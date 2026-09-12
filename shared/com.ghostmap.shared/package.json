@@ -1,0 +1,11 @@
+{
+  "name": "com.ghostmap.shared",
+  "version": "1.0.0",
+  "displayName": "GhostMap Shared",
+  "description": "The single source of truth for GhostMap domain models, capture geometry, validation, and the scanner/viewer wire protocol. Consumed by both apps/scanner and apps/viewer. Neither app may duplicate these types.",
+  "unity": "6000.3",
+  "author": {
+    "name": "GhostMap"
+  },
+  "hideInEditor": false
+}

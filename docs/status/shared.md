@@ -10,7 +10,7 @@
   produced by F1; `docs/contracts/protocol-v1.md` is produced by F3.
 
 ## Last verified commit
-- `F0 commit — see docs/handoffs/2026-09-12-foundation-f0-repo-scaffold.md`
+- `9c28d7a4dc30ef76966680a3ee7a99257b715262` (F0)
 
 ## Tests run
 - None. F0 produces no compilable code, so there is nothing to test.

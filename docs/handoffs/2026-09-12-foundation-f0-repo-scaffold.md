@@ -13,7 +13,7 @@ committed directly to `main`. The `foundation/<task>` branch convention in
 `none — initial commit, repository had no history`
 
 ## Head commit
-`PENDING — recorded in the follow-up docs commit`
+`9c28d7a4dc30ef76966680a3ee7a99257b715262`
 
 ## What changed
 

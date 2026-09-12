@@ -9,7 +9,7 @@ Foundation tasks run on `main` per implementation plan section 28, Stage A.
 `b34195c` (F1 sha recorded)
 
 ## Head commit
-`PENDING — recorded in the follow-up docs commit`
+`23050c4e89ac05cf02847f9f54e36ed2060c9f39`
 
 ## What changed
 

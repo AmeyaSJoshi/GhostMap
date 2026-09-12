@@ -1,0 +1,79 @@
+# ---------------------------------------------------------------------------
+# Unity generated folders
+# Applies to every Unity project in this repository (apps/scanner, apps/viewer).
+# ---------------------------------------------------------------------------
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# Never commit generated iOS/Xcode output
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Asset meta files for ignored folders
+/[Ll]ibrary.meta
+/[Tt]emp.meta
+/[Oo]bj.meta
+/[Bb]uild.meta
+/[Bb]uilds.meta
+/[Ll]ogs.meta
+/[Uu]ser[Ss]ettings.meta
+
+# Unity crash / stack traces
+sysinfo.txt
+crashlytics-build.properties
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Gradle / Android (not used in MVP, kept for safety)
+.gradle/
+
+# ---------------------------------------------------------------------------
+# macOS
+# ---------------------------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# ---------------------------------------------------------------------------
+# Python tooling (tools/)
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ---------------------------------------------------------------------------
+# Local scratch
+# ---------------------------------------------------------------------------
+*.log
+*.tmp

@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "fixture-valid-room-v1",
+  "revision": 12,
+  "scanPhase": "Finalized",
+  "finalized": true,
+  "closureErrorM": 0.054,
+  "room": {
+    "id": "room-1",
+    "name": "Fixture Bedroom",
+    "heightM": 2.5,
+    "corners": [
+      { "id": "c0", "position": { "x": 0.0, "y": 0.0, "z": 0.0 } },
+      { "id": "c1", "position": { "x": 4.0, "y": 0.0, "z": 0.0 } },
+      { "id": "c2", "position": { "x": 4.0, "y": 0.0, "z": 3.0 } },
+      { "id": "c3", "position": { "x": 0.0, "y": 0.0, "z": 3.0 } }
+    ],
+    "openings": [
+      {
+        "id": "door-1",
+        "type": "door",
+        "wallStartCornerId": "c0",
+        "wallEndCornerId": "c1",
+        "offsetM": 1.2,
+        "widthM": 0.9,
+        "sillHeightM": 0.0,
+        "heightM": 2.05
+      }
+    ],
+    "objects": [
+      {
+        "id": "bed-1",
+        "type": "bed",
+        "center": { "x": 1.0, "y": 0.0, "z": 2.2 },
+        "yawDeg": 90.0,
+        "widthM": 1.52,
+        "depthM": 2.03,
+        "heightM": 0.6
+      },
+      {
+        "id": "desk-1",
+        "type": "desk",
+        "center": { "x": 3.2, "y": 0.0, "z": 0.5 },
+        "yawDeg": 0.0,
+        "widthM": 1.4,
+        "depthM": 0.7,
+        "heightM": 0.75
+      },
+      {
+        "id": "chair-1",
+        "type": "chair",
+        "center": { "x": 3.2, "y": 0.0, "z": 1.3 },
+        "yawDeg": 180.0,
+        "widthM": 0.5,
+        "depthM": 0.5,
+        "heightM": 0.9
+      }
+    ]
+  }
+}

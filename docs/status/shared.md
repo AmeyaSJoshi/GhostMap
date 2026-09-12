@@ -15,7 +15,7 @@
 - `docs/contracts/protocol-v1.md` is still a placeholder, produced by F3.
 
 ## Last verified commit
-- `<F1 sha — see docs/handoffs/2026-09-12-foundation-f1-scene-schema.md>`
+- `33d63fed8474c8146e959ec3a082a29a9b7d1f19` (F1)
 
 ## Tests run
 - Command:

@@ -10,7 +10,7 @@ Foundation tasks run on `main` per implementation plan section 28, Stage A
 `76ddf3e43fe5c57de23ade76ed7e0cece6f552cd`
 
 ## Head commit
-`PENDING — recorded in the follow-up docs commit`
+`33d63fed8474c8146e959ec3a082a29a9b7d1f19`
 
 ## What changed
 

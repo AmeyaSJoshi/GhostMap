@@ -7,7 +7,7 @@
 `2ee62eb` (F2 sha recorded)
 
 ## Head commit
-`PENDING — recorded in the follow-up docs commit`
+`db347c13d8df8d5136fd86cd2b89da7705c8156d`
 
 ## What changed
 

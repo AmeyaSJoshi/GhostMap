@@ -33,10 +33,10 @@ namespace GhostMap.Scanner.Tests.EditMode
         private static ScanWorkflowController Workflow(FakeSpatialProvider provider)
         {
             var floorLock = new FloorLockController(provider);
+            var corners = new CornerCaptureController(provider, floorLock);
+            var height = new HeightCaptureController(provider, floorLock, corners);
 
-            return new ScanWorkflowController(
-                floorLock,
-                new CornerCaptureController(provider, floorLock));
+            return new ScanWorkflowController(floorLock, corners, height);
         }
 
         /// <summary>Ticks to FindFloor and locks, leaving the phase at FloorLocked.</summary>
@@ -606,6 +606,155 @@ namespace GhostMap.Scanner.Tests.EditMode
             Assert.AreEqual(origin, frame.Origin);
             Assert.AreEqual(right, frame.Right);
             Assert.AreEqual(forward, frame.Forward);
+        }
+
+        // -------------------------------------------------------------------
+        // Task S4 — height capture
+        // -------------------------------------------------------------------
+
+        /// <summary>
+        /// Points the center-screen ray from roughly the room's center at a
+        /// point on wall 0 (corners 0-&gt;1, at Ghost z = 0) at the given height.
+        /// </summary>
+        private static void AimAtWallHeight(
+            FakeSpatialProvider provider, GhostCoordinateFrame frame, float wallX, float heightM)
+        {
+            Vector3 eye = frame.GhostToWorld(new Vector3(1.5f, 1.5f, 1.25f));
+            Vector3 target = frame.GhostToWorld(new Vector3(wallX, heightM, 0f));
+
+            provider.ScreenRay = new Ray(eye, (target - eye).normalized);
+        }
+
+        /// <summary>Captures the legal room and a good closure, landing at CaptureHeight.</summary>
+        private static ScanWorkflowController RoomAtCaptureHeight(FakeSpatialProvider provider)
+        {
+            ScanWorkflowController workflow = RoomCaptured(provider);
+
+            AimAtGhost(provider, workflow.Frame, 0.05f, 0f);
+            Assert.IsTrue(workflow.TryVerifyClosure(out _, out _));
+            Assert.AreEqual(ScanPhase.CaptureHeight, workflow.Phase);
+
+            return workflow;
+        }
+
+        [Test]
+        public void ConfirmingAValidHeightAdvancesToAddOpenings()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtCaptureHeight(provider);
+
+            Assert.IsTrue(workflow.SelectHeightWall(0));
+            AimAtWallHeight(provider, workflow.Frame, 1.5f, 2.5f);
+
+            Assert.IsTrue(workflow.TryCaptureHeight(out HeightCaptureRejection rejection));
+            Assert.AreEqual(HeightCaptureRejection.None, rejection);
+            Assert.AreEqual(ScanPhase.AddOpenings, workflow.Phase);
+        }
+
+        [Test]
+        public void AnInvalidHeightDoesNotAdvanceThePhase()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtCaptureHeight(provider);
+
+            Assert.IsTrue(workflow.SelectHeightWall(0));
+            AimAtWallHeight(provider, workflow.Frame, 1.5f, 1.2f);
+
+            Assert.IsFalse(workflow.TryCaptureHeight(out HeightCaptureRejection rejection));
+            Assert.AreEqual(HeightCaptureRejection.ValidationFailed, rejection);
+            Assert.AreEqual(ScanPhase.CaptureHeight, workflow.Phase);
+        }
+
+        [Test]
+        public void AConfirmedHeightIsWrittenToTheRoomSnapshot()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtCaptureHeight(provider);
+
+            Assert.AreEqual(0f, workflow.Snapshot.room.heightM);
+
+            Assert.IsTrue(workflow.SelectHeightWall(0));
+            AimAtWallHeight(provider, workflow.Frame, 1.5f, 2.5f);
+            Assert.IsTrue(workflow.TryCaptureHeight(out _));
+
+            Assert.That(workflow.Snapshot.room.heightM, Is.EqualTo(2.5f).Within(1e-3f));
+        }
+
+        [Test]
+        public void RevisionIncreasesMonotonicallyAfterHeightIsCaptured()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtCaptureHeight(provider);
+            int revision = workflow.Revision;
+
+            Assert.IsTrue(workflow.SelectHeightWall(0));
+            AimAtWallHeight(provider, workflow.Frame, 1.5f, 2.5f);
+            Assert.IsTrue(workflow.TryCaptureHeight(out _));
+
+            Assert.Greater(workflow.Revision, revision);
+            Assert.AreEqual(workflow.Revision, workflow.Snapshot.revision);
+        }
+
+        [Test]
+        public void ManualHeightAlsoAdvancesToAddOpenings()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtCaptureHeight(provider);
+
+            Assert.IsTrue(workflow.TrySetManualHeight(2.6f, out HeightCaptureRejection rejection));
+            Assert.AreEqual(HeightCaptureRejection.None, rejection);
+            Assert.AreEqual(ScanPhase.AddOpenings, workflow.Phase);
+            Assert.That(workflow.Snapshot.room.heightM, Is.EqualTo(2.6f).Within(1e-3f));
+        }
+
+        [Test]
+        public void HeightCannotBeCapturedOutsideTheCaptureHeightPhase()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+            Assert.IsTrue(workflow.BeginCornerCapture());
+
+            Assert.IsFalse(workflow.TryCaptureHeight(out HeightCaptureRejection rejection));
+            Assert.AreEqual(HeightCaptureRejection.WrongPhase, rejection);
+        }
+
+        [Test]
+        public void ManualHeightCannotBeSetOutsideTheCaptureHeightPhase()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+
+            Assert.IsFalse(workflow.TrySetManualHeight(2.5f, out HeightCaptureRejection rejection));
+            Assert.AreEqual(HeightCaptureRejection.WrongPhase, rejection);
+        }
+
+        /// <summary>
+        /// The S2 frame and the S3 footprint are authoritative and must not be
+        /// disturbed by S4. Height capture only ever reads them.
+        /// </summary>
+        [Test]
+        public void TheFrameAndCornersSurviveHeightCapture()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtCaptureHeight(provider);
+
+            GhostCoordinateFrame frame = workflow.Frame;
+            var beforeCorners = new CornerModel[workflow.Snapshot.room.corners.Length];
+            workflow.Snapshot.room.corners.CopyTo(beforeCorners, 0);
+
+            Assert.IsTrue(workflow.SelectHeightWall(0));
+            AimAtWallHeight(provider, workflow.Frame, 1.5f, 2.5f);
+            Assert.IsTrue(workflow.TryCaptureHeight(out _));
+
+            Assert.AreSame(frame, workflow.Frame);
+            Assert.AreEqual(4, workflow.Snapshot.room.corners.Length);
+
+            for (int i = 0; i < beforeCorners.Length; i++)
+            {
+                Assert.AreEqual(beforeCorners[i].position.x, workflow.Snapshot.room.corners[i].position.x);
+                Assert.AreEqual(beforeCorners[i].position.y, workflow.Snapshot.room.corners[i].position.y);
+                Assert.AreEqual(beforeCorners[i].position.z, workflow.Snapshot.room.corners[i].position.z);
+            }
         }
     }
 }

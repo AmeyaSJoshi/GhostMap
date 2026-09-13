@@ -83,3 +83,4 @@ or
 | 2026-09-12 | scanner | [S1 — complete, verified on device](2026-09-12-scanner-s1-complete.md) |
 | 2026-09-12 | scanner | [S2 — floor lock and GhostMap coordinate frame](2026-09-12-scanner-s2-floor-lock-coordinate-frame.md) |
 | 2026-09-12 | scanner | [S3 — corner capture and closure verification](2026-09-12-scanner-s3-corner-capture-closure.md) |
+| 2026-09-12 | scanner | [S4 — height capture](2026-09-12-scanner-s4-height-capture.md) |

@@ -1,13 +1,17 @@
 # Scanner Status
 
 ## Current state
-- **S4 implemented and passing off-device; physical-device verification is
-  pending.** Room height is now captured by deriving vertical wall planes from
-  the S3 footprint, intersecting the center-screen ray with the wall the user
-  selects, and validating the result against 2.0-4.0 m. A manual numeric
-  fallback exists per the implementation plan's section 8.7. Do not treat this
-  as fixed on hardware until the physical-device procedure in the S4 handoff
-  has been run and passed — see "Next safe task" below.
+- **S4 complete and verified on a physical iPhone.** Room height is captured
+  by deriving vertical wall planes from the S3 footprint, intersecting the
+  center-screen ray with the wall the user selects, and validating the result
+  against 2.0-4.0 m. On device: wall selection worked, aiming at the selected
+  wall's ceiling junction produced a valid candidate, **captured height was
+  2.69 m**, `Capture Height` advanced the phase to `AddOpenings`, `Frame O/X/Z`
+  and the S3 corner markers stayed fixed, and the tracking session stayed
+  `SessionTracking` throughout. The measured height agreed with the captured
+  value within acceptable tolerance. A manual numeric fallback exists per the
+  implementation plan's section 8.7 and was not exercised on this device pass
+  (see "Known issues").
 - Delivered in S4: `HeightCaptureController`, `HeightCaptureHud`, the S4
   transition and real `heightM` on `ScanWorkflowController`'s snapshot, and the
   scene builder's wall-selection / capture / manual-entry UI. `VerifyScene()`
@@ -42,10 +46,8 @@
   root cause. Both are recorded below and in their handoffs.
 
 ## Last verified commit
-- `1b8a6ce` — S4 implementation, **not yet physically verified**. All
-  off-device tests pass and the iOS build succeeds; see the S4 handoff for the
-  device procedure. Do not treat S4 as done on hardware until that
-  verification is recorded here.
+- `1b8a6ce` — S4, verified on a real iPhone. The commits that follow it change
+  only documentation, so their scanner sources are byte-identical.
 - `1e04d02` — S3, verified on a real iPhone. The commits that follow it change
   only documentation, so their scanner sources are byte-identical.
 - `b0fe6f0` — S2, verified on a real iPhone. `4dd4c13` follows it and changed
@@ -54,6 +56,35 @@
 - S1 reached `main` as merge commit `150512d` (PR #1) and S2 as merge commit
   `a3f15f8` (PR #2). Both were merged with a merge commit so the original task
   SHAs stay reachable from the handoff documents that cite them.
+
+## Physical-device verification — S4, passed
+Observed on a real iPhone against the build produced from `1b8a6ce`:
+
+- `Phase` reached `CaptureHeight` after the S3 closure
+- wall selection worked: cycling `Wall N/4` moved the highlighted wall
+- aiming the center crosshair at the selected wall's ceiling junction produced
+  a valid candidate height
+- **candidate/captured height was 2.69 m**
+- `Capture Height` succeeded and advanced `Phase` to `AddOpenings`
+- `Frame O`, `Frame X` and `Frame Z` stayed fixed through height capture
+- the S3 corner markers stayed fixed through height capture
+- `Session` stayed `SessionTracking` throughout
+- the measured room height agreed with the captured 2.69 m within acceptable
+  tolerance
+
+That covers the golden path of the device procedure in
+`docs/handoffs/2026-09-12-scanner-s4-height-capture.md`, and confirms on
+hardware what the automated tests assert off it: walls are derived correctly
+from the S3 footprint, the ray/plane intersection lands on the real ceiling
+line, the S2 frame and S3 corners are untouched by height capture, and a valid
+height advances the phase.
+
+**Not exercised on this device pass** — still covered only by EditMode tests:
+the manual height fallback and its on-screen-keyboard behavior, an
+out-of-range automatic candidate (red marker / rejected capture), selecting a
+wall other than the one aimed at, and a non-rectangular room. None of these is
+suspected broken; they are recorded because a passing test is not the same
+evidence as a passing phone.
 
 ## Physical-device verification — S3, passed
 Observed on a real iPhone against the build produced from `1e04d02`:
@@ -83,7 +114,7 @@ The 0.031 m closure is the strongest on-device evidence available that the frame
 did not drift across the scan. A frame that had moved would have surfaced here as
 accumulated error rather than as a clean re-aim onto the stored first corner.
 
-## Task S4 — height capture (implemented, not yet device-verified)
+## Task S4 — height capture
 
 ### How a height is captured
 ```text
@@ -324,8 +355,12 @@ S4 changed nothing under `shared/`:
 **156 tests, 156 passed, 0 failed, 0 skipped.** Unity exit code 0 — unchanged
 from S3.
 
-**Physical-device verification has not been run yet.** Do not treat S4 as done
-on hardware until it has — see the S4 handoff for the exact procedure.
+Re-run after physical-device verification, against the same `1b8a6ce`, to
+confirm nothing drifted between the build used on device and the final state:
+Scanner **292/292**, Shared **156/156**, both exit code 0.
+
+The S4 physical-device test was then run on a real iPhone and **passed** —
+see the verification section above.
 
 ### S3 — latest
 ```bash
@@ -544,20 +579,24 @@ physical-device test from passing.
   confirmation step. A mistyped value is only caught by the 2.0-4.0 m range
   check, not by asking the user to re-enter it.
 
-### Not covered by the S4 EditMode tests, or by any device test yet
-None of Task S4 has been run on a phone. Everything below is covered by
-EditMode tests only:
+### Not covered by the S4 device test
+The S4 hardware run exercised the golden path on a rectangular room: locking
+the floor, capturing four corners, an accepted closure, selecting a wall,
+aiming at its ceiling line, and a successful automatic capture (2.69 m). These
+paths are covered by EditMode tests but have **not** been seen on a phone:
 
-- the real ray/plane math against a live AR camera and detected corners,
-  rather than the fixture's synthetic rays;
-- whether a phone-held aim genuinely lands within a wall's span in practice,
-  versus the fixture's exact geometric placements;
-- the manual-height fallback's on-screen keyboard behavior (the legacy
-  `InputField`'s `DecimalNumber` content type has not been exercised on iOS
-  hardware);
-- the wall-selection cycle button under real touch input;
-- a non-rectangular room's wall planes (only the S3 rectangular fixture was
-  used).
+- the manual height fallback end to end, including the legacy `InputField`'s
+  `DecimalNumber` content type on the iOS on-screen keyboard;
+- an out-of-range automatic candidate — the red aim marker and a refused
+  `Capture Height` press;
+- aiming at a wall other than the one currently selected, to confirm the
+  highlighted wall and the intersected plane agree;
+- a non-rectangular four-corner room's wall planes (only the S3 rectangular
+  fixture was used, both in tests and on this device pass).
+
+None of these is suspected broken — each has a passing EditMode test, and the
+ray/plane and range-validation logic was mutation-checked. They are recorded
+because a passing test is not the same evidence as a passing phone.
 
 ### Not covered by the S3 device test
 The S3 hardware run exercised a rectangular room with a good scan. These paths
@@ -591,15 +630,15 @@ passing test is not the same evidence as a passing phone.
   trampoline sources.
 
 ## Next safe task
-- **Physically verify S4 on a real iPhone.** The implementation, EditMode
-  tests, mutation checks and iOS build are all done and passing — see "Tests
-  run" and the S4 handoff's device procedure — but per `AGENTS.md` rule 12,
-  real-device behavior must never be declared fixed until verified on
-  hardware. **S5 must not start until that verification passes and this
-  section is updated to reflect it**, exactly as S1-S3 required before the
-  workstream moved on.
-- Once S4 is verified: **S5** — doors, windows, furniture, per
-  `docs/plans/ghostmap-implementation-plan.md`.
+- **S4** — height capture. S4 is complete and verified on hardware (2.69 m
+  captured height, golden path confirmed — see "Physical-device verification
+  — S4, passed" above), so the scanner workstream may proceed to the next task
+  in `docs/plans/ghostmap-implementation-plan.md`: **S5 — doors, windows,
+  furniture**. S5 has not been started in this session.
+- S5 inherits the room's real `heightM` (S4's contribution): `RoomValidator.ValidateRoom`
+  now applies the 2.0-4.0 m range check on every subsequent snapshot, and
+  `OpeningModel.sillHeightM + heightM` validation (F2) has a real ceiling to
+  check openings against for the first time.
 
 ## Do not touch
 - `shared/**`, `fixtures/**`, `tools/**`, `docs/contracts/**`, `docs/decisions/**`

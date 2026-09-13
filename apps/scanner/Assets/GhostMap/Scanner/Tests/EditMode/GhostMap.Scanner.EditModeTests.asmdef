@@ -1,0 +1,25 @@
+{
+    "name": "GhostMap.Scanner.EditModeTests",
+    "rootNamespace": "GhostMap.Scanner.Tests",
+    "references": [
+        "GhostMap.Scanner.Editor",
+        "GhostMap.Scanner.Runtime",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

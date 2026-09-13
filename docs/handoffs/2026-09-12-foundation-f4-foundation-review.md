@@ -9,7 +9,7 @@ Foundation tasks run on `main` per implementation plan section 28, Stage A.
 `4a6d636` (F3 sha recorded)
 
 ## Head commit
-`<filled in below after the commit>`
+`47a6a0acbba0ad9ec05653df6361617f21bf5b08`
 
 ## What changed
 

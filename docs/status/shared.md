@@ -28,7 +28,7 @@
   `docs/handoffs/2026-09-12-foundation-f4-foundation-review.md`.
 
 ## Last verified commit
-- F4 review — see the handoff for the sha. Previous: `db347c13d8df8d5136fd86cd2b89da7705c8156d` (F3).
+- `47a6a0acbba0ad9ec05653df6361617f21bf5b08` (F4 review). Previous: `db347c13d8df8d5136fd86cd2b89da7705c8156d` (F3).
 
 ## Tests run
 - Command:

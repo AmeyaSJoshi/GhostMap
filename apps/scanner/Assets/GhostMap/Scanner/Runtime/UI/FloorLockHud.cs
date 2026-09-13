@@ -35,17 +35,26 @@ namespace GhostMap.Scanner.UI
         private readonly StringBuilder builder = new StringBuilder();
 
         private FloorLockController floorLock;
+        private CornerCaptureController cornerCapture;
         private ScanWorkflowController workflow;
 
         private FloorLockRejection lastAttemptRejection = FloorLockRejection.None;
         private bool hasAttempted;
 
+        /// <summary>
+        /// This component is the scene's composition root: it owns the one
+        /// <see cref="ScanWorkflowController"/> every other HUD reads. Task S3's
+        /// <see cref="CornerCaptureHud"/> takes it from here rather than
+        /// building a second one, because two workflows would mean two
+        /// revisions and two rooms.
+        /// </summary>
         public ScanWorkflowController Workflow => workflow;
 
         private void Awake()
         {
             floorLock = new FloorLockController(spatialProvider);
-            workflow = new ScanWorkflowController(floorLock);
+            cornerCapture = new CornerCaptureController(spatialProvider, floorLock);
+            workflow = new ScanWorkflowController(floorLock, cornerCapture);
 
             if (lockFloorButton != null)
             {

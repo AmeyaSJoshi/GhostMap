@@ -30,9 +30,23 @@ namespace GhostMap.Scanner.Tests.EditMode
         /// <summary>Screen point the last <see cref="TryGetFloorHit"/> was asked about.</summary>
         public Vector2 LastRaycastScreenPoint { get; private set; }
 
+        /// <summary>
+        /// How many AR plane raycasts have been asked for. Task S3 corner
+        /// capture must not need any: plane extents lag behind the room and
+        /// stop at furniture, so a corner is routinely off every detected
+        /// plane. Counting them is how that stays true.
+        /// </summary>
+        public int FloorHitRequestCount { get; private set; }
+
+        /// <summary>Screen point the last <see cref="GetScreenRay"/> was asked about.</summary>
+        public Vector2 LastScreenRayPoint { get; private set; }
+
+        public int ScreenRayRequestCount { get; private set; }
+
         public bool TryGetFloorHit(Vector2 screenPoint, out FloorHit hit)
         {
             LastRaycastScreenPoint = screenPoint;
+            FloorHitRequestCount++;
 
             if (!HasFloorHit)
             {
@@ -44,7 +58,12 @@ namespace GhostMap.Scanner.Tests.EditMode
             return true;
         }
 
-        public Ray GetScreenRay(Vector2 screenPoint) => ScreenRay;
+        public Ray GetScreenRay(Vector2 screenPoint)
+        {
+            LastScreenRayPoint = screenPoint;
+            ScreenRayRequestCount++;
+            return ScreenRay;
+        }
 
         public bool TryGetCameraPose(out Pose pose)
         {

@@ -2,7 +2,9 @@ using System;
 using GhostMap.Scanner.Capture;
 using GhostMap.Scanner.Workflow;
 using GhostMap.Shared.Domain;
+using GhostMap.Shared.Geometry;
 using GhostMap.Shared.Protocol;
+using GhostMap.Shared.Validation;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.XR.ARSubsystems;
@@ -30,7 +32,69 @@ namespace GhostMap.Scanner.Tests.EditMode
 
         private static ScanWorkflowController Workflow(FakeSpatialProvider provider)
         {
-            return new ScanWorkflowController(new FloorLockController(provider));
+            var floorLock = new FloorLockController(provider);
+
+            return new ScanWorkflowController(
+                floorLock,
+                new CornerCaptureController(provider, floorLock));
+        }
+
+        /// <summary>Ticks to FindFloor and locks, leaving the phase at FloorLocked.</summary>
+        private static ScanWorkflowController LockedWorkflow(FakeSpatialProvider provider)
+        {
+            ScanWorkflowController workflow = Workflow(provider);
+            workflow.Tick(true);
+            workflow.Tick(true);
+
+            Assert.IsTrue(
+                workflow.TryLockFloor(out FloorLockRejection rejection),
+                $"The fixture's own floor lock should succeed, got {rejection}.");
+
+            return workflow;
+        }
+
+        /// <summary>
+        /// Points the center-screen ray at a Ghost-space floor point, from an
+        /// eye 1.5 m above the floor and 1 m short of the target.
+        /// </summary>
+        private static void AimAtGhost(
+            FakeSpatialProvider provider,
+            GhostCoordinateFrame frame,
+            float ghostX,
+            float ghostZ)
+        {
+            Vector3 target = frame.GhostToWorld(new Vector3(ghostX, 0f, ghostZ));
+            Vector3 eye = frame.GhostToWorld(new Vector3(ghostX, 1.5f, ghostZ - 1f));
+
+            provider.ScreenRay = new Ray(eye, (target - eye).normalized);
+        }
+
+        /// <summary>A legal 3.0 m x 2.5 m room: 7.5 m2, four right angles.</summary>
+        private static readonly Vector2[] LegalRoom =
+        {
+            new Vector2(0f, 0f),
+            new Vector2(3f, 0f),
+            new Vector2(3f, 2.5f),
+            new Vector2(0f, 2.5f)
+        };
+
+        /// <summary>Locks the floor, enters CaptureCorners and captures the legal room.</summary>
+        private static ScanWorkflowController RoomCaptured(FakeSpatialProvider provider)
+        {
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+            Assert.IsTrue(workflow.BeginCornerCapture());
+
+            foreach (Vector2 corner in LegalRoom)
+            {
+                AimAtGhost(provider, workflow.Frame, corner.x, corner.y);
+
+                Assert.IsTrue(
+                    workflow.TryCaptureCorner(out CornerCaptureRejection rejection),
+                    $"Corner ({corner.x}, {corner.y}) should have been accepted, got " +
+                    $"{rejection}: {workflow.Corners.LastError}");
+            }
+
+            return workflow;
         }
 
         [Test]
@@ -226,6 +290,322 @@ namespace GhostMap.Scanner.Tests.EditMode
 
             Assert.AreEqual(sessionId, workflow.SessionId);
             Assert.AreEqual(sessionId, workflow.Snapshot.sessionId);
+        }
+
+        // -------------------------------------------------------------------
+        // Task S3 — corner capture
+        // -------------------------------------------------------------------
+
+        [Test]
+        public void CornerCaptureIsEnteredFromFloorLocked()
+        {
+            ScanWorkflowController workflow = LockedWorkflow(GoodProvider());
+
+            Assert.IsTrue(workflow.BeginCornerCapture());
+            Assert.AreEqual(ScanPhase.CaptureCorners, workflow.Phase);
+            Assert.AreEqual(ScanPhase.CaptureCorners.ToString(), workflow.Snapshot.scanPhase);
+        }
+
+        [Test]
+        public void CornersCannotBeCapturedBeforeTheCaptureCornersPhase()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+
+            AimAtGhost(provider, workflow.Frame, 0f, 0f);
+
+            Assert.IsFalse(workflow.TryCaptureCorner(out CornerCaptureRejection rejection));
+            Assert.AreEqual(CornerCaptureRejection.WrongPhase, rejection);
+            Assert.AreEqual(0, workflow.Corners.CornerCount);
+        }
+
+        [Test]
+        public void EachAcceptedCornerAdvancesTheRevision()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+            Assert.IsTrue(workflow.BeginCornerCapture());
+
+            int revision = workflow.Revision;
+
+            foreach (Vector2 corner in LegalRoom)
+            {
+                AimAtGhost(provider, workflow.Frame, corner.x, corner.y);
+                Assert.IsTrue(workflow.TryCaptureCorner(out _));
+
+                Assert.Greater(workflow.Revision, revision, "Revision must be monotonic.");
+                Assert.AreEqual(workflow.Revision, workflow.Snapshot.revision);
+
+                revision = workflow.Revision;
+            }
+        }
+
+        [Test]
+        public void ARejectedCornerChangesNothing()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+            Assert.IsTrue(workflow.BeginCornerCapture());
+
+            AimAtGhost(provider, workflow.Frame, 0f, 0f);
+            Assert.IsTrue(workflow.TryCaptureCorner(out _));
+
+            int revision = workflow.Revision;
+
+            // 0.30 m from the previous corner, below the 0.50 m minimum.
+            AimAtGhost(provider, workflow.Frame, 0.30f, 0f);
+
+            Assert.IsFalse(workflow.TryCaptureCorner(out CornerCaptureRejection rejection));
+
+            Assert.AreEqual(CornerCaptureRejection.ValidationFailed, rejection);
+            Assert.AreEqual(revision, workflow.Revision);
+            Assert.AreEqual(ScanPhase.CaptureCorners, workflow.Phase);
+            Assert.AreEqual(1, workflow.Snapshot.room.corners.Length);
+        }
+
+        [Test]
+        public void TheFourthCornerEntersClosureVerification()
+        {
+            ScanWorkflowController workflow = RoomCaptured(GoodProvider());
+
+            Assert.AreEqual(ScanPhase.VerifyClosure, workflow.Phase);
+            Assert.AreEqual(ScanPhase.VerifyClosure.ToString(), workflow.Snapshot.scanPhase);
+            Assert.AreEqual(4, workflow.Snapshot.room.corners.Length);
+        }
+
+        [Test]
+        public void TheSnapshotCarriesTheCornersInCaptureOrder()
+        {
+            ScanWorkflowController workflow = RoomCaptured(GoodProvider());
+
+            CornerModel[] corners = workflow.Snapshot.room.corners;
+
+            for (int i = 0; i < LegalRoom.Length; i++)
+            {
+                Assert.That(corners[i].position.x, Is.EqualTo(LegalRoom[i].x).Within(1e-3f), $"corner {i} x");
+                Assert.That(corners[i].position.z, Is.EqualTo(LegalRoom[i].y).Within(1e-3f), $"corner {i} z");
+                Assert.AreEqual(0f, corners[i].position.y, $"corner {i} y");
+            }
+        }
+
+        /// <summary>
+        /// A published snapshot is a value, not a window onto live state. If it
+        /// shared corner objects with the capture controller, an undo would
+        /// retroactively rewrite a revision the viewer had already accepted.
+        /// </summary>
+        [Test]
+        public void SnapshotCornersAreCopiesRatherThanLiveReferences()
+        {
+            ScanWorkflowController workflow = RoomCaptured(GoodProvider());
+
+            SceneSnapshot published = workflow.Snapshot;
+            CornerModel live = workflow.Corners.Corners[0];
+
+            Assert.AreNotSame(live, published.room.corners[0]);
+
+            Assert.IsTrue(workflow.TryUndoCorner(out _));
+
+            Assert.AreEqual(4, published.room.corners.Length,
+                "The already-published snapshot changed when a corner was undone.");
+        }
+
+        /// <summary>
+        /// Walls are derived from consecutive corners and must never appear on
+        /// the wire; a stored wall could disagree with the corners it came from.
+        /// </summary>
+        [Test]
+        public void TheFourCornerSnapshotDoesNotSerializeWalls()
+        {
+            ScanWorkflowController workflow = RoomCaptured(GoodProvider());
+
+            string json = JsonUtility.ToJson(workflow.Snapshot);
+
+            StringAssert.DoesNotContain("\"walls\"", json);
+            StringAssert.Contains("\"corners\"", json);
+        }
+
+        // -------------------------------------------------------------------
+        // Task S3 — undo
+        // -------------------------------------------------------------------
+
+        [Test]
+        public void UndoRemovesACornerAndStillAdvancesTheRevision()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+            Assert.IsTrue(workflow.BeginCornerCapture());
+
+            AimAtGhost(provider, workflow.Frame, 0f, 0f);
+            Assert.IsTrue(workflow.TryCaptureCorner(out _));
+            AimAtGhost(provider, workflow.Frame, 3f, 0f);
+            Assert.IsTrue(workflow.TryCaptureCorner(out _));
+
+            int revision = workflow.Revision;
+
+            Assert.IsTrue(workflow.TryUndoCorner(out CornerCaptureRejection rejection));
+
+            Assert.AreEqual(CornerCaptureRejection.None, rejection);
+            Assert.AreEqual(1, workflow.Corners.CornerCount);
+            Assert.AreEqual(1, workflow.Snapshot.room.corners.Length);
+
+            // Revision is monotonic per scene schema v1: the viewer ignores any
+            // snapshot whose revision is not greater than the one it holds, so
+            // an undo that wound the counter back would be dropped.
+            Assert.Greater(workflow.Revision, revision);
+            Assert.AreEqual(workflow.Revision, workflow.Snapshot.revision);
+        }
+
+        [Test]
+        public void UndoFromClosureVerificationReturnsToCornerCapture()
+        {
+            ScanWorkflowController workflow = RoomCaptured(GoodProvider());
+
+            Assert.AreEqual(ScanPhase.VerifyClosure, workflow.Phase);
+
+            Assert.IsTrue(workflow.TryUndoCorner(out _));
+
+            Assert.AreEqual(ScanPhase.CaptureCorners, workflow.Phase);
+            Assert.AreEqual(3, workflow.Corners.CornerCount);
+            Assert.AreEqual(0f, workflow.Snapshot.closureErrorM);
+        }
+
+        // -------------------------------------------------------------------
+        // Task S3 — closure verification
+        // -------------------------------------------------------------------
+
+        [Test]
+        public void AnExcellentClosureIsRecordedAndTheScanProceeds()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomCaptured(provider);
+
+            AimAtGhost(provider, workflow.Frame, 0.05f, 0f);
+
+            Assert.IsTrue(workflow.TryVerifyClosure(out ClosureQuality quality, out _));
+
+            Assert.AreEqual(ClosureQuality.Excellent, quality);
+            Assert.That(workflow.Snapshot.closureErrorM, Is.EqualTo(0.05f).Within(1e-3f));
+            Assert.AreEqual(ScanPhase.CaptureHeight, workflow.Phase);
+        }
+
+        [Test]
+        public void AnAcceptableClosureAlsoProceeds()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomCaptured(provider);
+
+            AimAtGhost(provider, workflow.Frame, 0.12f, 0f);
+
+            Assert.IsTrue(workflow.TryVerifyClosure(out ClosureQuality quality, out _));
+
+            Assert.AreEqual(ClosureQuality.Acceptable, quality);
+            Assert.That(workflow.Snapshot.closureErrorM, Is.EqualTo(0.12f).Within(1e-3f));
+            Assert.AreEqual(ScanPhase.CaptureHeight, workflow.Phase);
+        }
+
+        /// <summary>
+        /// A rejected closure must not continue to height capture. The phase
+        /// stays put so the user can only redo the corners.
+        /// </summary>
+        [Test]
+        public void ARejectedClosureDoesNotProceedToHeightCapture()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomCaptured(provider);
+
+            AimAtGhost(provider, workflow.Frame, 0.20f, 0f);
+
+            Assert.IsTrue(workflow.TryVerifyClosure(out ClosureQuality quality, out _));
+
+            Assert.AreEqual(ClosureQuality.Rejected, quality);
+            Assert.AreEqual(ScanPhase.VerifyClosure, workflow.Phase);
+            Assert.That(workflow.Snapshot.closureErrorM, Is.EqualTo(0.20f).Within(1e-3f));
+            Assert.IsFalse(workflow.Corners.IsClosureAccepted);
+        }
+
+        [Test]
+        public void RedoCornersClearsTheRoomAndReturnsToCornerCapture()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomCaptured(provider);
+
+            AimAtGhost(provider, workflow.Frame, 0.20f, 0f);
+            Assert.IsTrue(workflow.TryVerifyClosure(out _, out _));
+
+            int revision = workflow.Revision;
+
+            Assert.IsTrue(workflow.RedoCorners());
+
+            Assert.AreEqual(ScanPhase.CaptureCorners, workflow.Phase);
+            Assert.AreEqual(0, workflow.Corners.CornerCount);
+            Assert.IsEmpty(workflow.Snapshot.room.corners);
+            Assert.AreEqual(0f, workflow.Snapshot.closureErrorM);
+            Assert.Greater(workflow.Revision, revision);
+        }
+
+        /// <summary>
+        /// Redoing the corners must not disturb the frame. The room is being
+        /// re-measured, not re-anchored.
+        /// </summary>
+        [Test]
+        public void RedoCornersKeepsTheLockedFrame()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomCaptured(provider);
+
+            GhostCoordinateFrame frame = workflow.Frame;
+
+            AimAtGhost(provider, workflow.Frame, 0.20f, 0f);
+            Assert.IsTrue(workflow.TryVerifyClosure(out _, out _));
+            Assert.IsTrue(workflow.RedoCorners());
+
+            Assert.AreSame(frame, workflow.Frame);
+        }
+
+        [Test]
+        public void ClosureCannotBeVerifiedOutsideTheVerifyClosurePhase()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+            Assert.IsTrue(workflow.BeginCornerCapture());
+
+            AimAtGhost(provider, workflow.Frame, 0f, 0f);
+
+            Assert.IsFalse(workflow.TryVerifyClosure(out _, out CornerCaptureRejection rejection));
+            Assert.AreEqual(CornerCaptureRejection.WrongPhase, rejection);
+        }
+
+        /// <summary>
+        /// The whole of S3 runs against the frame S2 established. Nothing here
+        /// may re-lock or move it.
+        /// </summary>
+        [Test]
+        public void TheFrameSurvivesTheWholeCornerCaptureWorkflow()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+
+            GhostCoordinateFrame frame = workflow.Frame;
+            Vector3 origin = frame.Origin;
+            Vector3 right = frame.Right;
+            Vector3 forward = frame.Forward;
+
+            Assert.IsTrue(workflow.BeginCornerCapture());
+
+            foreach (Vector2 corner in LegalRoom)
+            {
+                AimAtGhost(provider, workflow.Frame, corner.x, corner.y);
+                Assert.IsTrue(workflow.TryCaptureCorner(out _));
+                Assert.AreSame(frame, workflow.Frame);
+            }
+
+            AimAtGhost(provider, workflow.Frame, 0.05f, 0f);
+            Assert.IsTrue(workflow.TryVerifyClosure(out _, out _));
+
+            Assert.AreSame(frame, workflow.Frame);
+            Assert.AreEqual(origin, frame.Origin);
+            Assert.AreEqual(right, frame.Right);
+            Assert.AreEqual(forward, frame.Forward);
         }
     }
 }

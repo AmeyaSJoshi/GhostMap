@@ -27,6 +27,12 @@ namespace GhostMap.Scanner.Editor
     {
         private const string ScenePath = "Assets/GhostMap/Scanner/Scanner.unity";
 
+        /// <summary>
+        /// Y of the Task S3 button row, above the Lock Floor button (90-220)
+        /// and below the readouts. All three S3 buttons share it.
+        /// </summary>
+        private const float S3ButtonRowY = 240f;
+
         [MenuItem("GhostMap/Build Scanner Scene")]
         public static void BuildScene()
         {
@@ -74,12 +80,36 @@ namespace GhostMap.Scanner.Editor
                 ("diagnosticsText", diagnosticsText));
 
             var hudGo = new GameObject("FloorLockHud", typeof(FloorLockHud));
+            var floorLockHud = hudGo.GetComponent<FloorLockHud>();
             AssignSerializedReferences(
-                hudGo.GetComponent<FloorLockHud>(),
+                floorLockHud,
                 ("spatialProvider", spatialProvider),
                 ("lockFloorButton", lockFloorButton),
                 ("crosshair", crosshair),
                 ("readoutText", floorLockReadout));
+
+            // Task S3 corner capture.
+            Text cornerReadout = CreateCornerReadout(canvasGo);
+            Button primaryButton = CreateActionButton(
+                canvasGo, "CaptureCornerButton", "Start Corners",
+                new Vector2(0f, S3ButtonRowY), new Vector2(380f, 110f), 34, out Text primaryLabel);
+            Button undoButton = CreateActionButton(
+                canvasGo, "UndoCornerButton", "Undo",
+                new Vector2(-350f, S3ButtonRowY), new Vector2(300f, 110f), 34, out _);
+            Button redoButton = CreateActionButton(
+                canvasGo, "RedoCornersButton", "Redo Corners",
+                new Vector2(350f, S3ButtonRowY), new Vector2(300f, 110f), 30, out _);
+
+            var cornerHudGo = new GameObject("CornerCaptureHud", typeof(CornerCaptureHud));
+            AssignSerializedReferences(
+                cornerHudGo.GetComponent<CornerCaptureHud>(),
+                ("floorLockHud", floorLockHud),
+                ("spatialProvider", spatialProvider),
+                ("primaryButton", primaryButton),
+                ("primaryButtonLabel", primaryLabel),
+                ("undoButton", undoButton),
+                ("redoButton", redoButton),
+                ("readoutText", cornerReadout));
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath) !);
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -125,6 +155,18 @@ namespace GhostMap.Scanner.Editor
                 var hud = FindInScene<FloorLockHud>(scene);
                 Require(hud != null, "no FloorLockHud");
                 RequireAssigned(hud, "spatialProvider", "lockFloorButton", "crosshair", "readoutText");
+
+                var cornerHud = FindInScene<CornerCaptureHud>(scene);
+                Require(cornerHud != null, "no CornerCaptureHud");
+                RequireAssigned(
+                    cornerHud,
+                    "floorLockHud",
+                    "spatialProvider",
+                    "primaryButton",
+                    "primaryButtonLabel",
+                    "undoButton",
+                    "redoButton",
+                    "readoutText");
             }
             finally
             {
@@ -136,7 +178,7 @@ namespace GhostMap.Scanner.Editor
         {
             if (!condition)
             {
-                throw new InvalidOperationException($"Scanner scene is not S2-ready: {whatIsWrong}.");
+                throw new InvalidOperationException($"Scanner scene is not capture-ready: {whatIsWrong}.");
             }
         }
 
@@ -238,7 +280,26 @@ namespace GhostMap.Scanner.Editor
             rect.anchorMin = new Vector2(0f, 0f);
             rect.anchorMax = new Vector2(1f, 0f);
             rect.pivot = new Vector2(0f, 0f);
-            rect.anchoredPosition = new Vector2(24f, 260f);
+            rect.anchoredPosition = new Vector2(24f, 380f);
+            rect.sizeDelta = new Vector2(-48f, 280f);
+
+            return text;
+        }
+
+        /// <summary>
+        /// The Task S3 readout, above the floor-lock block: corner count, the
+        /// live crosshair projection, every captured corner in Ghost
+        /// coordinates, and the closure result.
+        /// </summary>
+        private static Text CreateCornerReadout(GameObject canvasGo)
+        {
+            Text text = CreateText(canvasGo, "CornerCaptureReadout", 26);
+
+            RectTransform rect = text.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(1f, 0f);
+            rect.pivot = new Vector2(0f, 0f);
+            rect.anchoredPosition = new Vector2(24f, 690f);
             rect.sizeDelta = new Vector2(-48f, 300f);
 
             return text;
@@ -307,6 +368,53 @@ namespace GhostMap.Scanner.Editor
 
             Text label = CreateText(buttonGo, "Label", 40);
             label.text = "Lock Floor";
+            label.alignment = TextAnchor.MiddleCenter;
+            label.raycastTarget = false;
+
+            RectTransform labelRect = label.GetComponent<RectTransform>();
+            labelRect.anchorMin = Vector2.zero;
+            labelRect.anchorMax = Vector2.one;
+            labelRect.pivot = new Vector2(0.5f, 0.5f);
+            labelRect.anchoredPosition = Vector2.zero;
+            labelRect.sizeDelta = Vector2.zero;
+
+            return button;
+        }
+
+        /// <summary>
+        /// A bottom-anchored button. The label is handed back so
+        /// <see cref="CornerCaptureHud"/> can retitle the primary control as
+        /// the phase changes.
+        /// </summary>
+        private static Button CreateActionButton(
+            GameObject canvasGo,
+            string name,
+            string labelText,
+            Vector2 anchoredPosition,
+            Vector2 size,
+            int fontSize,
+            out Text label)
+        {
+            var buttonGo = new GameObject(name, typeof(Image), typeof(Button));
+            buttonGo.transform.SetParent(canvasGo.transform, false);
+
+            var background = buttonGo.GetComponent<Image>();
+            background.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+            background.type = Image.Type.Sliced;
+            background.color = new Color(0.16f, 0.16f, 0.18f, 0.92f);
+
+            RectTransform rect = buttonGo.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 0f);
+            rect.anchorMax = new Vector2(0.5f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.anchoredPosition = anchoredPosition;
+            rect.sizeDelta = size;
+
+            var button = buttonGo.GetComponent<Button>();
+            button.targetGraphic = background;
+
+            label = CreateText(buttonGo, "Label", fontSize);
+            label.text = labelText;
             label.alignment = TextAnchor.MiddleCenter;
             label.raycastTarget = false;
 

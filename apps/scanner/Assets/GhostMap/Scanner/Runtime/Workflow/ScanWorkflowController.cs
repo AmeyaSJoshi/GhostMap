@@ -4,6 +4,7 @@ using GhostMap.Scanner.Capture;
 using GhostMap.Shared.Domain;
 using GhostMap.Shared.Geometry;
 using GhostMap.Shared.Protocol;
+using GhostMap.Shared.Validation;
 
 namespace GhostMap.Scanner.Workflow
 {
@@ -45,10 +46,14 @@ namespace GhostMap.Scanner.Workflow
             };
 
         private readonly FloorLockController floorLock;
+        private readonly CornerCaptureController corners;
 
-        public ScanWorkflowController(FloorLockController floorLock)
+        public ScanWorkflowController(
+            FloorLockController floorLock,
+            CornerCaptureController corners)
         {
             this.floorLock = floorLock;
+            this.corners = corners;
             SessionId = Guid.NewGuid().ToString();
             RoomId = Guid.NewGuid().ToString();
             Phase = ScanPhase.Boot;
@@ -70,6 +75,9 @@ namespace GhostMap.Scanner.Workflow
 
         /// <summary>The locked GhostMap frame, or null before floor lock.</summary>
         public GhostCoordinateFrame Frame => floorLock.Frame;
+
+        /// <summary>Task S3 corner capture and closure. Read-only from outside the workflow.</summary>
+        public CornerCaptureController Corners => corners;
 
         /// <summary>
         /// Advances the pre-floor-lock phases from tracking quality. Boot
@@ -116,8 +124,136 @@ namespace GhostMap.Scanner.Workflow
             }
 
             TransitionTo(ScanPhase.FloorLocked);
-            Revision++;
-            Snapshot = BuildSnapshot();
+            Publish();
+            return true;
+        }
+
+        // -------------------------------------------------------------------
+        // Task S3 — corner capture and closure verification
+        // -------------------------------------------------------------------
+
+        /// <summary>
+        /// Leaves <see cref="ScanPhase.FloorLocked"/> for
+        /// <see cref="ScanPhase.CaptureCorners"/>.
+        ///
+        /// <para>Explicit rather than automatic on lock, so that FloorLocked is
+        /// a state the user actually sees and the S2 device readout stays
+        /// observable.</para>
+        /// </summary>
+        public bool BeginCornerCapture()
+        {
+            if (Phase != ScanPhase.FloorLocked)
+            {
+                return false;
+            }
+
+            TransitionTo(ScanPhase.CaptureCorners);
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Captures the corner under the crosshair. The fourth accepted corner
+        /// closes the footprint and moves the scan into closure verification.
+        /// </summary>
+        public bool TryCaptureCorner(out CornerCaptureRejection rejection)
+        {
+            if (Phase != ScanPhase.CaptureCorners)
+            {
+                rejection = CornerCaptureRejection.WrongPhase;
+                return false;
+            }
+
+            if (!corners.TryCaptureCorner(out rejection))
+            {
+                return false;
+            }
+
+            if (corners.IsComplete)
+            {
+                TransitionTo(ScanPhase.VerifyClosure);
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Removes the most recent corner. Undoing from closure verification
+        /// steps the scan back to corner capture, because the footprint the
+        /// closure was measured against no longer exists.
+        /// </summary>
+        public bool TryUndoCorner(out CornerCaptureRejection rejection)
+        {
+            if (Phase != ScanPhase.CaptureCorners && Phase != ScanPhase.VerifyClosure)
+            {
+                rejection = CornerCaptureRejection.WrongPhase;
+                return false;
+            }
+
+            if (!corners.TryUndoLastCorner(out rejection))
+            {
+                return false;
+            }
+
+            if (Phase == ScanPhase.VerifyClosure)
+            {
+                TransitionTo(ScanPhase.CaptureCorners);
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Measures closure against the first corner and publishes the result.
+        ///
+        /// <para>A measurement in the reject band is still published — the user
+        /// needs the exact number — but the scan does not proceed. The phase
+        /// stays at <see cref="ScanPhase.VerifyClosure"/> so the only way
+        /// forward is <see cref="RedoCorners"/>.</para>
+        /// </summary>
+        public bool TryVerifyClosure(
+            out ClosureQuality quality,
+            out CornerCaptureRejection rejection)
+        {
+            quality = ClosureQuality.Rejected;
+
+            if (Phase != ScanPhase.VerifyClosure)
+            {
+                rejection = CornerCaptureRejection.WrongPhase;
+                return false;
+            }
+
+            if (!corners.TryMeasureClosure(out quality, out rejection))
+            {
+                return false;
+            }
+
+            if (corners.IsClosureAccepted)
+            {
+                TransitionTo(ScanPhase.CaptureHeight);
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Discards the footprint and returns to corner capture. The locked
+        /// frame is deliberately left alone: a rescan re-measures the room, it
+        /// does not re-anchor it.
+        /// </summary>
+        public bool RedoCorners()
+        {
+            if (Phase != ScanPhase.VerifyClosure && Phase != ScanPhase.CaptureHeight)
+            {
+                return false;
+            }
+
+            corners.ClearCorners();
+            TransitionTo(ScanPhase.CaptureCorners);
+            Publish();
             return true;
         }
 
@@ -142,9 +278,27 @@ namespace GhostMap.Scanner.Workflow
         }
 
         /// <summary>
+        /// Advances the revision and republishes the snapshot.
+        ///
+        /// <para>The revision is monotonic within the session, never wound
+        /// back. The viewer ignores any snapshot whose revision is not greater
+        /// than the one it already holds, so an undo that decremented the
+        /// counter would publish a room the viewer was contractually obliged to
+        /// drop. Undo is a forward mutation like any other.</para>
+        /// </summary>
+        private void Publish()
+        {
+            Revision++;
+            Snapshot = BuildSnapshot();
+        }
+
+        /// <summary>
         /// Builds the snapshot for the current phase and revision. Collections
         /// are zero-length rather than null, which scene schema v1 requires on
         /// the wire.
+        ///
+        /// <para>Walls are absent by construction: schema v1 has no walls
+        /// field, and they are derived from consecutive corners on demand.</para>
         /// </summary>
         private SceneSnapshot BuildSnapshot()
         {
@@ -155,13 +309,13 @@ namespace GhostMap.Scanner.Workflow
                 revision = Revision,
                 scanPhase = Phase.ToString(),
                 finalized = false,
-                closureErrorM = 0f,
+                closureErrorM = corners.HasClosureMeasurement ? corners.ClosureErrorM : 0f,
                 room = new RoomModel
                 {
                     id = RoomId,
                     name = "Room",
                     heightM = 0f,
-                    corners = Array.Empty<CornerModel>(),
+                    corners = corners.CopyCorners(),
                     openings = Array.Empty<OpeningModel>(),
                     objects = Array.Empty<SceneObjectModel>()
                 }

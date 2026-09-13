@@ -1,11 +1,11 @@
 # Scanner Status
 
 ## Current state
-- **S3 implemented, tested off-device, and NOT yet verified on hardware.**
-  Four-corner capture and closure verification are in place and the whole
-  EditMode suite is green, but the Task S3 physical-device test has not been
-  run. **S3 is not complete.** The procedure is in
-  `docs/handoffs/2026-09-12-scanner-s3-corner-capture-closure.md`.
+- **S3 complete and verified on a physical iPhone.** Four-corner capture and
+  closure verification work on device: corners are captured from the
+  center-screen ray against the locked floor plane, every stored corner lands on
+  GhostMap y = 0, markers stay put, the S2 frame does not move, and closure
+  measured **0.031 m — Excellent** on the test room.
 - Delivered in S3: `CornerCaptureController`, `CornerCaptureHud`, the S3
   transitions and snapshot contents on `ScanWorkflowController`, and the scene
   builder's corner-capture UI. `VerifyScene()` now asserts the S3 wiring as
@@ -31,12 +31,42 @@
   root cause. Both are recorded below and in their handoffs.
 
 ## Last verified commit
-- `b0fe6f0` — S2, verified on a real iPhone. **S3 has no verified commit yet.** `4dd4c13` follows it and changed
+- `1e04d02` — S3, verified on a real iPhone. The commits that follow it change
+  only documentation, so their scanner sources are byte-identical.
+- `b0fe6f0` — S2, verified on a real iPhone. `4dd4c13` follows it and changed
   only a handoff document, so its scanner sources are byte-identical.
 - `80b5a48` — S1, verified on a real iPhone.
 - S1 reached `main` as merge commit `150512d` (PR #1) and S2 as merge commit
   `a3f15f8` (PR #2). Both were merged with a merge commit so the original task
   SHAs stay reachable from the handoff documents that cite them.
+
+## Physical-device verification — S3, passed
+Observed on a real iPhone against the build produced from `1e04d02`:
+
+- `Phase` reaches `CaptureCorners` after the floor lock
+- all four corners capture successfully, in order
+- every stored corner reads GhostMap `y = 0.00`
+- markers stay fixed at the locations they were captured at
+- `Frame O`, `Frame X` and `Frame Z` unchanged after the floor lock
+- closure verification works
+- **closure error 0.031 m, classified `Excellent`**
+- a successful closure advances the phase to `CaptureHeight`
+- `Session` stays `SessionTracking`
+- `Handedness` stays `+1.000`
+- GhostMap camera coordinates keep updating correctly as the user moves
+- **Undo** removes the most recent corner correctly
+- **Redo Corners** clears the corner set without changing the locked frame
+- a deliberately too-close corner is refused by the spacing validation
+
+That covers every item of the Task S3 device procedure in
+`docs/handoffs/2026-09-12-scanner-s3-corner-capture-closure.md`, and confirms on
+hardware what the automated tests assert off it: capture is anchored to the
+locked floor plane, corners land on Ghost y = 0, the S2 frame does not move
+during or after corner capture, and the closure bands behave as specified.
+
+The 0.031 m closure is the strongest on-device evidence available that the frame
+did not drift across the scan. A frame that had moved would have surfaced here as
+accumulated error rather than as a clean re-aim onto the stored first corner.
 
 ## Task S3 — corner capture and closure
 
@@ -205,7 +235,20 @@ three of its four cases under that mutation with residues of `-5.96e-07`,
 `xcodebuild -target Unity-iPhone -configuration Release -sdk iphoneos
 CODE_SIGNING_ALLOWED=NO` reported BUILD SUCCEEDED.
 
-**The S3 physical-device test has not been run.**
+The shared package was also run standalone in its own host project, to confirm
+S3 changed nothing under `shared/`:
+```bash
+/Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -projectPath shared/TestProject \
+  -runTests -testPlatform EditMode \
+  -testResults /tmp/ghostmap-s3-final-shared.xml \
+  -logFile /tmp/ghostmap-s3-final-shared.log
+```
+**156 tests, 156 passed, 0 failed, 0 skipped.** Unity exit code 0 — unchanged
+from F4.
+
+The S3 physical-device test was then run on a real iPhone and **passed** — see
+the verification section above.
 
 ### S2 — previous
 ```bash
@@ -361,6 +404,23 @@ physical-device test from passing.
 - A corner can be undone but not edited. Fixing corner 2 means undoing 4 and 3
   first, or pressing Redo Corners. The plan asks for Undo, not editing.
 
+### Not covered by the S3 device test
+The S3 hardware run exercised a rectangular room with a good scan. These paths
+are covered by EditMode tests but have **not** been seen on a phone:
+
+- the `Acceptable` closure band (0.08-0.15 m) and the `Rejected` band
+  (> 0.15 m), including the rejected path's refusal to advance and its
+  Redo-Corners-only exit. Only `Excellent` (0.031 m) was observed;
+- the area, wall-length, interior-angle and self-intersection refusals. Only the
+  minimum-spacing refusal was provoked on device;
+- capture blocked by degraded tracking (`TrackingNotGood`);
+- `RayMissedFloor`, which needs the crosshair aimed at or above the horizon;
+- a non-rectangular four-corner room.
+
+None of these is suspected broken — each has a passing test, and two of the
+three validation groups were mutation-checked. They are recorded because a
+passing test is not the same evidence as a passing phone.
+
 ### Toolchain warnings, stock noise
 - `ld: warning: search path '.../Metal.xctoolchain/usr/lib/swift*/iphoneos' not
   found` (twice per link). These are the ARKit package's own `$(TOOLCHAIN_DIR)`
@@ -376,14 +436,16 @@ physical-device test from passing.
   trampoline sources.
 
 ## Next safe task
-- **Run the Task S3 physical-device test.** S3 is implemented and green off-device
-  but is not complete until it passes on a real iPhone. The procedure is in
-  `docs/handoffs/2026-09-12-scanner-s3-corner-capture-closure.md`.
-- **Then S4** — height capture. It consumes the same locked frame, the walls
-  derived by `RoomGeometry.BuildWalls`, and
-  `GhostCoordinateFrame.WorldRayToGhost`. `ScanPhase.CaptureHeight` is already
-  entered by an accepted closure, so S4 starts by giving that phase a UI. Do not
-  begin it until S3 is verified on hardware.
+- **S4** — height capture. S3 is complete and verified on hardware, so the
+  scanner workstream may proceed to the next task in
+  `docs/plans/ghostmap-implementation-plan.md`. S4 consumes the same locked
+  frame, the walls derived by `RoomGeometry.BuildWalls`, and
+  `GhostCoordinateFrame.WorldRayToGhost`; all three are in place and tested.
+  `ScanPhase.CaptureHeight` is already entered by an accepted closure and has no
+  UI behind it, so S4 starts there.
+- S4 inherits one loose end: `RoomModel.heightM` is still published as `0f`.
+  `RoomValidator.ValidateRoom` treats `0` as "not yet captured" and skips the
+  2.0-4.0 m range check, which is why the four-corner snapshot validates today.
 
 ## Do not touch
 - `shared/**`, `fixtures/**`, `tools/**`, `docs/contracts/**`, `docs/decisions/**`

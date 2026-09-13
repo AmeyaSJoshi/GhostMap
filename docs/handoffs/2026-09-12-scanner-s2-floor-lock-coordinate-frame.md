@@ -10,9 +10,9 @@
 `b0fe6f0` (implementation). This handoff's own sha is recorded by the follow-up docs commit below.
 
 ## Status
-**Task S2 implementation is complete and fully covered by automated tests, but
-it is NOT done.** The physical-device test has not been run. Per `AGENTS.md`
-rule 12, nothing here may be described as working on a phone until it is.
+**Task S2 is complete and verified on a physical iPhone.** This handoff closes
+S2. The device procedure below was run against the build produced from `b0fe6f0`
+and passed; the results are recorded under "Physical device".
 
 ## What changed
 
@@ -227,10 +227,28 @@ independently from the camera yaw, and a new test
   -configuration Release -sdk iphoneos CODE_SIGNING_ALLOWED=NO` —
   **BUILD SUCCEEDED**.
 
-### Physical device
-**NOT RUN.** See below.
+### Physical device — PASSED
+Verified on a real iPhone against the build produced from `b0fe6f0`:
 
-## Physical-device test procedure
+- `Phase` reaches `FloorLocked`
+- `Session` is `SessionTracking`
+- `Handedness: +1.000`
+- `Cam G` exists and updates as the user moves
+- stepping right increases GhostMap **x**
+- walking forward increases GhostMap **z**
+- crouching lowers GhostMap **y**
+- `Frame O`, `Frame X` and `Frame Z` stay fixed after the lock
+- floor points stay near GhostMap **y = 0**
+- returning near the lock spot returns close to the GhostMap origin
+- no mirrored-axis behavior observed
+
+Every item of the procedure below was covered. The three claims the automated
+tests exist to protect were each confirmed independently on hardware: the frame
+is right-handed (`+1.000`, not `-1.000`), it is immutable after the lock (`Frame
+O/X/Z` fixed while walking), and `CameraYOffset` does not displace it (floor
+points at Ghost y = 0, not y = ±1.12).
+
+## Physical-device test procedure — run, passed
 
 ### What you should see on launch
 The S1 diagnostics block at the top, unchanged. Below it, near the bottom:
@@ -320,7 +338,7 @@ Small drift over minutes is ARKit, not the frame. A sudden jump is not.
 - Walking forward decreases z, or right decreases x -> an axis sign error.
 
 ## Known failures
-- None in automated testing.
+- None. S2 passes, on the bench and on hardware.
 
 ## Known issues — non-blocking
 - Everything in the S1 "Known issues" list still applies: the two-step build, no
@@ -344,5 +362,17 @@ Small drift over minutes is ARKit, not the frame. A sudden jump is not.
 - `docs/status/scanner.md`
 
 ## Next task
-- **Finish S2**: run the physical-device test above. Do not start S3 until it
-  passes.
+- **S3** — four-corner capture and closure verification. Do not start it in this
+  handoff's scope; S2 is closed here.
+
+S3 consumes what S2 leaves in place:
+- `ScanWorkflowController.Frame`, the locked immutable `GhostCoordinateFrame`;
+- `ISpatialProvider.GetScreenRay` for the center-screen camera ray;
+- `RayPlaneMath.TryIntersectHorizontalPlane`, which already rejects parallel,
+  grazing and behind-camera rays;
+- the `FloorLocked -> CaptureCorners` transition, already in the table.
+
+Corner capture should intersect in Ghost space against y = 0, as
+`CameraRayIntersectsTheGhostFloorAtTheAimedPoint` demonstrates, rather than
+against the AR-world floor Y — the two agree, but the Ghost form needs no second
+conversion and cannot pick up a stale floor height.

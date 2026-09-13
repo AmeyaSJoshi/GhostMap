@@ -1,14 +1,15 @@
 # Scanner Status
 
 ## Current state
-- **S2 implemented and fully covered by automated tests, but NOT complete.** The
-  physical-device test has not been run. Per `AGENTS.md` rule 12 nothing in S2
-  may be called working until it is. The procedure is in
-  `docs/handoffs/2026-09-12-scanner-s2-floor-lock-coordinate-frame.md`.
-- Floor lock and the GhostMap coordinate frame exist: `ArSpatialProvider`,
-  `FloorLockController`, `ScanWorkflowController`, `ScanPhase` and the
-  `FloorLockHud` crosshair / Lock Floor button / readout. The scene builder now
-  produces all of it, and `ScannerSceneBuilder.VerifyScene()` asserts the wiring.
+- **S2 complete and verified on a physical iPhone.** Floor lock and the GhostMap
+  coordinate frame work on device: the frame is established from a confirmed
+  floor, it is right-handed in Unity's sense, it stays fixed while the user moves,
+  and the floor normalizes to Ghost y = 0.
+- Delivered in S2: `ArSpatialProvider` / `ISpatialProvider`,
+  `FloorLockController`, `ScanWorkflowController`, `ScanPhase`, and the
+  `FloorLockHud` crosshair / Lock Floor button / readout. The scene builder
+  produces all of it, and `ScannerSceneBuilder.VerifyScene()` asserts the wiring
+  so a null reference fails on a laptop rather than silently on a phone.
 - **S1 complete and verified on a physical iPhone.** The scanner Unity project,
   AR smoke-test scene, two-step iOS build pipeline and on-device diagnostics are
   in place, and the Task S1 physical-device test passes.
@@ -21,11 +22,31 @@
   root cause. Both are recorded below and in their handoffs.
 
 ## Last verified commit
-- `80b5a48` — the last commit verified on a real iPhone. That is still S1. Its
-  scanner sources are byte-identical to `772ce05`; `80b5a48` changed only a
-  handoff document.
+- `b0fe6f0` — S2, verified on a real iPhone. `4dd4c13` follows it and changed
+  only a handoff document, so its scanner sources are byte-identical.
+- `80b5a48` — S1, verified on a real iPhone.
 - S1 reached `main` as merge commit `150512d` (PR #1), merged with a merge
   commit so the original S1 SHAs stay reachable.
+
+## Physical-device verification — S2, passed
+Observed on a real iPhone against the build produced from `b0fe6f0`:
+
+- `Phase` reaches `FloorLocked`
+- `Session` is `SessionTracking`
+- `Handedness: +1.000` — the frame is not mirrored
+- `Cam G` exists and updates as the user moves
+- stepping right increases GhostMap **x**
+- walking forward increases GhostMap **z**
+- crouching lowers GhostMap **y**
+- `Frame O`, `Frame X` and `Frame Z` stay fixed after the lock
+- floor points stay near GhostMap **y = 0**
+- returning near the lock spot returns close to the GhostMap origin
+- no mirrored-axis behavior observed
+
+That covers every item of the Task S2 device procedure in
+`docs/handoffs/2026-09-12-scanner-s2-floor-lock-coordinate-frame.md`, and in
+particular confirms on hardware what the automated tests assert off it: the
+frame is right-handed, immutable after lock, and immune to `CameraYOffset`.
 
 ## The GhostMap coordinate frame — S2
 Built at the floor-lock instant, exactly as `GhostCoordinateFrame`'s own
@@ -114,7 +135,8 @@ independently and `FrameAxesMatchTheCameraYawTheLockWasTakenAt` was added.
 `xcodebuild -target Unity-iPhone -configuration Release -sdk iphoneos
 CODE_SIGNING_ALLOWED=NO` reported BUILD SUCCEEDED.
 
-**No physical-device test has been run for S2.**
+The S2 physical-device test was then run on a real iPhone and **passed** — see
+the verification section above.
 
 ### S1
 - `GhostMap.Scanner.EditModeTests` — 4/4 passed.
@@ -246,9 +268,10 @@ physical-device test from passing.
   trampoline sources.
 
 ## Next safe task
-- **Finish S2**: run the physical-device test in
-  `docs/handoffs/2026-09-12-scanner-s2-floor-lock-coordinate-frame.md`. S3 must
-  not start until it passes.
+- **S3** — four-corner capture and closure verification. S2 is complete and
+  verified on hardware, so the scanner workstream may proceed to the next task in
+  `docs/plans/ghostmap-implementation-plan.md`. S3 consumes the locked frame and
+  `RayPlaneMath.TryIntersectHorizontalPlane`; both are in place and tested.
 
 ## Do not touch
 - `shared/**`, `fixtures/**`, `tools/**`, `docs/contracts/**`, `docs/decisions/**`

@@ -7,7 +7,7 @@
 `150512d` — the merge of PR #1, which brought Task S1 onto `main`.
 
 ## Head commit
-`<filled in by the follow-up docs commit>`
+`b0fe6f0` (implementation). This handoff's own sha is recorded by the follow-up docs commit below.
 
 ## Status
 **Task S2 implementation is complete and fully covered by automated tests, but

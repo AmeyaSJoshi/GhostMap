@@ -7,7 +7,7 @@
 `9690151` (merge of PR #4, `scanner/s4-room-height-capture` into `main`)
 
 ## Head commit
-`<filled in by the follow-up "docs(handoffs): record S5 implementation commit sha" commit>`
+`7274cfe`
 
 ## What changed
 - `Runtime/Capture/OpeningCaptureController.cs` (new): captures a door or

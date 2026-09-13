@@ -8,7 +8,9 @@
 history.
 
 ## Head commit
-`<pending — recorded in the next commit, following the S1-S3 convention>`
+`1b8a6ce` — `feat(scanner): capture room height with manual fallback`. The
+commit that follows it changes only this handoff document, so its scanner
+sources are byte-identical.
 
 ## Status
 **Task S4 is implemented, tested off-device, and built for iOS. It has NOT

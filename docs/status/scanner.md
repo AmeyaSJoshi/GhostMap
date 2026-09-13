@@ -42,9 +42,10 @@
   root cause. Both are recorded below and in their handoffs.
 
 ## Last verified commit
-- S4's implementation commit is not yet physically verified — see the S4
-  handoff for the exact commit once it exists. Do not treat S4 as done on
-  hardware until that verification is recorded here.
+- `1b8a6ce` — S4 implementation, **not yet physically verified**. All
+  off-device tests pass and the iOS build succeeds; see the S4 handoff for the
+  device procedure. Do not treat S4 as done on hardware until that
+  verification is recorded here.
 - `1e04d02` — S3, verified on a real iPhone. The commits that follow it change
   only documentation, so their scanner sources are byte-identical.
 - `b0fe6f0` — S2, verified on a real iPhone. `4dd4c13` follows it and changed

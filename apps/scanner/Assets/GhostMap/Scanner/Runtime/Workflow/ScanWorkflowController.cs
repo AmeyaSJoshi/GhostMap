@@ -48,15 +48,21 @@ namespace GhostMap.Scanner.Workflow
         private readonly FloorLockController floorLock;
         private readonly CornerCaptureController corners;
         private readonly HeightCaptureController height;
+        private readonly OpeningCaptureController openingCapture;
+        private readonly ObjectPlacementController objectPlacement;
 
         public ScanWorkflowController(
             FloorLockController floorLock,
             CornerCaptureController corners,
-            HeightCaptureController height)
+            HeightCaptureController height,
+            OpeningCaptureController openingCapture,
+            ObjectPlacementController objectPlacement)
         {
             this.floorLock = floorLock;
             this.corners = corners;
             this.height = height;
+            this.openingCapture = openingCapture;
+            this.objectPlacement = objectPlacement;
             SessionId = Guid.NewGuid().ToString();
             RoomId = Guid.NewGuid().ToString();
             Phase = ScanPhase.Boot;
@@ -84,6 +90,12 @@ namespace GhostMap.Scanner.Workflow
 
         /// <summary>Task S4 height capture. Read-only from outside the workflow.</summary>
         public HeightCaptureController Height => height;
+
+        /// <summary>Task S5 opening capture. Read-only from outside the workflow.</summary>
+        public OpeningCaptureController Openings => openingCapture;
+
+        /// <summary>Task S5 object placement. Read-only from outside the workflow.</summary>
+        public ObjectPlacementController Objects => objectPlacement;
 
         /// <summary>
         /// Advances the pre-floor-lock phases from tracking quality. Boot
@@ -332,6 +344,247 @@ namespace GhostMap.Scanner.Workflow
             return true;
         }
 
+        // -------------------------------------------------------------------
+        // Task S5 Part 1 — openings
+        // -------------------------------------------------------------------
+
+        /// <summary>Selects a wall, by index into <see cref="OpeningCaptureController.Walls"/>, to place an opening on.</summary>
+        public bool SelectOpeningWall(int index)
+        {
+            if (Phase != ScanPhase.AddOpenings)
+            {
+                return false;
+            }
+
+            return openingCapture.SelectWall(index);
+        }
+
+        /// <summary>Chooses door or window for the next opening capture.</summary>
+        public bool SetOpeningType(string type)
+        {
+            if (Phase != ScanPhase.AddOpenings)
+            {
+                return false;
+            }
+
+            return openingCapture.SetType(type);
+        }
+
+        /// <summary>
+        /// Captures the lower-left point of the opening under the crosshair.
+        /// Not a structural mutation by itself — nothing is appended, so the
+        /// snapshot is not republished — until <see cref="TryCaptureOpeningEndPoint"/>
+        /// commits it.
+        /// </summary>
+        public bool TryCaptureOpeningStartPoint(out OpeningCaptureRejection rejection)
+        {
+            if (Phase != ScanPhase.AddOpenings)
+            {
+                rejection = OpeningCaptureRejection.WrongPhase;
+                return false;
+            }
+
+            return openingCapture.TryCaptureStartPoint(out rejection);
+        }
+
+        /// <summary>
+        /// Captures the upper-right point and, on a valid opening, appends it
+        /// and republishes the snapshot.
+        /// </summary>
+        public bool TryCaptureOpeningEndPoint(out OpeningCaptureRejection rejection)
+        {
+            if (Phase != ScanPhase.AddOpenings)
+            {
+                rejection = OpeningCaptureRejection.WrongPhase;
+                return false;
+            }
+
+            if (!openingCapture.TryCaptureEndPointAndCommit(out rejection))
+            {
+                return false;
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>Removes the most recently captured opening and republishes the snapshot.</summary>
+        public bool TryUndoLastOpening(out OpeningCaptureRejection rejection)
+        {
+            if (Phase != ScanPhase.AddOpenings)
+            {
+                rejection = OpeningCaptureRejection.WrongPhase;
+                return false;
+            }
+
+            if (!openingCapture.TryUndoLastOpening(out rejection))
+            {
+                return false;
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Leaves <see cref="ScanPhase.AddOpenings"/> for
+        /// <see cref="ScanPhase.AddObjects"/>. Legal with zero openings
+        /// captured — implementation plan section 16 allows continuing
+        /// without any.
+        /// </summary>
+        public bool FinishAddingOpenings()
+        {
+            if (Phase != ScanPhase.AddOpenings)
+            {
+                return false;
+            }
+
+            TransitionTo(ScanPhase.AddObjects);
+            Publish();
+            return true;
+        }
+
+        // -------------------------------------------------------------------
+        // Task S5 Part 2 — furniture / objects
+        // -------------------------------------------------------------------
+
+        /// <summary>Chooses the furniture type the next placement will use.</summary>
+        public bool SetObjectType(string type)
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                return false;
+            }
+
+            return objectPlacement.SetType(type);
+        }
+
+        /// <summary>Places an object under the crosshair and republishes the snapshot.</summary>
+        public bool TryPlaceObject(out ObjectPlacementRejection rejection)
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                rejection = ObjectPlacementRejection.WrongPhase;
+                return false;
+            }
+
+            if (!objectPlacement.TryPlaceObject(out rejection))
+            {
+                return false;
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>Removes the most recently placed object and republishes the snapshot.</summary>
+        public bool TryUndoLastObject(out ObjectPlacementRejection rejection)
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                rejection = ObjectPlacementRejection.WrongPhase;
+                return false;
+            }
+
+            if (!objectPlacement.TryUndoLastObject(out rejection))
+            {
+                return false;
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>Adjusts a placed object's width and republishes the snapshot on success.</summary>
+        public bool TrySetObjectWidth(int index, float widthM, out ObjectPlacementRejection rejection)
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                rejection = ObjectPlacementRejection.WrongPhase;
+                return false;
+            }
+
+            if (!objectPlacement.TrySetWidth(index, widthM, out rejection))
+            {
+                return false;
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>Adjusts a placed object's depth and republishes the snapshot on success.</summary>
+        public bool TrySetObjectDepth(int index, float depthM, out ObjectPlacementRejection rejection)
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                rejection = ObjectPlacementRejection.WrongPhase;
+                return false;
+            }
+
+            if (!objectPlacement.TrySetDepth(index, depthM, out rejection))
+            {
+                return false;
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>Adjusts a placed object's height and republishes the snapshot on success.</summary>
+        public bool TrySetObjectHeight(int index, float heightM, out ObjectPlacementRejection rejection)
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                rejection = ObjectPlacementRejection.WrongPhase;
+                return false;
+            }
+
+            if (!objectPlacement.TrySetHeight(index, heightM, out rejection))
+            {
+                return false;
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>Adjusts a placed object's yaw and republishes the snapshot on success.</summary>
+        public bool TrySetObjectYaw(int index, float yawDeg, out ObjectPlacementRejection rejection)
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                rejection = ObjectPlacementRejection.WrongPhase;
+                return false;
+            }
+
+            if (!objectPlacement.TrySetYaw(index, yawDeg, out rejection))
+            {
+                return false;
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Leaves <see cref="ScanPhase.AddObjects"/> for
+        /// <see cref="ScanPhase.ReadyToFinalize"/>. Legal with zero objects
+        /// placed — implementation plan section 16 allows continuing without
+        /// furniture. Task S6 owns finalization itself.
+        /// </summary>
+        public bool FinishAddingObjects()
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                return false;
+            }
+
+            TransitionTo(ScanPhase.ReadyToFinalize);
+            Publish();
+            return true;
+        }
+
         /// <summary>
         /// Moves to <paramref name="next"/>, or throws when the plan does not
         /// allow that transition.
@@ -391,8 +644,8 @@ namespace GhostMap.Scanner.Workflow
                     name = "Room",
                     heightM = height.HasCapturedHeight ? height.HeightM : 0f,
                     corners = corners.CopyCorners(),
-                    openings = Array.Empty<OpeningModel>(),
-                    objects = Array.Empty<SceneObjectModel>()
+                    openings = openingCapture.CopyOpenings(),
+                    objects = objectPlacement.CopyObjects()
                 }
             };
         }

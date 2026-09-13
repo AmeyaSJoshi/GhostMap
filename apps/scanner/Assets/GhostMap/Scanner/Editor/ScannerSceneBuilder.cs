@@ -43,6 +43,27 @@ namespace GhostMap.Scanner.Editor
 
         private const float S4ManualRowY = 1200f;
 
+        /// <summary>
+        /// Task S5 Part 1 (openings) button rows, stacked above the Task S4
+        /// block (1080-1290). Bring-up instrumentation, not the capture UI —
+        /// see the S3/S4 handoffs' "screen is now crowded" notes, which this
+        /// continues rather than solves; Task S6 owns the real layout.
+        /// </summary>
+        private const float S5OpeningsRow1Y = 1330f;
+
+        private const float S5OpeningsRow2Y = 1440f;
+
+        private const float S5OpeningsReadoutY = 1500f;
+
+        /// <summary>Task S5 Part 2 (furniture) button rows, stacked above the openings block.</summary>
+        private const float S5ObjectsRow1Y = 1710f;
+
+        private const float S5ObjectsRow2Y = 1810f;
+
+        private const float S5ObjectsRow3Y = 1900f;
+
+        private const float S5ObjectsReadoutY = 1990f;
+
         [MenuItem("GhostMap/Build Scanner Scene")]
         public static void BuildScene()
         {
@@ -148,6 +169,100 @@ namespace GhostMap.Scanner.Editor
                 ("useManualHeightButton", useManualHeightButton),
                 ("readoutText", heightReadout));
 
+            // Task S5 Part 1: openings.
+            Text openingReadout = CreateOpeningReadout(canvasGo);
+            Button selectOpeningWallButton = CreateActionButton(
+                canvasGo, "SelectOpeningWallButton", "Wall 1/4",
+                new Vector2(-350f, S5OpeningsRow1Y), new Vector2(280f, 90f), 28, out Text selectOpeningWallLabel);
+            Button toggleOpeningTypeButton = CreateActionButton(
+                canvasGo, "ToggleOpeningTypeButton", "Type: door",
+                new Vector2(0f, S5OpeningsRow1Y), new Vector2(280f, 90f), 28, out Text toggleOpeningTypeLabel);
+            Button captureOpeningPointButton = CreateActionButton(
+                canvasGo, "CaptureOpeningPointButton", "Capture Lower-Left",
+                new Vector2(350f, S5OpeningsRow1Y), new Vector2(280f, 90f), 24, out Text captureOpeningPointLabel);
+            Button undoOpeningButton = CreateActionButton(
+                canvasGo, "UndoOpeningButton", "Undo Opening",
+                new Vector2(-260f, S5OpeningsRow2Y), new Vector2(300f, 90f), 28, out _);
+            Button finishOpeningsButton = CreateActionButton(
+                canvasGo, "FinishOpeningsButton", "Finish Openings",
+                new Vector2(260f, S5OpeningsRow2Y), new Vector2(300f, 90f), 28, out _);
+
+            var openingHudGo = new GameObject("OpeningCaptureHud", typeof(OpeningCaptureHud));
+            AssignSerializedReferences(
+                openingHudGo.GetComponent<OpeningCaptureHud>(),
+                ("floorLockHud", floorLockHud),
+                ("spatialProvider", spatialProvider),
+                ("selectWallButton", selectOpeningWallButton),
+                ("selectWallLabel", selectOpeningWallLabel),
+                ("toggleTypeButton", toggleOpeningTypeButton),
+                ("toggleTypeLabel", toggleOpeningTypeLabel),
+                ("capturePointButton", captureOpeningPointButton),
+                ("capturePointLabel", captureOpeningPointLabel),
+                ("undoOpeningButton", undoOpeningButton),
+                ("finishOpeningsButton", finishOpeningsButton),
+                ("readoutText", openingReadout));
+
+            // Task S5 Part 2: furniture.
+            Text objectReadout = CreateObjectReadout(canvasGo);
+            Button selectObjectTypeButton = CreateActionButton(
+                canvasGo, "SelectObjectTypeButton", "Type: bed",
+                new Vector2(-350f, S5ObjectsRow1Y), new Vector2(280f, 80f), 26, out Text selectObjectTypeLabel);
+            Button placeObjectButton = CreateActionButton(
+                canvasGo, "PlaceObjectButton", "Place Object",
+                new Vector2(0f, S5ObjectsRow1Y), new Vector2(280f, 80f), 26, out _);
+            Button undoObjectButton = CreateActionButton(
+                canvasGo, "UndoObjectButton", "Undo Object",
+                new Vector2(350f, S5ObjectsRow1Y), new Vector2(280f, 80f), 26, out _);
+
+            Button widthMinusButton = CreateActionButton(
+                canvasGo, "WidthMinusButton", "W -",
+                new Vector2(-450f, S5ObjectsRow2Y), new Vector2(160f, 70f), 26, out _);
+            Button widthPlusButton = CreateActionButton(
+                canvasGo, "WidthPlusButton", "W +",
+                new Vector2(-270f, S5ObjectsRow2Y), new Vector2(160f, 70f), 26, out _);
+            Button depthMinusButton = CreateActionButton(
+                canvasGo, "DepthMinusButton", "D -",
+                new Vector2(-70f, S5ObjectsRow2Y), new Vector2(160f, 70f), 26, out _);
+            Button depthPlusButton = CreateActionButton(
+                canvasGo, "DepthPlusButton", "D +",
+                new Vector2(110f, S5ObjectsRow2Y), new Vector2(160f, 70f), 26, out _);
+            Button heightMinusButton = CreateActionButton(
+                canvasGo, "HeightMinusButton", "H -",
+                new Vector2(290f, S5ObjectsRow2Y), new Vector2(160f, 70f), 26, out _);
+            Button heightPlusButton = CreateActionButton(
+                canvasGo, "HeightPlusButton", "H +",
+                new Vector2(470f, S5ObjectsRow2Y), new Vector2(160f, 70f), 26, out _);
+
+            Button yawMinusButton = CreateActionButton(
+                canvasGo, "YawMinusButton", "Yaw -",
+                new Vector2(-260f, S5ObjectsRow3Y), new Vector2(200f, 70f), 26, out _);
+            Button yawPlusButton = CreateActionButton(
+                canvasGo, "YawPlusButton", "Yaw +",
+                new Vector2(-40f, S5ObjectsRow3Y), new Vector2(200f, 70f), 26, out _);
+            Button finishObjectsButton = CreateActionButton(
+                canvasGo, "FinishObjectsButton", "Finish Objects",
+                new Vector2(260f, S5ObjectsRow3Y), new Vector2(300f, 70f), 26, out _);
+
+            var objectHudGo = new GameObject("ObjectPlacementHud", typeof(ObjectPlacementHud));
+            AssignSerializedReferences(
+                objectHudGo.GetComponent<ObjectPlacementHud>(),
+                ("floorLockHud", floorLockHud),
+                ("spatialProvider", spatialProvider),
+                ("selectTypeButton", selectObjectTypeButton),
+                ("selectTypeLabel", selectObjectTypeLabel),
+                ("placeObjectButton", placeObjectButton),
+                ("undoObjectButton", undoObjectButton),
+                ("widthPlusButton", widthPlusButton),
+                ("widthMinusButton", widthMinusButton),
+                ("depthPlusButton", depthPlusButton),
+                ("depthMinusButton", depthMinusButton),
+                ("heightPlusButton", heightPlusButton),
+                ("heightMinusButton", heightMinusButton),
+                ("yawPlusButton", yawPlusButton),
+                ("yawMinusButton", yawMinusButton),
+                ("finishObjectsButton", finishObjectsButton),
+                ("readoutText", objectReadout));
+
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath) !);
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
@@ -217,6 +332,43 @@ namespace GhostMap.Scanner.Editor
                     "captureHeightLabel",
                     "manualHeightInput",
                     "useManualHeightButton",
+                    "readoutText");
+
+                var openingHud = FindInScene<OpeningCaptureHud>(scene);
+                Require(openingHud != null, "no OpeningCaptureHud");
+                RequireAssigned(
+                    openingHud,
+                    "floorLockHud",
+                    "spatialProvider",
+                    "selectWallButton",
+                    "selectWallLabel",
+                    "toggleTypeButton",
+                    "toggleTypeLabel",
+                    "capturePointButton",
+                    "capturePointLabel",
+                    "undoOpeningButton",
+                    "finishOpeningsButton",
+                    "readoutText");
+
+                var objectHud = FindInScene<ObjectPlacementHud>(scene);
+                Require(objectHud != null, "no ObjectPlacementHud");
+                RequireAssigned(
+                    objectHud,
+                    "floorLockHud",
+                    "spatialProvider",
+                    "selectTypeButton",
+                    "selectTypeLabel",
+                    "placeObjectButton",
+                    "undoObjectButton",
+                    "widthPlusButton",
+                    "widthMinusButton",
+                    "depthPlusButton",
+                    "depthMinusButton",
+                    "heightPlusButton",
+                    "heightMinusButton",
+                    "yawPlusButton",
+                    "yawMinusButton",
+                    "finishObjectsButton",
                     "readoutText");
             }
             finally
@@ -370,6 +522,44 @@ namespace GhostMap.Scanner.Editor
             rect.pivot = new Vector2(0f, 0f);
             rect.anchoredPosition = new Vector2(24f, 1000f);
             rect.sizeDelta = new Vector2(-48f, 260f);
+
+            return text;
+        }
+
+        /// <summary>
+        /// The Task S5 Part 1 readout, above the Task S4 block: the selected
+        /// wall and type, the live aim and pending-point projections, and
+        /// every captured opening.
+        /// </summary>
+        private static Text CreateOpeningReadout(GameObject canvasGo)
+        {
+            Text text = CreateText(canvasGo, "OpeningCaptureReadout", 24);
+
+            RectTransform rect = text.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(1f, 0f);
+            rect.pivot = new Vector2(0f, 0f);
+            rect.anchoredPosition = new Vector2(24f, S5OpeningsReadoutY);
+            rect.sizeDelta = new Vector2(-48f, 200f);
+
+            return text;
+        }
+
+        /// <summary>
+        /// The Task S5 Part 2 readout, above the openings block: the object
+        /// count, next type, live floor aim, and every placed object's
+        /// dimensions and yaw.
+        /// </summary>
+        private static Text CreateObjectReadout(GameObject canvasGo)
+        {
+            Text text = CreateText(canvasGo, "ObjectPlacementReadout", 24);
+
+            RectTransform rect = text.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(1f, 0f);
+            rect.pivot = new Vector2(0f, 0f);
+            rect.anchoredPosition = new Vector2(24f, S5ObjectsReadoutY);
+            rect.sizeDelta = new Vector2(-48f, 220f);
 
             return text;
         }

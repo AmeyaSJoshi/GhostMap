@@ -8,6 +8,7 @@
         "Unity.XR.CoreUtils",
         "Unity.XR.Management",
         "Unity.XR.Management.Editor",
+        "Unity.InputSystem",
         "UnityEngine.UI"
     ],
     "includePlatforms": [

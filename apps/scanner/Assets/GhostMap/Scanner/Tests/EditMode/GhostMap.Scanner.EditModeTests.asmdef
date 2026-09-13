@@ -4,6 +4,9 @@
     "references": [
         "GhostMap.Scanner.Editor",
         "GhostMap.Scanner.Runtime",
+        "GhostMap.Shared",
+        "Unity.XR.ARFoundation",
+        "Unity.XR.ARSubsystems",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

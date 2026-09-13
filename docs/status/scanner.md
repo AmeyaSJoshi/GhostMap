@@ -1,6 +1,21 @@
 # Scanner Status
 
 ## Current state
+- **S4 complete and verified on a physical iPhone.** Room height is captured
+  by deriving vertical wall planes from the S3 footprint, intersecting the
+  center-screen ray with the wall the user selects, and validating the result
+  against 2.0-4.0 m. On device: wall selection worked, aiming at the selected
+  wall's ceiling junction produced a valid candidate, **captured height was
+  2.69 m**, `Capture Height` advanced the phase to `AddOpenings`, `Frame O/X/Z`
+  and the S3 corner markers stayed fixed, and the tracking session stayed
+  `SessionTracking` throughout. The measured height agreed with the captured
+  value within acceptable tolerance. A manual numeric fallback exists per the
+  implementation plan's section 8.7 and was not exercised on this device pass
+  (see "Known issues").
+- Delivered in S4: `HeightCaptureController`, `HeightCaptureHud`, the S4
+  transition and real `heightM` on `ScanWorkflowController`'s snapshot, and the
+  scene builder's wall-selection / capture / manual-entry UI. `VerifyScene()`
+  now asserts the S4 wiring too.
 - **S3 complete and verified on a physical iPhone.** Four-corner capture and
   closure verification work on device: corners are captured from the
   center-screen ray against the locked floor plane, every stored corner lands on
@@ -31,6 +46,8 @@
   root cause. Both are recorded below and in their handoffs.
 
 ## Last verified commit
+- `1b8a6ce` — S4, verified on a real iPhone. The commits that follow it change
+  only documentation, so their scanner sources are byte-identical.
 - `1e04d02` — S3, verified on a real iPhone. The commits that follow it change
   only documentation, so their scanner sources are byte-identical.
 - `b0fe6f0` — S2, verified on a real iPhone. `4dd4c13` follows it and changed
@@ -39,6 +56,35 @@
 - S1 reached `main` as merge commit `150512d` (PR #1) and S2 as merge commit
   `a3f15f8` (PR #2). Both were merged with a merge commit so the original task
   SHAs stay reachable from the handoff documents that cite them.
+
+## Physical-device verification — S4, passed
+Observed on a real iPhone against the build produced from `1b8a6ce`:
+
+- `Phase` reached `CaptureHeight` after the S3 closure
+- wall selection worked: cycling `Wall N/4` moved the highlighted wall
+- aiming the center crosshair at the selected wall's ceiling junction produced
+  a valid candidate height
+- **candidate/captured height was 2.69 m**
+- `Capture Height` succeeded and advanced `Phase` to `AddOpenings`
+- `Frame O`, `Frame X` and `Frame Z` stayed fixed through height capture
+- the S3 corner markers stayed fixed through height capture
+- `Session` stayed `SessionTracking` throughout
+- the measured room height agreed with the captured 2.69 m within acceptable
+  tolerance
+
+That covers the golden path of the device procedure in
+`docs/handoffs/2026-09-12-scanner-s4-height-capture.md`, and confirms on
+hardware what the automated tests assert off it: walls are derived correctly
+from the S3 footprint, the ray/plane intersection lands on the real ceiling
+line, the S2 frame and S3 corners are untouched by height capture, and a valid
+height advances the phase.
+
+**Not exercised on this device pass** — still covered only by EditMode tests:
+the manual height fallback and its on-screen-keyboard behavior, an
+out-of-range automatic candidate (red marker / rejected capture), selecting a
+wall other than the one aimed at, and a non-rectangular room. None of these is
+suspected broken; they are recorded because a passing test is not the same
+evidence as a passing phone.
 
 ## Physical-device verification — S3, passed
 Observed on a real iPhone against the build produced from `1e04d02`:
@@ -67,6 +113,71 @@ during or after corner capture, and the closure bands behave as specified.
 The 0.031 m closure is the strongest on-device evidence available that the frame
 did not drift across the scan. A frame that had moved would have surfaced here as
 accumulated error rather than as a clean re-aim onto the stored first corner.
+
+## Task S4 — height capture
+
+### How a height is captured
+```text
+walls  = RoomGeometry.BuildWalls(room)          // from the S3 corners, in order
+wall   = walls[selectedWallIndex]               // user-selected
+plane  = WallGeometry.PlaneFor(wall)            // vertical, through wall.Start
+ray    = provider.GetScreenRay(provider.CenterScreenPoint)   // AR world space
+ghost  = frame.WorldRayToGhost(ray)             // Ghost-space ray
+        -> intersect ghost ray with plane
+        -> candidate = intersection.y
+        -> reject if candidate < 2.0 or > 4.0
+        -> RoomModel.heightM = candidate, revision++, republish snapshot
+```
+
+Exactly implementation plan section 8.7: the footprint is already exact, so a
+vertical plane through two consecutive Ghost-space corners is the real wall,
+without waiting on ARKit to detect a vertical plane or depending on LiDAR.
+`HeightCaptureController` never raycasts against a detected plane — the same
+reasoning S3's corner capture already established for the floor.
+
+### Wall selection
+Walls are derived, never serialized, from the same `RoomGeometry.BuildWalls`
+S3 uses: wall 0 is corner 0 -> corner 1, and so on. The HUD auto-selects wall 0
+the first time the phase reaches `CaptureHeight`, then lets the user cycle
+through the rest with **Wall N/4**. A yellow world-space line is drawn along
+the selected wall's floor edge, and a marker is drawn at the current aim
+point — green if the candidate height would validate, red otherwise.
+
+### Distinguishing ray rejections
+`RayPlaneMath.TryIntersectPlane` collapses "parallel to the plane" and
+"intersection behind the camera" into one `false`. Height capture needs to
+tell them apart — the plan lists them as separate test cases — so
+`HeightCaptureController` re-implements the same two-step check
+(`RayPlaneMath.ParallelEpsilon`, then `Plane.Raycast`'s own distance) rather
+than calling `TryIntersectPlane` and losing the distinction. This is not a
+second implementation of a validation rule (the parity risk `docs/status/shared.md`
+warns about); it is exposing which half of one existing check fired.
+
+### Validation and the manual fallback
+The 2.0-4.0 m range comes from `RoomValidator.MinRoomHeightM` /
+`MaxRoomHeightM` directly — referenced, not restated — so the two can never
+drift apart. A rejected candidate leaves `HeightM` and `HasCapturedHeight`
+exactly as they were; nothing is clamped.
+
+Per plan section 8.7, "a failed automatic height capture must never block the
+demo": `TrySetManualHeight` runs the same validation and is always available
+in `CaptureHeight`, independent of wall selection or aim. It is not written to
+the wire — scene schema v1 has no manual-entry flag, and adding one is a
+contract change this task does not need — so it is HUD-visible only, via
+`HeightCaptureController.IsManualEntry`.
+
+### The S2 frame and S3 footprint are read, never written
+`HeightCaptureController` holds `ISpatialProvider`, `FloorLockController` and
+`CornerCaptureController` only to read from them: `Frame`, `CopyCorners()` and
+`IsComplete`. It has no path to move the frame or mutate a corner. Tests pin
+the frame surviving by reference and the corners surviving by value across a
+height capture.
+
+### Contract impact
+**None.** No file under `shared/**`, `fixtures/**`, `tools/**`,
+`docs/contracts/**` or `docs/decisions/**` was touched, and no viewer file was
+touched. `RoomModel.heightM` already existed in scene schema v1 with exactly
+this meaning; S4 is the first task to actually write a non-zero value into it.
 
 ## Task S3 — corner capture and closure
 
@@ -202,6 +313,54 @@ session reaches tracking, the plane manager reports a floor candidate, and the
 screen shows session state, notTrackingReason and camera pose.
 
 ## Tests run
+
+### S4 — latest
+```bash
+/Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -projectPath apps/scanner -buildTarget iOS \
+  -runTests -testPlatform EditMode \
+  -testResults /tmp/ghostmap-s4-final.xml -logFile /tmp/ghostmap-s4-final.log
+```
+**292 tests, 292 passed, 0 failed, 0 skipped.** Unity exit code 0.
+`HeightCaptureControllerTests` 18 (new), `ScanWorkflowControllerTests` 39
+(31 + 8 new S4 tests), `CornerCaptureControllerTests` 37, `GhostFrameTests` 20,
+`FloorLockControllerTests` 17, `ScannerXrSettingsTests` 4, `ScannerSceneTests` 1,
+`GhostMap.Shared.Tests` 156. S3 finished at 266.
+
+Mutation-checked rather than merely observed passing:
+
+| Mutation | Result |
+| --- | --- |
+| Skip `frame.WorldRayToGhost` and intersect the raw world ray | **14 failed** — every test that used the hostile fixture frame (floor 1.4 m below Unity's origin, 40° yaw) |
+| Force the parallel-ray check to never fire (`if (false)` instead of the epsilon test) | **1 failed** — exactly `RayParallelToTheWallIsRejected`, and only that one |
+
+The first mutation biting 14 of 18 controller tests (not all 18 — the manual-
+height and wall-derivation tests never touch the ray) is itself evidence the
+suite is not vacuously passing. The second mutation confirms the
+parallel/behind-camera distinction is load-bearing rather than incidental:
+exactly the one test written to catch it fails, nothing else.
+
+`ScannerBuild.ConfigureXr` and `ScannerBuild.BuildScanner` both exited 0, and
+`xcodebuild -target Unity-iPhone -configuration Release -sdk iphoneos
+CODE_SIGNING_ALLOWED=NO` reported **BUILD SUCCEEDED**.
+
+The shared package was also run standalone in its own host project, to confirm
+S4 changed nothing under `shared/`:
+```bash
+/Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -projectPath shared/TestProject \
+  -runTests -testPlatform EditMode \
+  -testResults /tmp/ghostmap-s4-shared.xml -logFile /tmp/ghostmap-s4-shared.log
+```
+**156 tests, 156 passed, 0 failed, 0 skipped.** Unity exit code 0 — unchanged
+from S3.
+
+Re-run after physical-device verification, against the same `1b8a6ce`, to
+confirm nothing drifted between the build used on device and the final state:
+Scanner **292/292**, Shared **156/156**, both exit code 0.
+
+The S4 physical-device test was then run on a real iPhone and **passed** —
+see the verification section above.
 
 ### S3 — latest
 ```bash
@@ -404,6 +563,41 @@ physical-device test from passing.
 - A corner can be undone but not edited. Fixing corner 2 means undoing 4 and 3
   first, or pressing Redo Corners. The plan asks for Undo, not editing.
 
+### Scene / runtime — new in S4
+- The screen is even more crowded now: four readouts, seven buttons and an
+  input field. Bring-up instrumentation, not the capture UI; Task S6 owns the
+  real one.
+- Wall selection is text-and-line, not the "numbered walls in a simple
+  top-down mini preview" implementation plan section 8.7 describes. A yellow
+  world-space line on the selected wall plus the readout's `Wall N/4` cover
+  the same need — which wall is selected, is unambiguous on device — without
+  a rendered 2D floorplan. A real top-down preview is left for Task S6.
+- The aim marker is an untextured sphere, matching S3's corner markers. It is
+  green or red by validation state, not by whether the ray is on the physical
+  wall versus past its edge; `withinWallSpan` is readout-only.
+- The manual height fallback commits immediately on button press; there is no
+  confirmation step. A mistyped value is only caught by the 2.0-4.0 m range
+  check, not by asking the user to re-enter it.
+
+### Not covered by the S4 device test
+The S4 hardware run exercised the golden path on a rectangular room: locking
+the floor, capturing four corners, an accepted closure, selecting a wall,
+aiming at its ceiling line, and a successful automatic capture (2.69 m). These
+paths are covered by EditMode tests but have **not** been seen on a phone:
+
+- the manual height fallback end to end, including the legacy `InputField`'s
+  `DecimalNumber` content type on the iOS on-screen keyboard;
+- an out-of-range automatic candidate — the red aim marker and a refused
+  `Capture Height` press;
+- aiming at a wall other than the one currently selected, to confirm the
+  highlighted wall and the intersected plane agree;
+- a non-rectangular four-corner room's wall planes (only the S3 rectangular
+  fixture was used, both in tests and on this device pass).
+
+None of these is suspected broken — each has a passing EditMode test, and the
+ray/plane and range-validation logic was mutation-checked. They are recorded
+because a passing test is not the same evidence as a passing phone.
+
 ### Not covered by the S3 device test
 The S3 hardware run exercised a rectangular room with a good scan. These paths
 are covered by EditMode tests but have **not** been seen on a phone:
@@ -436,16 +630,15 @@ passing test is not the same evidence as a passing phone.
   trampoline sources.
 
 ## Next safe task
-- **S4** — height capture. S3 is complete and verified on hardware, so the
-  scanner workstream may proceed to the next task in
-  `docs/plans/ghostmap-implementation-plan.md`. S4 consumes the same locked
-  frame, the walls derived by `RoomGeometry.BuildWalls`, and
-  `GhostCoordinateFrame.WorldRayToGhost`; all three are in place and tested.
-  `ScanPhase.CaptureHeight` is already entered by an accepted closure and has no
-  UI behind it, so S4 starts there.
-- S4 inherits one loose end: `RoomModel.heightM` is still published as `0f`.
-  `RoomValidator.ValidateRoom` treats `0` as "not yet captured" and skips the
-  2.0-4.0 m range check, which is why the four-corner snapshot validates today.
+- **S4** — height capture. S4 is complete and verified on hardware (2.69 m
+  captured height, golden path confirmed — see "Physical-device verification
+  — S4, passed" above), so the scanner workstream may proceed to the next task
+  in `docs/plans/ghostmap-implementation-plan.md`: **S5 — doors, windows,
+  furniture**. S5 has not been started in this session.
+- S5 inherits the room's real `heightM` (S4's contribution): `RoomValidator.ValidateRoom`
+  now applies the 2.0-4.0 m range check on every subsequent snapshot, and
+  `OpeningModel.sillHeightM + heightM` validation (F2) has a real ceiling to
+  check openings against for the first time.
 
 ## Do not touch
 - `shared/**`, `fixtures/**`, `tools/**`, `docs/contracts/**`, `docs/decisions/**`

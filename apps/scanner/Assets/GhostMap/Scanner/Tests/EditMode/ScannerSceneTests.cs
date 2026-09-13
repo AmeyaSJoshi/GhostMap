@@ -12,14 +12,15 @@ namespace GhostMap.Scanner.Tests.EditMode
     /// would do nothing, with no error to read. Asserting the committed scene
     /// here means that class of failure is caught on a laptop.
     ///
-    /// Covers Task S2's floor-lock wiring and Task S3's corner-capture wiring;
+    /// Covers Task S2's floor-lock wiring, Task S3's corner-capture wiring and
+    /// Task S4's height-capture wiring;
     /// <see cref="ScannerSceneBuilder.VerifyScene"/> throws on the first broken
-    /// link in either.
+    /// link in any of them.
     /// </summary>
     public sealed class ScannerSceneTests
     {
         [Test]
-        public void SceneIsWiredForFloorLockAndCornerCapture()
+        public void SceneIsWiredForFloorLockCornerCaptureAndHeightCapture()
         {
             Assert.DoesNotThrow(ScannerSceneBuilder.VerifyScene);
         }

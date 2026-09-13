@@ -33,6 +33,16 @@ namespace GhostMap.Scanner.Editor
         /// </summary>
         private const float S3ButtonRowY = 240f;
 
+        /// <summary>
+        /// Y of the two Task S4 button rows, stacked above the Task S3 corner
+        /// readout (690-990) rather than squeezed into the already-tight space
+        /// below it. This screen is bring-up instrumentation, not the capture
+        /// UI Task S6 owns — see the S3 handoff's "screen is now crowded" note.
+        /// </summary>
+        private const float S4WallRowY = 1080f;
+
+        private const float S4ManualRowY = 1200f;
+
         [MenuItem("GhostMap/Build Scanner Scene")]
         public static void BuildScene()
         {
@@ -111,6 +121,33 @@ namespace GhostMap.Scanner.Editor
                 ("redoButton", redoButton),
                 ("readoutText", cornerReadout));
 
+            // Task S4 height capture.
+            Text heightReadout = CreateHeightReadout(canvasGo);
+            Button selectWallButton = CreateActionButton(
+                canvasGo, "SelectWallButton", "Wall 1/4",
+                new Vector2(-260f, S4WallRowY), new Vector2(300f, 100f), 32, out Text selectWallLabel);
+            Button captureHeightButton = CreateActionButton(
+                canvasGo, "CaptureHeightButton", "Capture Height",
+                new Vector2(260f, S4WallRowY), new Vector2(300f, 100f), 30, out Text captureHeightLabel);
+            InputField manualHeightInput = CreateManualHeightInputField(
+                canvasGo, new Vector2(-220f, S4ManualRowY), new Vector2(340f, 90f));
+            Button useManualHeightButton = CreateActionButton(
+                canvasGo, "UseManualHeightButton", "Use Manual Height",
+                new Vector2(260f, S4ManualRowY), new Vector2(340f, 90f), 26, out _);
+
+            var heightHudGo = new GameObject("HeightCaptureHud", typeof(HeightCaptureHud));
+            AssignSerializedReferences(
+                heightHudGo.GetComponent<HeightCaptureHud>(),
+                ("floorLockHud", floorLockHud),
+                ("spatialProvider", spatialProvider),
+                ("selectWallButton", selectWallButton),
+                ("selectWallLabel", selectWallLabel),
+                ("captureHeightButton", captureHeightButton),
+                ("captureHeightLabel", captureHeightLabel),
+                ("manualHeightInput", manualHeightInput),
+                ("useManualHeightButton", useManualHeightButton),
+                ("readoutText", heightReadout));
+
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath) !);
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
@@ -166,6 +203,20 @@ namespace GhostMap.Scanner.Editor
                     "primaryButtonLabel",
                     "undoButton",
                     "redoButton",
+                    "readoutText");
+
+                var heightHud = FindInScene<HeightCaptureHud>(scene);
+                Require(heightHud != null, "no HeightCaptureHud");
+                RequireAssigned(
+                    heightHud,
+                    "floorLockHud",
+                    "spatialProvider",
+                    "selectWallButton",
+                    "selectWallLabel",
+                    "captureHeightButton",
+                    "captureHeightLabel",
+                    "manualHeightInput",
+                    "useManualHeightButton",
                     "readoutText");
             }
             finally
@@ -303,6 +354,77 @@ namespace GhostMap.Scanner.Editor
             rect.sizeDelta = new Vector2(-48f, 300f);
 
             return text;
+        }
+
+        /// <summary>
+        /// The Task S4 readout, above the S3 corner readout (690-990): the
+        /// selected wall, the live aim projection, and the captured height.
+        /// </summary>
+        private static Text CreateHeightReadout(GameObject canvasGo)
+        {
+            Text text = CreateText(canvasGo, "HeightCaptureReadout", 26);
+
+            RectTransform rect = text.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(1f, 0f);
+            rect.pivot = new Vector2(0f, 0f);
+            rect.anchoredPosition = new Vector2(24f, 1000f);
+            rect.sizeDelta = new Vector2(-48f, 260f);
+
+            return text;
+        }
+
+        /// <summary>
+        /// A legacy <see cref="InputField"/> for the Task S4 manual height
+        /// fallback (implementation plan section 8.7): a failed automatic
+        /// capture must never block the scan.
+        /// </summary>
+        private static InputField CreateManualHeightInputField(
+            GameObject canvasGo, Vector2 anchoredPosition, Vector2 size)
+        {
+            var fieldGo = new GameObject("ManualHeightInput", typeof(Image), typeof(InputField));
+            fieldGo.transform.SetParent(canvasGo.transform, false);
+
+            var background = fieldGo.GetComponent<Image>();
+            background.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+            background.type = Image.Type.Sliced;
+            background.color = new Color(0.92f, 0.92f, 0.92f, 0.95f);
+
+            RectTransform rect = fieldGo.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 0f);
+            rect.anchorMax = new Vector2(0.5f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.anchoredPosition = anchoredPosition;
+            rect.sizeDelta = size;
+
+            Text text = CreateText(fieldGo, "Text", 32);
+            text.color = Color.black;
+            text.alignment = TextAnchor.MiddleLeft;
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+
+            RectTransform textRect = text.GetComponent<RectTransform>();
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = new Vector2(16f, 6f);
+            textRect.offsetMax = new Vector2(-16f, -6f);
+
+            Text placeholder = CreateText(fieldGo, "Placeholder", 32);
+            placeholder.text = "Height (m)";
+            placeholder.color = new Color(0f, 0f, 0f, 0.4f);
+            placeholder.fontStyle = FontStyle.Italic;
+
+            RectTransform placeholderRect = placeholder.GetComponent<RectTransform>();
+            placeholderRect.anchorMin = Vector2.zero;
+            placeholderRect.anchorMax = Vector2.one;
+            placeholderRect.offsetMin = new Vector2(16f, 6f);
+            placeholderRect.offsetMax = new Vector2(-16f, -6f);
+
+            var field = fieldGo.GetComponent<InputField>();
+            field.textComponent = text;
+            field.placeholder = placeholder;
+            field.contentType = InputField.ContentType.DecimalNumber;
+
+            return field;
         }
 
         private static Text CreateText(GameObject canvasGo, string name, int fontSize)

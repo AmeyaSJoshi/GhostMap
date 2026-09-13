@@ -47,13 +47,16 @@ namespace GhostMap.Scanner.Workflow
 
         private readonly FloorLockController floorLock;
         private readonly CornerCaptureController corners;
+        private readonly HeightCaptureController height;
 
         public ScanWorkflowController(
             FloorLockController floorLock,
-            CornerCaptureController corners)
+            CornerCaptureController corners,
+            HeightCaptureController height)
         {
             this.floorLock = floorLock;
             this.corners = corners;
+            this.height = height;
             SessionId = Guid.NewGuid().ToString();
             RoomId = Guid.NewGuid().ToString();
             Phase = ScanPhase.Boot;
@@ -78,6 +81,9 @@ namespace GhostMap.Scanner.Workflow
 
         /// <summary>Task S3 corner capture and closure. Read-only from outside the workflow.</summary>
         public CornerCaptureController Corners => corners;
+
+        /// <summary>Task S4 height capture. Read-only from outside the workflow.</summary>
+        public HeightCaptureController Height => height;
 
         /// <summary>
         /// Advances the pre-floor-lock phases from tracking quality. Boot
@@ -243,6 +249,10 @@ namespace GhostMap.Scanner.Workflow
         /// Discards the footprint and returns to corner capture. The locked
         /// frame is deliberately left alone: a rescan re-measures the room, it
         /// does not re-anchor it.
+        ///
+        /// <para>Any in-progress wall selection is cleared with the corners:
+        /// the new footprint will derive different walls, and a stale index
+        /// must not silently resolve against one of them.</para>
         /// </summary>
         public bool RedoCorners()
         {
@@ -252,7 +262,72 @@ namespace GhostMap.Scanner.Workflow
             }
 
             corners.ClearCorners();
+            height.ResetWallSelection();
             TransitionTo(ScanPhase.CaptureCorners);
+            Publish();
+            return true;
+        }
+
+        // -------------------------------------------------------------------
+        // Task S4 — height capture
+        // -------------------------------------------------------------------
+
+        /// <summary>Selects a wall, by index into <see cref="HeightCaptureController.Walls"/>, to aim height capture at.</summary>
+        public bool SelectHeightWall(int index)
+        {
+            if (Phase != ScanPhase.CaptureHeight)
+            {
+                return false;
+            }
+
+            return height.SelectWall(index);
+        }
+
+        /// <summary>
+        /// Captures the room height under the crosshair against the selected
+        /// wall. A valid, confirmed height moves the scan to
+        /// <see cref="ScanPhase.AddOpenings"/>; an invalid one leaves the
+        /// phase and the previously captured height untouched.
+        /// </summary>
+        public bool TryCaptureHeight(out HeightCaptureRejection rejection)
+        {
+            if (Phase != ScanPhase.CaptureHeight)
+            {
+                rejection = HeightCaptureRejection.WrongPhase;
+                return false;
+            }
+
+            if (!height.TryCaptureHeight(out rejection))
+            {
+                return false;
+            }
+
+            TransitionTo(ScanPhase.AddOpenings);
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// The manual fallback: a typed height, validated the same way as an
+        /// automatic capture. A failed automatic capture must never block the
+        /// scan (implementation plan section 8.7), so this is always available
+        /// in <see cref="ScanPhase.CaptureHeight"/>, independent of wall
+        /// selection or aim.
+        /// </summary>
+        public bool TrySetManualHeight(float heightM, out HeightCaptureRejection rejection)
+        {
+            if (Phase != ScanPhase.CaptureHeight)
+            {
+                rejection = HeightCaptureRejection.WrongPhase;
+                return false;
+            }
+
+            if (!height.TrySetManualHeight(heightM, out rejection))
+            {
+                return false;
+            }
+
+            TransitionTo(ScanPhase.AddOpenings);
             Publish();
             return true;
         }
@@ -314,7 +389,7 @@ namespace GhostMap.Scanner.Workflow
                 {
                     id = RoomId,
                     name = "Room",
-                    heightM = 0f,
+                    heightM = height.HasCapturedHeight ? height.HeightM : 0f,
                     corners = corners.CopyCorners(),
                     openings = Array.Empty<OpeningModel>(),
                     objects = Array.Empty<SceneObjectModel>()

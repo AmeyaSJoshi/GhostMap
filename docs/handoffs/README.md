@@ -78,3 +78,6 @@ or
 | 2026-09-12 | foundation | [F2 — geometry and validation](2026-09-12-foundation-f2-geometry-validation.md) |
 | 2026-09-12 | foundation | [F3 — protocol v1 and fixtures](2026-09-12-foundation-f3-protocol-fixtures.md) |
 | 2026-09-12 | foundation | [F4 — foundation review](2026-09-12-foundation-f4-foundation-review.md) |
+| 2026-09-12 | scanner | [S1 — ARKit loader root cause](2026-09-12-scanner-s1-arkit-loader-root-cause.md) |
+| 2026-09-12 | scanner | [S1 — camera pose not driven by tracking](2026-09-12-scanner-s1-camera-pose-not-driven.md) |
+| 2026-09-12 | scanner | [S1 — complete, verified on device](2026-09-12-scanner-s1-complete.md) |

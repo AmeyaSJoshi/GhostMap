@@ -7,7 +7,7 @@
 `6b3b44c`
 
 ## Head commit
-`<sha>`
+`772ce05`
 
 ## What changed
 

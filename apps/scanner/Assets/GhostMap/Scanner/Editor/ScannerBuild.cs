@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -38,10 +39,13 @@ namespace GhostMap.Scanner.Editor
         private const string OutputPath = "Builds/iOS";
 
         /// <summary>
-        /// Step 1. Makes iOS the active build target and enables the ARKit XR
-        /// loader for it. Run this before <see cref="BuildScanner"/>, in its own
-        /// Unity invocation when building from the command line, so scripts are
-        /// recompiled with UNITY_XR_ARKIT_LOADER_ENABLED before the build runs.
+        /// Step 1. Makes iOS the active build target, enables the ARKit XR
+        /// loader for it, and turns on the Input System backend that AR
+        /// Foundation's TrackedPoseDriver needs to receive the device pose. Run
+        /// this before <see cref="BuildScanner"/>, in its own Unity invocation
+        /// when building from the command line, so scripts are recompiled with
+        /// UNITY_XR_ARKIT_LOADER_ENABLED and ENABLE_INPUT_SYSTEM before the
+        /// build runs.
         /// </summary>
         [MenuItem(ConfigureXrMenuPath)]
         public static void ConfigureXr()
@@ -53,12 +57,23 @@ namespace GhostMap.Scanner.Editor
                     "Could not switch the active build target to iOS. The iOS Build Support module must be installed.");
             }
 
-            bool definesChanged = ScannerXrSettings.EnableArKitLoaderForIos();
+            bool xrDefinesChanged = ScannerXrSettings.EnableArKitLoaderForIos();
+            bool inputBackendChanged = ScannerInputSettings.EnableInputSystemBackend();
 
-            Debug.Log(definesChanged
-                ? $"GhostMap: enabled the ARKit XR loader for iOS and added {ScannerXrSettings.ArKitLoaderDefine}. " +
-                  "Scripts must finish recompiling before running the build."
+            Debug.Log(xrDefinesChanged
+                ? $"GhostMap: enabled the ARKit XR loader for iOS and added {ScannerXrSettings.ArKitLoaderDefine}."
                 : $"GhostMap: ARKit XR loader for iOS already enabled with {ScannerXrSettings.ArKitLoaderDefine} set.");
+
+            Debug.Log(inputBackendChanged
+                ? "GhostMap: switched Active Input Handling to Both so the Input System backend is on."
+                : $"GhostMap: Active Input Handling is already {ScannerInputSettings.ActiveInputHandler}.");
+
+            if (xrDefinesChanged || inputBackendChanged)
+            {
+                Debug.Log(
+                    "GhostMap: scripts must finish recompiling before running the build. In the Editor, restart it " +
+                    "if Active Input Handling changed.");
+            }
         }
 
         /// <summary>
@@ -76,19 +91,32 @@ namespace GhostMap.Scanner.Editor
                     $"{ConfigureXrMenuPath} first.");
             }
 
+#if !UNITY_XR_ARKIT_LOADER_ENABLED || !ENABLE_INPUT_SYSTEM
+            // This assembly is compiled with the iOS scripting defines and with
+            // the built-in input-handling defines, so a branch below surviving
+            // compilation proves the currently loaded domain was built without
+            // that define.
+            var missing = new List<string>();
 #if !UNITY_XR_ARKIT_LOADER_ENABLED
-            // This assembly is compiled with the iOS scripting defines, so this
-            // branch surviving compilation proves the currently loaded domain
-            // was built without the define. Everything the Apple ARKit XR
-            // Plug-in contributes — its native entry points and libUnityARKit.a
-            // itself — would be missing from the player.
+            missing.Add(
+                $"{ScannerXrSettings.ArKitLoaderDefine} — the Apple ARKit XR Plug-in would compile to stubs and " +
+                "libUnityARKit.a would be left out, so the app would report no active XR loader on device");
+#endif
+#if !ENABLE_INPUT_SYSTEM
+            missing.Add(
+                "ENABLE_INPUT_SYSTEM — Active Input Handling excludes the Input System backend, so AR Foundation's " +
+                "TrackedPoseDriver would resolve no controls and the AR camera transform would never be written, " +
+                "leaving the camera pose frozen on device however well ARKit tracks");
+#endif
             throw new BuildFailedException(
-                $"{ScannerXrSettings.ArKitLoaderDefine} was not defined when these scripts were compiled, so an iOS " +
-                $"build now would ship without the ARKit native plug-in and would report no active XR loader on " +
-                $"device. Run {ConfigureXrMenuPath} (or -executeMethod GhostMap.Scanner.Editor.ScannerBuild.ConfigureXr " +
-                "in its own Unity invocation), let scripts recompile, then build again.");
+                "These defines were missing when these scripts were compiled:\n  - " +
+                string.Join("\n  - ", missing) +
+                $"\nRun {ConfigureXrMenuPath} (or -executeMethod " +
+                "GhostMap.Scanner.Editor.ScannerBuild.ConfigureXr in its own Unity invocation), let scripts " +
+                "recompile, then build again.");
 #else
             ScannerXrSettings.VerifyIosArKitConfiguration();
+            ScannerInputSettings.VerifyInputSystemBackendEnabled();
             ConfigurePlayerSettings();
 
             // Unity's incremental iOS export can leave a stale Data folder

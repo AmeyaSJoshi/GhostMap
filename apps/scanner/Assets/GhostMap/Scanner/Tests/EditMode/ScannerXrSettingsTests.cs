@@ -23,6 +23,35 @@ namespace GhostMap.Scanner.Tests.EditMode
             Assert.DoesNotThrow(ScannerXrSettings.VerifyIosArKitConfiguration);
         }
 
+        /// <summary>
+        /// Regression test for the second Task S1 device failure: ARKit tracked
+        /// correctly but the AR camera Transform never moved, because Active
+        /// Input Handling was "Input Manager (Old)". Without the Input System
+        /// backend there is no &lt;HandheldARInputDevice&gt;, so AR Foundation's
+        /// TrackedPoseDriver resolves no controls, reports TrackingStates.None,
+        /// and writes neither position nor rotation.
+        /// </summary>
+        [Test]
+        public void InputSystemBackendIsEnabledForTheProject()
+        {
+            Assert.IsTrue(
+                ScannerInputSettings.IsInputSystemBackendEnabled,
+                "Active Input Handling is " + ScannerInputSettings.ActiveInputHandler +
+                "; AR Foundation's TrackedPoseDriver needs the Input System backend to drive the AR camera.");
+        }
+
+        [Test]
+        public void InputSystemBackendIsCompiledIn()
+        {
+#if ENABLE_INPUT_SYSTEM
+            Assert.Pass();
+#else
+            Assert.Fail(
+                "ENABLE_INPUT_SYSTEM was not defined when these scripts were compiled, so no XR input device can " +
+                "exist and the AR camera pose would stay frozen on device.");
+#endif
+        }
+
         [Test]
         public void ArKitLoaderDefineIsSetForIos()
         {

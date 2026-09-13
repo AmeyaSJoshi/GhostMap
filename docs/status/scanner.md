@@ -9,24 +9,27 @@
   `ProjectSettings`, `Assets/XR` XR Plug-in Management configuration,
   `Assets/GhostMap/Scanner/Scanner.unity`, runtime bootstrap, editor build
   scripts, and EditMode tests.
-- A first physical-iPhone test **failed**: the app reported `XR loader: none`,
-  `Session: None`, and Xcode logged no active `XRRaycastSubsystem` and no active
-  `XRInputSubsystem`. The root cause has been found and fixed (below), and the
-  project has been rebuilt cleanly, but the fix is **not yet verified on
-  hardware**.
+- Two physical-iPhone tests have **failed**, each with a distinct root cause,
+  both found and fixed. The project has been rebuilt cleanly after each, but
+  neither fix is **verified on hardware**.
+  1. `XR loader: none`, no active `XRRaycastSubsystem` / `XRInputSubsystem` —
+     the ARKit loader define (below).
+  2. ARKitLoader active and `ARWorldTrackingConfiguration` running, but the
+     camera pose never changed when the phone moved or rotated — the Input
+     System backend (below).
 
 ## Last verified commit
 - None. No scanner work has been verified on a physical iPhone yet.
 
 ## Tests run
-- `GhostMap.Scanner.EditModeTests` — 2 tests, both passing (see the S1 handoff
+- `GhostMap.Scanner.EditModeTests` — 4 tests, all passing (see the S1 handoffs
   for the exact command and output).
 - Editor iOS build via `ScannerBuild.ConfigureXr` + `ScannerBuild.BuildScanner`
   — succeeded. `xcodebuild` on the generated project reports BUILD SUCCEEDED and
   the linked binary contains the ARKit native symbols.
 - **No passing physical-device test.**
 
-## Root cause of the first device failure
+## Root cause of the first device failure — no active XR loader
 `UNITY_XR_ARKIT_LOADER_ENABLED` was never present in the iOS scripting define
 symbols, so:
 
@@ -53,7 +56,32 @@ the define from nothing. The scanner's build script had been assigning the
 loader from inside `BuildPlayer`, which is far too late regardless: a scripting
 define only reaches compiled code on the next script compilation.
 
-## Second defect found behind the first
+## Root cause of the second device failure — camera pose never written
+`ProjectSettings.asset` had `activeInputHandler: 0` (Active Input Handling =
+Input Manager (Old)), so `ENABLE_INPUT_SYSTEM` was never defined and the Input
+System backend was absent from the player. AR Foundation drives the AR camera
+with `UnityEngine.InputSystem.XR.TrackedPoseDriver` bound to
+`<HandheldARInputDevice>/devicePosition` and `/deviceRotation`. With no backend
+there is no such device, the driver's actions resolve to zero controls,
+`ReadTrackingStateWithoutTrackingAction()` yields `TrackingStates.None`, and
+`SetLocalTransform` writes neither position nor rotation — so the camera sits at
+its authored local pose regardless of how well ARKit tracks.
+
+Proven from the failing player's own IL2CPP output: `InputSystemProvider`'s
+static constructor, whose only statement is inside `#if ENABLE_INPUT_SYSTEM`,
+was compiled down to `{ return; }`.
+
+Everything else in that chain was verified correct first — the Transform the
+diagnostics read, the XR Origin → Camera Offset → Main Camera hierarchy,
+`XROrigin.Camera`, and the ARCameraManager / ARCameraBackground /
+TrackedPoseDriver components with their bindings. See
+`docs/handoffs/2026-09-12-scanner-s1-camera-pose-not-driven.md` for the
+link-by-link table.
+
+Active Input Handling is now "Both", set by `ScannerBuild.ConfigureXr`, and
+`BuildScanner` refuses to build without `ENABLE_INPUT_SYSTEM`.
+
+## Xcode 26 link defect found behind the first fix
 Once `libUnityARKit.a` was actually linked, the Xcode project failed to link with
 undefined `__swift_FORCE_LOAD_$_swiftCompatibility*` symbols. The ARKit package
 points the linker at the Swift compatibility shims via `$(TOOLCHAIN_DIR)`, but
@@ -73,7 +101,12 @@ the ARKit library at all.
 - S1's physical-device smoke test has not passed. Nothing in this workstream may
   be declared working on device until it actually runs on a real iPhone.
 - Building the scanner for iOS is a **two-step** process and cannot be collapsed
-  into one. See "How to build" in the S1 handoff.
+  into one. See "How to build" in the S1 handoffs. In the interactive Editor,
+  the Active Input Handling change from step 1 needs an Editor restart.
+- `XROrigin.m_CameraYOffset` is `1.1176` (AR Foundation's own factory default),
+  which ARKit's Device tracking-origin mode applies to Camera Offset. Expect
+  `Offset W` to read about `y = 1.12` on device. Not changed, not a new failure
+  — decide it when S3 locks the floor.
 
 ## Next safe task
 - **Run the S1 physical-device smoke test on a real iPhone.** Open

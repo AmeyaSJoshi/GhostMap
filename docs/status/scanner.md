@@ -1,6 +1,14 @@
 # Scanner Status
 
 ## Current state
+- **S2 implemented and fully covered by automated tests, but NOT complete.** The
+  physical-device test has not been run. Per `AGENTS.md` rule 12 nothing in S2
+  may be called working until it is. The procedure is in
+  `docs/handoffs/2026-09-12-scanner-s2-floor-lock-coordinate-frame.md`.
+- Floor lock and the GhostMap coordinate frame exist: `ArSpatialProvider`,
+  `FloorLockController`, `ScanWorkflowController`, `ScanPhase` and the
+  `FloorLockHud` crosshair / Lock Floor button / readout. The scene builder now
+  produces all of it, and `ScannerSceneBuilder.VerifyScene()` asserts the wiring.
 - **S1 complete and verified on a physical iPhone.** The scanner Unity project,
   AR smoke-test scene, two-step iOS build pipeline and on-device diagnostics are
   in place, and the Task S1 physical-device test passes.
@@ -13,8 +21,54 @@
   root cause. Both are recorded below and in their handoffs.
 
 ## Last verified commit
-- `80b5a48` — verified on a real iPhone. Its scanner sources are byte-identical
-  to `772ce05`; `80b5a48` changed only a handoff document.
+- `80b5a48` — the last commit verified on a real iPhone. That is still S1. Its
+  scanner sources are byte-identical to `772ce05`; `80b5a48` changed only a
+  handoff document.
+- S1 reached `main` as merge commit `150512d` (PR #1), merged with a merge
+  commit so the original S1 SHAs stay reachable.
+
+## The GhostMap coordinate frame — S2
+Built at the floor-lock instant, exactly as `GhostCoordinateFrame`'s own
+documentation specifies:
+
+```text
+up      = Vector3.up
+forward = ProjectOnPlane(camera.forward, up).normalized
+right   = Cross(up, forward).normalized
+origin  = floor raycast hit (world space)
+```
+
+`Cross(up, forward)` is +X in Unity's left-handed basis, so the axes satisfy
+`Cross(right, up) == forward` — the same relationship Unity's world axes
+satisfy. Reversing the cross would mirror every captured room and **nothing
+downstream would notice**: area, wall length, closure error and interior angle
+are all unchanged by a reflection. Handedness is therefore asserted directly and
+printed on the device readout.
+
+The frame is immutable once locked. `GhostCoordinateFrame` has no setters and
+`FloorLockController` refuses a second lock.
+
+## CameraYOffset — resolved, no compensation needed
+This was deferred at S1 with "decide it when the floor is locked". Resolved: it
+needs no compensation, and compensating for it would be a bug.
+
+The AR camera is a child of Camera Offset, whose local Y is `CameraYOffset`
+(1.1176) because ARKit reports `TrackingOriginModeFlags.Device`. Detected planes
+hang off `XROrigin.TrackablesParent` instead, so it looks as though camera and
+planes sit in two spaces 1.12 m apart. They do not. In
+`com.unity.xr.core-utils@a8b9003/Runtime/XROrigin.cs`, `OnBeforeRender` (line
+611) assigns `TrackablesParent` the pose from `GetCameraOriginPose()` (line 585),
+which returns the camera's **parent** — Camera Offset itself. The same offset is
+baked into both.
+
+The frame's origin is the floor hit, so `WorldToGhost` subtracts the shared
+offset away exactly: the floor lands on Ghost `y = 0` for any offset value and
+the camera reads its true eye height above the floor.
+
+**This holds only because every reading is taken in world space.** Mixing in a
+*local* position — the camera's `localPosition`, printed as "Cam L" in the S1
+diagnostics — would reintroduce the offset. Nothing in `ArSpatialProvider` reads
+one. `m_CameraYOffset` is deliberately left at AR Foundation's default.
 
 ## Physical-device verification — S1, passed
 Observed on a real iPhone against the build produced from `80b5a48`:
@@ -36,6 +90,33 @@ session reaches tracking, the plane manager reports a floor candidate, and the
 screen shows session state, notTrackingReason and camera pose.
 
 ## Tests run
+
+### S2 — latest
+```bash
+/Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -projectPath apps/scanner -buildTarget iOS \
+  -runTests -testPlatform EditMode \
+  -testResults /tmp/ghostmap-s2-editmode.xml -logFile /tmp/ghostmap-s2-tests.log
+```
+**212 tests, 212 passed, 0 failed, 0 skipped.** Unity exit code 0.
+`GhostFrameTests` 20, `FloorLockControllerTests` 17,
+`ScanWorkflowControllerTests` 14, `ScannerSceneTests` 1,
+`ScannerXrSettingsTests` 4, `GhostMap.Shared.Tests` 156.
+
+The frame tests were mutation-checked rather than merely observed passing:
+`right = Cross(forward, up)` fails 4 tests, and shifting the origin by
+`-CameraYOffset` fails 8. The first attempt at the mirroring mutation caught only
+2, because `RightMapsToPlusX` had built its expectation from `frame.Right` and
+agreed with a wrong frame; it was rewritten to compute the expected world axis
+independently and `FrameAxesMatchTheCameraYawTheLockWasTakenAt` was added.
+
+`ScannerBuild.BuildScanner` succeeded, and
+`xcodebuild -target Unity-iPhone -configuration Release -sdk iphoneos
+CODE_SIGNING_ALLOWED=NO` reported BUILD SUCCEEDED.
+
+**No physical-device test has been run for S2.**
+
+### S1
 - `GhostMap.Scanner.EditModeTests` — 4/4 passed.
 - `GhostMap.Shared.Tests` — 156/156 passed in the same run. 160 total, 0 failed,
   0 skipped.
@@ -135,17 +216,20 @@ physical-device test from passing.
   whether it is still needed on an ARKit package or Xcode upgrade; it is
   additive, so it is harmless if the upstream issue is fixed.
 
-### Scene / runtime, to settle in a later task
-- `XROrigin.m_CameraYOffset` is `1.1176`, AR Foundation's own factory default
-  (`XROriginCreateUtil.CreateXROriginWithParent` never sets it). ARKit reports
-  `TrackingOriginModeFlags.Device`, so `XROrigin.MoveOffsetHeight()` applies
-  that offset to Camera Offset and every camera world Y carries it. Deliberately
-  left alone — it is unrelated to anything S1 tests, and the diagnostics report
-  `Offset W` separately so the value is visible rather than hidden inside
-  `Cam W`. **Decide it when S3 locks the floor.**
+### Scene / runtime
+- `XROrigin.m_CameraYOffset` stays at `1.1176`. No longer deferred — see the
+  CameraYOffset section above. The frame is immune to it.
 - `ScannerBootstrap`'s per-link diagnostics readout was built for S1 bring-up.
-  It stays for now because S2-S6 device work will want it; replace it with the
-  real capture UI when that UI exists.
+  It stays through S2-S6 device work and now shares the canvas with the S2
+  floor-lock readout; replace both with the real capture UI when that exists.
+- Together the two readouts fill much of the screen. This is bring-up
+  instrumentation, not the capture UI.
+- There is no reset. Establishing a new frame means relaunching the app. Reset
+  starts a new AR session and session id, which the plan places later.
+- `ISpatialProvider.TryGetFloorHit` returns a scanner-owned `FloorHit` rather
+  than the `ARRaycastHit` the implementation plan sketches. `ARRaycastHit` needs
+  a live `ARPlane` trackable and cannot be constructed in an EditMode test, which
+  would have pushed every floor-lock rule onto a phone to verify.
 
 ### Toolchain warnings, stock noise
 - `ld: warning: search path '.../Metal.xctoolchain/usr/lib/swift*/iphoneos' not
@@ -162,8 +246,9 @@ physical-device test from passing.
   trampoline sources.
 
 ## Next safe task
-- **S2.** S1 is complete and verified on hardware, so the scanner workstream may
-  proceed to the next task in `docs/plans/ghostmap-implementation-plan.md`.
+- **Finish S2**: run the physical-device test in
+  `docs/handoffs/2026-09-12-scanner-s2-floor-lock-coordinate-frame.md`. S3 must
+  not start until it passes.
 
 ## Do not touch
 - `shared/**`, `fixtures/**`, `tools/**`, `docs/contracts/**`, `docs/decisions/**`

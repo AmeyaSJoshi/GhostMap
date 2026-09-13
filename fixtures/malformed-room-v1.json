@@ -1,5 +1,5 @@
 {
-  "_comment": "INTENTIONALLY INVALID. Violates exactly one rule: heightM is 5.20 m, outside the supported 2.0-4.0 m range. Everything else - corner order, spacing, footprint area, wall lengths, interior angles, the door and all three objects - is valid, so RoomValidator must reject this on the height rule alone. Used to prove the viewer rejects bad scenes instead of rendering them.",
+  "_comment": "INTENTIONALLY INVALID. Violates exactly one rule: heightM is 5.20 m, outside the supported 2.0-4.0 m range. Everything else - corner order, spacing, footprint area, wall lengths, interior angles, the door and the object - is valid, so RoomValidator must reject this on the height rule alone. Used to prove the viewer rejects bad scenes instead of rendering them.",
   "schemaVersion": 1,
   "sessionId": "fixture-malformed-v1",
   "revision": 9,

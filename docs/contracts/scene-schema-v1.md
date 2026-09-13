@@ -351,7 +351,8 @@ it does not recognize rather than attempting a partial read.
 
 Covered by `shared/com.ghostmap.shared/Tests/Editor/SceneSchemaTests.cs`.
 
-Executed on Unity `6000.3.24f1`, EditMode: **14 tests, 14 passed, 0 failed.**
+Executed on Unity `6000.3.24f1`, EditMode: **14 schema tests, 14 passed, 0
+failed**, inside a shared suite of **156 tests, 156 passed, 0 failed.**
 
 | Test | Asserts |
 | --- | --- |

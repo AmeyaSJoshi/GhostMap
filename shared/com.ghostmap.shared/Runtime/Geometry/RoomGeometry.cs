@@ -150,10 +150,22 @@ namespace GhostMap.Shared.Geometry
         }
 
         /// <summary>
-        /// Interior angle at corner <paramref name="index"/>, in degrees.
+        /// Interior angle at corner <paramref name="index"/>, in degrees, measured
+        /// on the inside of the footprint. The result is in [0, 360): a reflex
+        /// corner reports more than 180.
+        ///
+        /// The unsigned angle between the two edges is not enough. It cannot
+        /// exceed 180 degrees, so a concave "dart" footprint reports its reflex
+        /// corner as the 360-degree complement and slips through the
+        /// interior-angle rule. The polygon's winding disambiguates the two.
         /// </summary>
         public static float InteriorAngleDeg(IReadOnlyList<Vector3> corners, int index)
         {
+            if (corners == null || corners.Count < 3)
+            {
+                return 0f;
+            }
+
             int count = corners.Count;
 
             Vector3 current = corners[index];
@@ -168,7 +180,24 @@ namespace GhostMap.Shared.Geometry
                 return 0f;
             }
 
-            return Vector3.Angle(a, b);
+            float unsignedAngle = Vector3.Angle(a, b);
+
+            float signedArea = SignedPolygonAreaXZ(corners);
+
+            // A degenerate footprint has no inside, so winding cannot be read.
+            // Fall back to the unsigned angle rather than guessing a side.
+            if (Mathf.Abs(signedArea) < CrossEpsilon)
+            {
+                return unsignedAngle;
+            }
+
+            // Positive cross product means the turn from the incoming edge to the
+            // outgoing edge goes the same way the polygon is wound, which places
+            // the interior on the far side of the corner.
+            float turn = CrossXZ(a, b);
+            bool reflex = (signedArea > 0f) ? (turn > 0f) : (turn < 0f);
+
+            return reflex ? 360f - unsignedAngle : unsignedAngle;
         }
 
         // -------------------------------------------------------------------

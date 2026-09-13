@@ -228,7 +228,7 @@ Bad scans are rejected, never silently rendered.
 | Polygon | no self-intersection in XZ |
 | Area | ≥ 2.0 m² |
 | Wall length | 0.5 m – 20 m |
-| Internal angle | 35° – 145° |
+| Internal angle | 35° – 145°, measured on the inside of the footprint, so a reflex (> 180°) corner is rejected |
 | Closure error | ≤ 0.08 m excellent · ≤ 0.15 m acceptable · > 0.15 m reject |
 | Room height | 2.0 m – 4.0 m |
 | Opening width | 0.30 m – 4.0 m |

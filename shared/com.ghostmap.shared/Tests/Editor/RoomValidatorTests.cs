@@ -334,5 +334,91 @@ namespace GhostMap.Shared.Tests
             Assert.AreEqual(ClosureQuality.Excellent, RoomValidator.ClassifyClosure(0.08f));
             Assert.AreEqual(ClosureQuality.Acceptable, RoomValidator.ClassifyClosure(0.15f));
         }
+
+        [Test]
+        public void Room_RejectsReflexInteriorAngle()
+        {
+            // Regression: a "dart" footprint is a simple, non-self-intersecting
+            // quad with one 216.1 degree interior corner. Area (10.0 m2) and all
+            // four wall lengths are inside their limits, so it must be rejected
+            // on the 35-145 degree interior-angle rule alone. Before the fix the
+            // reflex corner was reported as its complement, 143.9 degrees, and
+            // the room was accepted.
+            var room = new RoomModel
+            {
+                id = "room-1",
+                name = "Dart",
+                heightM = 2.5f,
+                corners = new[]
+                {
+                    new CornerModel { id = "c0", position = new Vec3Dto(0f, 0f, 0f) },
+                    new CornerModel { id = "c1", position = new Vec3Dto(4.98f, 0f, 0f) },
+                    new CornerModel { id = "c2", position = new Vec3Dto(1.19f, 0f, 4.71f) },
+                    new CornerModel { id = "c3", position = new Vec3Dto(1.07f, 0f, 1.36f) }
+                },
+                openings = new OpeningModel[0],
+                objects = new SceneObjectModel[0]
+            };
+
+            ValidationResult result = RoomValidator.ValidateRoom(room);
+
+            Assert.IsFalse(result.IsValid,
+                "A reflex interior angle is outside the supported 35-145 degree range.");
+            StringAssert.Contains("angle", result.Error.ToLowerInvariant());
+        }
+
+        [Test]
+        public void Room_RejectsReflexInteriorAngleRegardlessOfWinding()
+        {
+            // The same dart, captured in the opposite direction. Winding must not
+            // change whether a room is accepted.
+            var room = new RoomModel
+            {
+                id = "room-1",
+                name = "Dart reversed",
+                heightM = 2.5f,
+                corners = new[]
+                {
+                    new CornerModel { id = "c0", position = new Vec3Dto(1.07f, 0f, 1.36f) },
+                    new CornerModel { id = "c1", position = new Vec3Dto(1.19f, 0f, 4.71f) },
+                    new CornerModel { id = "c2", position = new Vec3Dto(4.98f, 0f, 0f) },
+                    new CornerModel { id = "c3", position = new Vec3Dto(0f, 0f, 0f) }
+                },
+                openings = new OpeningModel[0],
+                objects = new SceneObjectModel[0]
+            };
+
+            ValidationResult result = RoomValidator.ValidateRoom(room);
+
+            Assert.IsFalse(result.IsValid);
+            StringAssert.Contains("angle", result.Error.ToLowerInvariant());
+        }
+
+        [Test]
+        public void Room_AcceptsValidRectangleInEitherWinding()
+        {
+            // Guards the interior-angle fix against over-rejection: a plain
+            // rectangle must stay valid whichever way the user walked the room.
+            var clockwise = new RoomModel
+            {
+                id = "room-1",
+                name = "Bedroom",
+                heightM = 2.5f,
+                corners = new[]
+                {
+                    new CornerModel { id = "c0", position = new Vec3Dto(0f, 0f, 3f) },
+                    new CornerModel { id = "c1", position = new Vec3Dto(4f, 0f, 3f) },
+                    new CornerModel { id = "c2", position = new Vec3Dto(4f, 0f, 0f) },
+                    new CornerModel { id = "c3", position = new Vec3Dto(0f, 0f, 0f) }
+                },
+                openings = new OpeningModel[0],
+                objects = new SceneObjectModel[0]
+            };
+
+            ValidationResult result = RoomValidator.ValidateRoom(clockwise);
+
+            Assert.IsTrue(result.IsValid, result.Error);
+        }
+
     }
 }

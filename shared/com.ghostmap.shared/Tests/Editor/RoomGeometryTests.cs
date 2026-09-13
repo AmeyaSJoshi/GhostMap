@@ -290,5 +290,107 @@ namespace GhostMap.Shared.Tests
             Assert.AreEqual(1.5f, u, Tolerance);
             Assert.AreEqual(2.1f, v, Tolerance);
         }
+
+        // -------------------------------------------------------------------
+        // Interior angles. Regression coverage added during the F0-F3 review:
+        // InteriorAngleDeg previously returned the unsigned corner angle, which
+        // cannot exceed 180 degrees, so a reflex interior angle was silently
+        // reported as its 360-degree complement.
+        // -------------------------------------------------------------------
+
+        [Test]
+        public void InteriorAngle_IsNinetyDegreesAtEveryRectangleCorner()
+        {
+            List<Vector3> points = Points(
+                new Vector3(0f, 0f, 0f),
+                new Vector3(4f, 0f, 0f),
+                new Vector3(4f, 0f, 3f),
+                new Vector3(0f, 0f, 3f));
+
+            for (int i = 0; i < points.Count; i++)
+            {
+                Assert.AreEqual(90f, RoomGeometry.InteriorAngleDeg(points, i), 1e-3f,
+                    $"Corner {i} of a rectangle is a right angle.");
+            }
+        }
+
+        [Test]
+        public void InteriorAngle_IsIndependentOfWinding()
+        {
+            List<Vector3> ccw = Points(
+                new Vector3(0f, 0f, 0f),
+                new Vector3(4f, 0f, 0f),
+                new Vector3(4f, 0f, 3f),
+                new Vector3(0f, 0f, 3f));
+
+            List<Vector3> cw = Points(
+                new Vector3(0f, 0f, 3f),
+                new Vector3(4f, 0f, 3f),
+                new Vector3(4f, 0f, 0f),
+                new Vector3(0f, 0f, 0f));
+
+            for (int i = 0; i < 4; i++)
+            {
+                Assert.AreEqual(90f, RoomGeometry.InteriorAngleDeg(ccw, i), 1e-3f);
+                Assert.AreEqual(90f, RoomGeometry.InteriorAngleDeg(cw, i), 1e-3f);
+            }
+        }
+
+        [Test]
+        public void InteriorAngle_ReportsReflexAngleBeyond180()
+        {
+            // A "dart": a simple, non-self-intersecting quad whose fourth corner
+            // is pulled inside the triangle formed by the other three. The true
+            // interior angle there is 216.1 degrees.
+            List<Vector3> dart = DartFootprint();
+
+            Assert.Greater(RoomGeometry.InteriorAngleDeg(dart, 3), 180f,
+                "A reflex corner must report more than 180 degrees, not its complement.");
+            Assert.AreEqual(216.1f, RoomGeometry.InteriorAngleDeg(dart, 3), 0.2f);
+        }
+
+        [Test]
+        public void InteriorAngle_SumsTo360ForAQuad()
+        {
+            List<Vector3> dart = DartFootprint();
+
+            float sum = 0f;
+            for (int i = 0; i < dart.Count; i++)
+            {
+                sum += RoomGeometry.InteriorAngleDeg(dart, i);
+            }
+
+            Assert.AreEqual(360f, sum, 0.1f,
+                "Interior angles of any simple quad sum to 360 degrees.");
+        }
+
+        [Test]
+        public void TryFindWall_RejectsReversedCornerPair()
+        {
+            RoomModel room = BuildRectangularRoom();
+
+            Assert.IsTrue(RoomGeometry.TryFindWall(room, "c0", "c1", out _));
+            Assert.IsFalse(RoomGeometry.TryFindWall(room, "c1", "c0", out _),
+                "An opening offset is measured from its declared start corner, so a "
+                + "reversed pair must fail loudly rather than mirror the opening.");
+        }
+
+        /// <summary>
+        /// A simple quad with one reflex (216.1 degree) interior corner. Its area
+        /// is 10.0 m2 and every wall is between 1.73 m and 6.05 m, so it passes
+        /// every room rule except the interior-angle rule.
+        /// </summary>
+        internal static List<Vector3> DartFootprint()
+        {
+            return Points(
+                new Vector3(0f, 0f, 0f),
+                new Vector3(4.98f, 0f, 0f),
+                new Vector3(1.19f, 0f, 4.71f),
+                new Vector3(1.07f, 0f, 1.36f));
+        }
+
+        private static List<Vector3> Points(params Vector3[] values)
+            => new List<Vector3>(values);
+
     }
 }

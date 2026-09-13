@@ -186,10 +186,19 @@ network: the viewer logs it, rejects it, and keeps its current scene.
 | `protocolVersion != 1` | rejected |
 | Missing or unknown `type` | rejected |
 | Malformed JSON | rejected |
+| Absent `protocolVersion` | **accepted as version 1** |
 | `scene.snapshot` with no snapshot | rejected |
 | Snapshot `schemaVersion != 1` | rejected |
 | `scene.snapshot` with no room | rejected |
 | Unknown extra fields | **accepted and ignored** |
+
+> **Implementation note on an absent `protocolVersion`.** `WireMessageHeader`
+> initializes the field to `1` so a sender cannot forget it, and `JsonUtility`
+> runs field initializers before overwriting from JSON. A line that omits the
+> field therefore parses as v1 rather than as v0. This is deliberate — a real v2
+> sender will carry `2` and still be rejected — and it is locked by
+> `AbsentProtocolVersion_IsReadAsVersionOne` so a change to the default is a
+> visible wire-behavior change rather than a silent one.
 
 > **Implementation note.** `JsonUtility` materializes a *default* instance for a
 > missing nested object rather than leaving it null, so an absent `snapshot`
@@ -274,9 +283,17 @@ here for readability; on the wire each is a single line ending in `\n`).
 {"protocolVersion":1,"type":"scan.finalized","sessionId":"fixture-valid-room-v1","sequence":2,"unixTimeMs":1757721600002,"finalRevision":12}
 ```
 
-Measured sizes for the reference fixture: `hello` 177 bytes, `scene.snapshot`
-1214 bytes, `scan.finalized` 142 bytes — well inside both the 262144 byte line
-limit and the 100 KB snapshot target.
+Measured wire sizes, including the trailing terminator:
+
+| Fixture | `hello` | `scene.snapshot` | `scan.finalized` |
+| --- | --- | --- | --- |
+| `valid-room-v1.json` (the default) | 176 B | 1059 B | 141 B |
+| `room-with-door-window-v1.json` | 177 B | 1214 B | 142 B |
+| `malformed-room-v1.json` | 175 B | 822 B | 139 B |
+
+All are well inside both the 262144 byte line limit and the 100 KB snapshot
+target. `hello` and `scan.finalized` vary by a byte or two only because the
+session id differs in length.
 
 ---
 
@@ -339,15 +356,17 @@ rather than attempting a partial read.
 
 Covered by `shared/com.ghostmap.shared/Tests/Editor/ProtocolSerializerTests.cs`.
 
-Executed on Unity `6000.3.24f1`, EditMode: **143 tests across the shared suite,
-143 passed, 0 failed** (29 of them protocol tests).
+Executed on Unity `6000.3.24f1`, EditMode: **156 tests across the shared suite,
+156 passed, 0 failed** (31 of them protocol tests).
 
 Verified: round trip of all five message types; no raw newline in output; single
 trailing terminator; port and line-length constants; rejection of unknown
 protocol version, unknown type, missing type, malformed JSON, empty input,
 oversized line, missing snapshot and unknown schema version; tolerance of unknown
-fields; all five revision-arbitration outcomes; and that each of the three
-fixtures parses, validates as intended, and survives a wire round trip.
+fields; that an absent `protocolVersion` is read as v1; all five
+revision-arbitration outcomes; that each of the three fixtures parses, validates
+as intended, and survives a wire round trip; and that the malformed fixture
+becomes fully valid once its single broken field is corrected.
 
 Additionally verified outside Unity: `send_fixture.py` transmitted the reference
 fixture over real TCP to a listener on port 47831, which received exactly three

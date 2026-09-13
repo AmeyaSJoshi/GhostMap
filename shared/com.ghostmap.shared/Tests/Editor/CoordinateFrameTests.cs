@@ -180,5 +180,94 @@ namespace GhostMap.Shared.Tests
             Assert.Less((restored.origin - worldRay.origin).magnitude, Tolerance);
             Assert.Less((restored.direction - worldRay.direction).magnitude, Tolerance);
         }
+
+        // -------------------------------------------------------------------
+        // Handedness. Regression coverage added during the F0-F3 review: the
+        // existing round-trip tests all pass for a mirrored basis, so nothing
+        // locked the documented rule right = cross(up, forward). A scanner that
+        // built its frame as cross(forward, up) would mirror every room, and the
+        // viewer would render the mirror image without any test objecting.
+        // -------------------------------------------------------------------
+
+        [Test]
+        public void RightAxis_MapsToPositiveX()
+        {
+            Vector3 up = Vector3.up;
+            Vector3 forward = Vector3.forward;
+            Vector3 right = Vector3.Cross(up, forward).normalized;
+
+            var frame = new GhostCoordinateFrame(Vector3.zero, right, up, forward);
+
+            Vector3 ghost = frame.WorldToGhost(right);
+
+            Assert.AreEqual(1f, ghost.x, Tolerance, "World right must map to ghost +X.");
+            Assert.AreEqual(0f, ghost.y, Tolerance);
+            Assert.AreEqual(0f, ghost.z, Tolerance);
+        }
+
+        [Test]
+        public void FloorLockFrame_PreservesUnityHandedness()
+        {
+            // cross(right, up) == forward is true only for a left-handed basis,
+            // which is the one Unity and scene-schema-v1.md section 1 specify.
+            // A mirrored frame fails here and nowhere else.
+            for (float yaw = 0f; yaw < 360f; yaw += 45f)
+            {
+                GhostCoordinateFrame frame = BuildFrame(new Vector3(1f, 0f, -2f), yaw);
+
+                Vector3 derived = Vector3.Cross(frame.Right, frame.Up).normalized;
+
+                Assert.Less((derived - frame.Forward).magnitude, Tolerance,
+                    $"Frame at yaw {yaw} is mirrored: cross(right, up) != forward.");
+            }
+        }
+
+        [Test]
+        public void FloorLockFrame_PreservesSignedFootprintArea()
+        {
+            // The end-to-end consequence of handedness: a room walked
+            // counter-clockwise in the world must still read counter-clockwise
+            // after conversion. A mirrored frame flips this sign, which would
+            // flip every floor triangle in the viewer.
+            GhostCoordinateFrame frame = BuildFrame(new Vector3(5f, 1.2f, -3f), 71f);
+
+            var worldSquare = new[]
+            {
+                new Vector3(0f, 0f, 0f),
+                new Vector3(4f, 0f, 0f),
+                new Vector3(4f, 0f, 3f),
+                new Vector3(0f, 0f, 3f)
+            };
+
+            var ghost = new System.Collections.Generic.List<Vector3>();
+            float worldSigned = SignedAreaXZ(worldSquare);
+
+            foreach (Vector3 point in worldSquare)
+            {
+                ghost.Add(frame.WorldToGhost(point));
+            }
+
+            float ghostSigned = SignedAreaXZ(ghost);
+
+            Assert.AreEqual(Mathf.Sign(worldSigned), Mathf.Sign(ghostSigned),
+                "Converting into Ghost space must not reverse polygon winding.");
+            Assert.AreEqual(Mathf.Abs(worldSigned), Mathf.Abs(ghostSigned), 1e-3f,
+                "Conversion must preserve area.");
+        }
+
+        private static float SignedAreaXZ(System.Collections.Generic.IReadOnlyList<Vector3> points)
+        {
+            float sum = 0f;
+
+            for (int i = 0; i < points.Count; i++)
+            {
+                Vector3 a = points[i];
+                Vector3 b = points[(i + 1) % points.Count];
+                sum += (a.x * b.z) - (b.x * a.z);
+            }
+
+            return sum * 0.5f;
+        }
+
     }
 }

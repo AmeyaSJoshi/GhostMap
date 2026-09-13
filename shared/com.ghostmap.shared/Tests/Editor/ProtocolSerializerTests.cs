@@ -476,5 +476,55 @@ namespace GhostMap.Shared.Tests
             Assert.AreEqual(snapshot.room.corners.Length, typed.snapshot.room.corners.Length);
             Assert.AreEqual(snapshot.room.objects.Length, typed.snapshot.room.objects.Length);
         }
+
+        [Test]
+        public void AbsentProtocolVersion_IsReadAsVersionOne()
+        {
+            // WireMessageHeader.protocolVersion is initialised to 1 so senders
+            // cannot forget it, and JsonUtility runs field initialisers before
+            // overwriting from JSON. A line that omits the field therefore parses
+            // as v1 rather than as v0. This is deliberate and documented in
+            // protocol-v1.md section 4; the test exists so a change to the
+            // default is a visible wire-behaviour change, not a silent one.
+            const string json = "{\"type\":\"heartbeat\",\"sessionId\":\"s\"}";
+
+            bool ok = ProtocolSerializer.TryDeserialize(json, out object message, out string error);
+
+            Assert.IsTrue(ok, error);
+            Assert.IsInstanceOf<HeartbeatMessage>(message);
+            Assert.AreEqual(ProtocolConstants.ProtocolVersion,
+                ((WireMessageHeader)message).protocolVersion);
+        }
+
+        [Test]
+        public void Fixture_MalformedRoomFailsOnExactlyOneRule()
+        {
+            // The malformed fixture exists to pinpoint a regression, which only
+            // works while height is the single rule it breaks.
+            SceneSnapshot snapshot = LoadFixture("malformed-room-v1.json");
+
+            Assert.IsFalse(RoomValidator.ValidateRoom(snapshot.room).IsValid);
+
+            RoomModel repaired = snapshot.room;
+            repaired.heightM = 2.5f;
+
+            ValidationResult result = RoomValidator.ValidateRoom(repaired);
+            Assert.IsTrue(result.IsValid,
+                "With its height corrected the malformed fixture must be fully valid: "
+                + result.Error);
+
+            foreach (OpeningModel opening in repaired.openings)
+            {
+                ValidationResult o = OpeningValidator.Validate(opening, repaired);
+                Assert.IsTrue(o.IsValid, o.Error);
+            }
+
+            foreach (SceneObjectModel obj in repaired.objects)
+            {
+                ValidationResult f = FurnitureValidator.Validate(obj);
+                Assert.IsTrue(f.IsValid, f.Error);
+            }
+        }
+
     }
 }

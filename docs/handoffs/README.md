@@ -77,3 +77,4 @@ or
 | 2026-09-12 | foundation | [F1 — scene schema v1](2026-09-12-foundation-f1-scene-schema.md) |
 | 2026-09-12 | foundation | [F2 — geometry and validation](2026-09-12-foundation-f2-geometry-validation.md) |
 | 2026-09-12 | foundation | [F3 — protocol v1 and fixtures](2026-09-12-foundation-f3-protocol-fixtures.md) |
+| 2026-09-12 | foundation | [F4 — foundation review](2026-09-12-foundation-f4-foundation-review.md) |

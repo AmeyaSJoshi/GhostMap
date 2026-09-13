@@ -60,17 +60,32 @@ def dist(a, b):
     return math.hypot(b[0] - a[0], b[1] - a[1])
 
 
-def polygon_area(points):
+def signed_polygon_area(points):
     total = 0.0
     n = len(points)
     for i in range(n):
         x1, z1 = points[i]
         x2, z2 = points[(i + 1) % n]
         total += (x1 * z2) - (x2 * z1)
-    return abs(total) / 2.0
+    return total / 2.0
+
+
+def polygon_area(points):
+    return abs(signed_polygon_area(points))
+
+
+def cross_xz(a, b):
+    return (a[0] * b[1]) - (a[1] * b[0])
 
 
 def interior_angle(points, i):
+    """Interior angle in degrees, in [0, 360).
+
+    Mirrors RoomGeometry.InteriorAngleDeg. The unsigned angle between the two
+    edges cannot exceed 180 degrees, so a concave "dart" footprint would report
+    its reflex corner as the 360-degree complement and pass the angle rule. The
+    polygon's winding disambiguates the two.
+    """
     n = len(points)
     cur = points[i]
     prv = points[(i - 1) % n]
@@ -84,17 +99,48 @@ def interior_angle(points, i):
         return 0.0
 
     cos = max(-1.0, min(1.0, (a[0] * b[0] + a[1] * b[1]) / (ma * mb)))
-    return math.degrees(math.acos(cos))
+    unsigned = math.degrees(math.acos(cos))
+
+    area = signed_polygon_area(points)
+    if abs(area) < EPS:
+        return unsigned
+
+    turn = cross_xz(a, b)
+    reflex = (turn > 0.0) if area > 0.0 else (turn < 0.0)
+
+    return 360.0 - unsigned if reflex else unsigned
 
 
 def segments_cross(p1, p2, q1, q2):
+    """True when two segments properly cross or overlap while collinear.
+
+    The collinear branch mirrors RoomGeometry.SegmentsIntersectXZ. Without it
+    this tool would report a degenerate footprint as valid where the shared C#
+    validator rejects it.
+    """
     def cross(o, a, b):
         return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    def on_segment(a, b, point):
+        return (min(a[0], b[0]) - EPS <= point[0] <= max(a[0], b[0]) + EPS
+                and min(a[1], b[1]) - EPS <= point[1] <= max(a[1], b[1]) + EPS)
 
     d1, d2 = cross(q1, q2, p1), cross(q1, q2, p2)
     d3, d4 = cross(p1, p2, q1), cross(p1, p2, q2)
 
-    return ((d1 > 0 > d2) or (d1 < 0 < d2)) and ((d3 > 0 > d4) or (d3 < 0 < d4))
+    if ((d1 > 0 > d2) or (d1 < 0 < d2)) and ((d3 > 0 > d4) or (d3 < 0 < d4)):
+        return True
+
+    for d, (a, b, point) in (
+        (d1, (q1, q2, p1)),
+        (d2, (q1, q2, p2)),
+        (d3, (p1, p2, q1)),
+        (d4, (p1, p2, q2)),
+    ):
+        if abs(d) < EPS and on_segment(a, b, point):
+            return True
+
+    return False
 
 
 def has_self_intersection(points):
@@ -128,6 +174,23 @@ def closure_label(value):
     if value <= CLOSURE_ACCEPTABLE_M:
         return "Acceptable"
     return "REJECTED"
+
+
+def validate_partial_chain(corners):
+    """Mirrors RoomValidator.ValidatePartialChain: spacing rules only."""
+    problems = []
+    for i in range(1, len(corners)):
+        a, b = xz(corners[i - 1]), xz(corners[i])
+        length = dist(a, b)
+        if length < MIN_CORNER_SPACING_M:
+            problems.append(
+                f"corners {corners[i - 1]['id']} and {corners[i]['id']} are only "
+                f"{length:.2f} m apart")
+        if length > MAX_WALL_LENGTH_M:
+            problems.append(
+                f"wall {corners[i - 1]['id']}->{corners[i]['id']} is {length:.2f} m, "
+                f"above {MAX_WALL_LENGTH_M:.1f} m")
+    return problems
 
 
 def validate(snapshot):
@@ -164,7 +227,14 @@ def validate(snapshot):
     if not corners:
         return problems
 
-    if len(corners) != REQUIRED_CORNERS:
+    if len(corners) < REQUIRED_CORNERS:
+        # Capture still in progress. RoomValidator.ValidateRoom treats a partial
+        # corner chain as valid-so-far, so this tool must too, or it would report
+        # every legitimate mid-scan snapshot as bad data.
+        problems.extend(validate_partial_chain(corners))
+        return problems
+
+    if len(corners) > REQUIRED_CORNERS:
         problems.append(f"expected {REQUIRED_CORNERS} corners, found {len(corners)}")
         return problems
 
@@ -226,7 +296,13 @@ def validate(snapshot):
             problems.append(
                 f"opening {opening.get('id')} spans {offset:.2f}-{offset + width:.2f} m "
                 f"but the wall is {wall['length']:.2f} m")
-        if height > 0 and sill + oheight > height + EPS:
+        if height <= 0:
+            # OpeningValidator.Validate refuses to judge an opening before the
+            # room height exists, because its vertical extent is unbounded.
+            problems.append(
+                f"opening {opening.get('id')} cannot be validated: room height "
+                f"has not been captured yet")
+        elif sill + oheight > height + EPS:
             problems.append(
                 f"opening {opening.get('id')} top {sill + oheight:.2f} m exceeds "
                 f"room height {height:.2f} m")

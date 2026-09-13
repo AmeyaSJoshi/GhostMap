@@ -16,7 +16,8 @@
 - None yet.
 
 ## Known issues
-- No Unity installation on the current development machine.
+- Unity `6000.3.24f1` **is** installed on the current development machine and
+  runs the shared EditMode suite; this line previously said otherwise.
 - No physical iPhone has been connected to this project.
 
 ## Next safe task

@@ -7,7 +7,9 @@
 `a3f15f8` — merge of Task S2 (PR #2) into `main`. S1 and S2 are both in history.
 
 ## Head commit
-`<implementation commit sha — recorded in the follow-up commit>`
+`1e04d02` — `feat(scanner): add validated corner capture and closure check`. The
+commit that follows it changes only this handoff document, so its scanner
+sources are byte-identical.
 
 ## Status
 **S3 implementation is complete and green off-device. S3 is NOT complete:

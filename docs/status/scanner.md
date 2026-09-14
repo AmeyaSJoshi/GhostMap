@@ -100,9 +100,8 @@
   `xcodebuild ... BUILD SUCCEEDED`**, but has **not yet been verified on a
   real iPhone** — see "Physical-device verification needed — S6" below.
   `AGENTS.md` rule 12 applies: do not treat S6 as done until that pass
-  succeeds. The commit sha is filled in by the follow-up
-  "docs(handoffs): record S6 implementation commit sha" commit, the same
-  two-commit pattern S5 used.
+  succeeds.
+- `96b5de0` — S6 implementation, not yet verified on a real iPhone.
 - `7274cfe` — S5, verified on a real iPhone. The commit that follows it
   changes only documentation, so its scanner sources are byte-identical.
 - `1b8a6ce` — S4, verified on a real iPhone. The commits that follow it change

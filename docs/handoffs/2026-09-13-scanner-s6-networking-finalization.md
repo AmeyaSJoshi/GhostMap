@@ -7,7 +7,7 @@
 `2bb4899` (merge of PR #5, `scanner/s5-openings-furniture` into `main`)
 
 ## Head commit
-`<filled in by the follow-up "docs(handoffs): record S6 implementation commit sha" commit>`
+`96b5de0`
 
 ## What changed
 - `Runtime/Networking/ScannerNetworkClient.cs` (new): protocol v1's TCP

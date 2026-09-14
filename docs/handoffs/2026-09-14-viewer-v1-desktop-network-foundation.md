@@ -7,8 +7,7 @@
 `9996e5b` (merge of PR #6, `scanner/s6-network-finalization` -> `main`; Scanner S1-S6 complete)
 
 ## Head commit
-See the next handoff/commit that records this task's SHA (per this repo's
-convention of recording the commit SHA in a follow-up docs commit).
+`0cee857`
 
 ## What changed
 Task V1 from `docs/plans/ghostmap-implementation-plan.md` section 17: the

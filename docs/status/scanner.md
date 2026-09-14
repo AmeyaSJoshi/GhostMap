@@ -1,6 +1,28 @@
 # Scanner Status
 
 ## Current state
+- **S5 complete and verified on a physical iPhone.** Doors and windows are
+  captured on one of the four S3/S4-derived walls by intersecting the
+  center-screen ray with that wall's mathematical plane at a lower-left then
+  an upper-right point; furniture is placed by intersecting the center-screen
+  ray with the locked floor plane and applying the type's MVP default
+  dimensions. Both use the shared `OpeningValidator` / `FurnitureValidator`
+  for all validation. The scan phase advances
+  `AddOpenings -> AddObjects -> ReadyToFinalize`; S6 owns finalization itself.
+  On device: door capture worked and produced physically plausible
+  dimensions, window capture worked with the sill correctly reading above
+  0, wall selection worked and opening markers stayed on the correct walls,
+  furniture placement and its width/depth/height/yaw adjustment controls
+  worked, the S2 frame and S3 corner markers stayed fixed throughout, and
+  both `Finish Openings` and `Finish Objects` advanced the phase correctly
+  (`AddOpenings -> AddObjects -> ReadyToFinalize`). See "Task S5" below for
+  the full design and "Physical-device verification — S5, passed" below for
+  the complete device-test record.
+- Delivered in S5: `OpeningCaptureController`, `ObjectPlacementController`,
+  `OpeningCaptureHud`, `ObjectPlacementHud`, the S5 transitions and real
+  `openings`/`objects` arrays on `ScanWorkflowController`'s snapshot, and the
+  scene builder's wall/type selection, two-point capture, furniture placement
+  and adjustment UI. `VerifyScene()` now asserts the S5 wiring too.
 - **S4 complete and verified on a physical iPhone.** Room height is captured
   by deriving vertical wall planes from the S3 footprint, intersecting the
   center-screen ray with the wall the user selects, and validating the result
@@ -46,6 +68,8 @@
   root cause. Both are recorded below and in their handoffs.
 
 ## Last verified commit
+- `7274cfe` — S5, verified on a real iPhone. The commit that follows it
+  changes only documentation, so its scanner sources are byte-identical.
 - `1b8a6ce` — S4, verified on a real iPhone. The commits that follow it change
   only documentation, so their scanner sources are byte-identical.
 - `1e04d02` — S3, verified on a real iPhone. The commits that follow it change
@@ -56,6 +80,135 @@
 - S1 reached `main` as merge commit `150512d` (PR #1) and S2 as merge commit
   `a3f15f8` (PR #2). Both were merged with a merge commit so the original task
   SHAs stay reachable from the handoff documents that cite them.
+
+## Physical-device verification — S5, passed
+
+Observed on a real iPhone against the build produced from `7274cfe`:
+
+- door capture worked and produced physically plausible dimensions
+- window capture worked, with the sill correctly reading above 0
+- wall selection worked
+- opening markers stayed on the correct walls
+- furniture placement worked
+- furniture width/depth/height/yaw adjustment controls worked
+- the S2 frame readout and the S3 corner markers stayed fixed throughout
+  openings and furniture capture
+- `Finish Openings` advanced `Phase` from `AddOpenings` to `AddObjects`
+- `Finish Objects` advanced `Phase` from `AddObjects` to `ReadyToFinalize`
+
+That covers the golden path of the device procedure below, and confirms on
+hardware what the automated tests assert off it: the wall-plane and
+floor-plane ray intersections land correctly, offset/width/sill/height derive
+correctly from the two captured points, the S2 frame and S3/S4 footprint and
+height are untouched by S5 capture, and the workflow's forward transitions
+fire on the expected user actions.
+
+### Not covered by the S5 device test
+The S5 hardware run exercised the golden path: valid door capture, valid
+window capture, wall selection, furniture placement and adjustment, and both
+`Finish` transitions. These paths are covered by EditMode tests but have
+**not** been seen on a phone:
+
+- an opening whose two points fall outside the selected wall's length;
+- a window whose lower-left point is aimed below the physical floor line;
+- a window/door whose sill + height would exceed the captured room height;
+- two overlapping openings on the same wall;
+- tapping **Capture Upper-Right** before ever tapping **Capture Lower-Left**;
+- undoing a captured opening or a placed object with **Undo Opening** /
+  **Undo Object**;
+- finishing either phase with zero items captured (continuing without
+  openings or without furniture).
+
+None of these is suspected broken — each has a passing, mutation-checked
+EditMode test. They are recorded because a passing test is not the same
+evidence as a passing phone.
+
+### The S5 device procedure
+Build from the working tree at `7274cfe` with `ScannerBuild.ConfigureXr` then
+`ScannerBuild.BuildScanner` (two separate Unity invocations — see "Known
+issues" / "Build process" below), deploy to a physical iPhone, and drive the
+scan through S1-S4 exactly as before (lock floor, capture four corners,
+accept closure, capture height). `Phase` should reach `AddOpenings`.
+
+### Door
+1. On the `AddOpenings` screen, tap **Wall N/4** until the readout's
+   `Wall x/y: <start>-><end>` line and the yellow world-space line on the
+   floor both indicate the physical wall you want the door on.
+2. Confirm the button reads **Type: door** (tap **Type: door/window** to
+   toggle it if it reads `window`).
+3. Aim the crosshair at the door's bottom-left corner (where the door meets
+   the floor) and tap **Capture Lower-Left**. A blue marker should appear
+   there, and the button should now read **Capture Upper-Right**.
+4. Aim at the door's top-right corner (the far side, at the top of the
+   frame) and tap **Capture Upper-Right**.
+5. **Success looks like:** the readout's opening count increases by one, a
+   new line appears listing `door offset ... width ... sill 0.00 height ...`,
+   and the values are plausible for a real door (width roughly 0.7-1.0 m,
+   height roughly 2.0-2.1 m, sill exactly 0.00).
+6. If the two points don't form a legal door (e.g. you aimed outside the
+   wall, or width is under 0.30 m), the readout shows `Rejected: ...` with
+   the reason, the opening count does not increase, and you can just try the
+   two points again — no need to reselect the wall or the type.
+
+### Window
+Same as the door procedure, with two differences:
+- Toggle the type button to **Type: window** first.
+- Aim the lower-left point at the window's actual sill (bottom edge above
+  the floor, not at the floor itself) and the upper-right point at the
+  window's actual top edge.
+- **Success looks like:** the new readout line shows a `sill` value that is
+  clearly above 0.00 (roughly the real sill height off the floor) and a
+  `height` that is the window's real height, not its top-edge distance from
+  the floor.
+- To confirm the window is on the correct wall: reselect the same wall with
+  **Wall N/4** afterward and check the readout's `Wall x/y` line still names
+  the wall you aimed at; the opening is stored against that wall's corner
+  pair regardless of which wall is currently selected on screen.
+
+### Furniture
+1. Tap **Finish Openings** once you're done with doors/windows (zero is
+   fine). `Phase` should read `AddObjects`.
+2. Tap **Type: bed** (or whichever type shows) repeatedly to cycle through
+   the eight MVP types until the one you want is shown.
+3. Aim the crosshair at the floor spot where you want the object's center
+   and tap **Place Object**. An orange cube marker should appear there.
+4. To adjust the object you just placed: **W -/W +**, **D -/D +**,
+   **H -/H +** step its width/depth/height by 0.10 m per tap, and
+   **Yaw -/Yaw +** step its rotation by 15° per tap. Only the most recently
+   placed object is affected.
+5. **What should remain fixed while editing:** the frame readout (`Frame O`,
+   `Frame X`, `Frame Z`), the four corner markers, and the captured room
+   height must not move or change while you place or adjust furniture.
+6. Tap **Finish Objects** when done (zero furniture is fine). `Phase` should
+   read `ReadyToFinalize`.
+
+### What phase/state should appear at each step
+```text
+after S4 height capture -> AddOpenings
+after Finish Openings    -> AddObjects
+after Finish Objects     -> ReadyToFinalize
+```
+No screen in S5 should ever show `Finalized` — that is Task S6's job.
+
+### Invalid cases worth deliberately testing
+- A door/window whose two points land outside the selected wall's length.
+- A window whose lower-left point is aimed below the physical floor line.
+- A window/door whose sill + height would exceed the captured room height.
+- Two openings on the same wall whose spans overlap.
+- Tapping **Capture Upper-Right** before ever tapping **Capture Lower-Left**
+  (should simply do nothing / be a no-op via the disabled-until-aimable
+  button state).
+- Placing a piece of furniture, undoing it with **Undo Object**, and
+  confirming the room's corner markers and frame readout are unaffected.
+
+### If something fails, send
+- A screenshot of the full screen (all four readouts plus buttons) at the
+  moment of the failure.
+- The exact `Rejected: ...` line from the opening or object readout, if one
+  appeared.
+- Which wall (`Wall x/y: <start>-><end>`) was selected.
+- The room's captured height from the S4 readout, for context on the
+  ceiling-rule checks.
 
 ## Physical-device verification — S4, passed
 Observed on a real iPhone against the build produced from `1b8a6ce`:
@@ -113,6 +266,87 @@ during or after corner capture, and the closure bands behave as specified.
 The 0.031 m closure is the strongest on-device evidence available that the frame
 did not drift across the scan. A frame that had moved would have surfaced here as
 accumulated error rather than as a clean re-aim onto the stored first corner.
+
+## Task S5 — openings and furniture
+
+### Doors and windows
+```text
+walls  = RoomGeometry.BuildWalls(room)          // from the S3 corners, in order
+wall   = walls[selectedWallIndex]               // user-selected, as in S4
+plane  = WallGeometry.PlaneFor(wall)            // vertical, through wall.Start
+ray1   = provider.GetScreenRay(...)             // lower-left point
+ray2   = provider.GetScreenRay(...)             // upper-right point
+        -> intersect each Ghost-space ray with plane
+        -> convert each intersection to wall-local (u, v) via WallGeometry.ToWallLocal
+        -> door:   offset=min(u), width=|Δu|, sill=0,      height=max(v)
+        -> window: offset=min(u), width=|Δu|, sill=min(v), height=|Δv|
+        -> OpeningValidator.Validate(candidate, room)
+        -> append, revision++, republish snapshot
+```
+
+Exactly implementation plan section 16 (Task S5): both points come from the
+same center-screen ray / `WorldRayToGhost` / wall-plane intersection S4
+already established, so no new capture primitive was needed. `OpeningCaptureController`
+re-derives walls from the live corners on every access — the same choice
+`HeightCaptureController` makes — so an opening's wall can never disagree
+with the footprint it came from.
+
+A rejected second point clears the pending first point rather than retrying
+it: a failed two-point capture always restarts clean, so a stale first point
+measured against different aim never silently survives into the next
+attempt.
+
+### Furniture
+```text
+ray    = provider.GetScreenRay(...)                          // center screen
+world  = RayPlaneMath.TryIntersectHorizontalPlane(ray, frame.FloorWorldY)
+ghost  = frame.WorldToGhost(world); ghost.y = 0               // forced, as in S3
+        -> FurnitureValidator.TryGetDefaultDimensions(type, ...)
+        -> new SceneObjectModel { center=ghost, yawDeg=0, ...defaults }
+        -> FurnitureValidator.Validate(candidate)
+        -> append, revision++, republish snapshot
+```
+
+`ObjectPlacementController` never scans a mesh or infers shape from pixels:
+every object is `{ type, center, yawDeg, widthM, depthM, heightM }`, exactly
+scene schema v1's `SceneObjectModel`. Adjustment (`TrySetWidth`/`TrySetDepth`/
+`TrySetHeight`/`TrySetYaw`) always re-validates the whole candidate through
+`FurnitureValidator.Validate` and only applies the change if the result would
+still be legal — an invalid adjustment leaves the object exactly as it was.
+
+### Validation is the shared package's, not a scanner copy
+Both controllers validate through `OpeningValidator.Validate` and
+`FurnitureValidator.Validate` exclusively (`AGENTS.md` rules 2 and 3). Wall
+containment, the ceiling rule (`sillHeightM + heightM <= room.heightM`,
+real now that S4 has captured a non-zero height), opening overlap, and
+furniture dimension bounds are each enforced in exactly one place.
+
+### Workflow and state machine
+`AddOpenings` and `AddObjects` behave like every earlier phase: selection
+(`SelectOpeningWall`, `SetOpeningType`, `SetObjectType`) and the start-point
+capture are read-only with respect to the snapshot; only an accepted
+end-point capture, an accepted placement, an undo, an accepted adjustment, or
+a `FinishAdding*` transition increments the revision and republishes. Both
+`FinishAddingOpenings` and `FinishAddingObjects` are legal with zero items —
+implementation plan section 16 allows continuing without either — and S5
+stops at `ReadyToFinalize`. Actually finalizing (`scan.finalized` on the
+wire) is Task S6's networking work, not S5's; `ReadyToFinalize` is reached
+and `SceneSnapshot.finalized` stays `false`.
+
+### The S2 frame, S3 corners and S4 height are read, never written
+Both new controllers hold `FloorLockController` and (for openings)
+`CornerCaptureController` / `HeightCaptureController` only to read `Frame`,
+`CopyCorners()` and `HeightM`/`HasCapturedHeight`. Neither has a path to move
+the frame, mutate a corner or change the captured height. Tests pin the
+frame surviving by reference and the corners/height surviving by value
+across opening and object capture.
+
+### Contract impact
+**None.** No file under `shared/**`, `fixtures/**`, `tools/**`,
+`docs/contracts/**` or `docs/decisions/**` was touched, and no viewer file
+was touched. `OpeningModel` and `SceneObjectModel` already existed in scene
+schema v1 with exactly this meaning; S5 is the first task to actually write
+non-empty `openings`/`objects` arrays into a live snapshot.
 
 ## Task S4 — height capture
 
@@ -313,6 +547,56 @@ session reaches tracking, the plane manager reports a floor candidate, and the
 screen shows session state, notTrackingReason and camera pose.
 
 ## Tests run
+
+### S5 — latest
+```bash
+/Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -projectPath apps/scanner -buildTarget iOS \
+  -runTests -testPlatform EditMode \
+  -testResults /tmp/ghostmap-s5-final.xml -logFile /tmp/ghostmap-s5-final.log
+```
+**339 tests, 339 passed, 0 failed, 0 skipped.** Unity exit code 0.
+`OpeningCaptureControllerTests` 20 (new), `ObjectPlacementControllerTests` 17
+(new), `ScanWorkflowControllerTests` 49 (39 + 10 new S5 tests),
+`CornerCaptureControllerTests` 37, `HeightCaptureControllerTests` 18,
+`GhostFrameTests` 20, `FloorLockControllerTests` 17,
+`ScannerXrSettingsTests` 4, `ScannerSceneTests` 1, `GhostMap.Shared.Tests`
+156. S4 finished at 292.
+
+Mutation-checked rather than merely observed passing:
+
+| Mutation | Result |
+| --- | --- |
+| Door height formula `Mathf.Max(v1, v2)` flipped to `Mathf.Min(v1, v2)` in `OpeningCaptureController.BuildOpeningModel` | **9 failed** — `AValidDoorIsAccepted` and every test that builds on an accepted door as a fixture (undo, copy, workflow revision, frame/corner/height survival, the overlap and invalid-capture tests) |
+| `ObjectPlacementController.TryAdjust`'s `FurnitureValidator.Validate` call replaced with an unconditional `ValidationResult.Valid()` | **1 failed** — exactly `AnInvalidAdjustmentIsRejectedByTheSharedValidatorAndLeavesTheObjectUnchanged`, and only that one |
+
+The first mutation cascading through 9 tests (rather than being silently
+absorbed) is itself evidence the door/window formula is load-bearing rather
+than incidental. The second mutation confirms adjustment validation is
+exercised by exactly the one test written to catch it, not accidentally by
+something else.
+
+`ScannerBuild.ConfigureXr` and `ScannerBuild.BuildScanner` both exited 0, and
+`xcodebuild -target Unity-iPhone -configuration Release -sdk iphoneos
+CODE_SIGNING_ALLOWED=NO` reported **BUILD SUCCEEDED**.
+
+The shared package was also run standalone in its own host project, to
+confirm S5 changed nothing under `shared/`:
+```bash
+/Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -projectPath shared/TestProject \
+  -runTests -testPlatform EditMode \
+  -testResults /tmp/ghostmap-s5-shared.xml -logFile /tmp/ghostmap-s5-shared.log
+```
+**156 tests, 156 passed, 0 failed, 0 skipped.** Unity exit code 0 — unchanged
+from S4.
+
+Re-run after physical-device verification, against the same `7274cfe`, to
+confirm nothing drifted between the build used on device and the final
+state: Scanner **339/339**, Shared **156/156**, both exit code 0.
+
+The S5 physical-device test was then run on a real iPhone and **passed** —
+see "Physical-device verification — S5, passed" above.
 
 ### S4 — latest
 ```bash
@@ -579,6 +863,33 @@ physical-device test from passing.
   confirmation step. A mistyped value is only caught by the 2.0-4.0 m range
   check, not by asking the user to re-enter it.
 
+### Scene / runtime — new in S5
+- The screen is now extremely crowded: openings and furniture add two more
+  readouts and thirteen more buttons on top of the four readouts and eleven
+  buttons S2-S4 already placed. This continues rather than solves the
+  "screen is now crowded" issue S3/S4 flagged; Task S6 owns the real capture
+  UI and is expected to consolidate all of this into the plan's "Door /
+  Window / Furniture / Finish" single screen (implementation plan section
+  19). Depending on device aspect ratio, some S5 controls may sit close to
+  or beyond the top edge of the canvas — if a button described in the test
+  procedure above is not visible, scroll is not implemented; report which
+  control is missing rather than assuming it is broken.
+- Furniture adjustment is by fixed step (0.10 m / 15°) via `+`/`-` buttons
+  rather than a typed value or a slider, the same simplicity trade Task S4's
+  manual height field makes in the other direction. It always acts on the
+  most recently placed object; there is no way to select and re-edit an
+  earlier one without undoing back to it.
+- The opening capture button doubles as both "capture lower-left" and
+  "capture upper-right" via its changing label rather than being two
+  separate buttons. This is fewer controls, not fewer capabilities, but it
+  means the label text itself is load-bearing UI state.
+- There is no per-opening or per-object delete by selection — only "undo the
+  most recently added one" for each list, per the implementation plan's
+  explicit Undo scope (it asks for undo, not arbitrary deletion).
+- Object and opening markers are untextured primitives (cubes for furniture,
+  spheres for the opening aim/start points), matching S3's corner markers.
+  Legible, not designed.
+
 ### Not covered by the S4 device test
 The S4 hardware run exercised the golden path on a rectangular room: locking
 the floor, capturing four corners, an accepted closure, selecting a wall,
@@ -630,15 +941,17 @@ passing test is not the same evidence as a passing phone.
   trampoline sources.
 
 ## Next safe task
-- **S4** — height capture. S4 is complete and verified on hardware (2.69 m
-  captured height, golden path confirmed — see "Physical-device verification
-  — S4, passed" above), so the scanner workstream may proceed to the next task
-  in `docs/plans/ghostmap-implementation-plan.md`: **S5 — doors, windows,
-  furniture**. S5 has not been started in this session.
-- S5 inherits the room's real `heightM` (S4's contribution): `RoomValidator.ValidateRoom`
-  now applies the 2.0-4.0 m range check on every subsequent snapshot, and
-  `OpeningModel.sillHeightM + heightM` validation (F2) has a real ceiling to
-  check openings against for the first time.
+- **S6** — scanner TCP client and the complete capture UI. S5 is complete
+  and verified on hardware (door/window capture, furniture placement and
+  adjustment, both `Finish` transitions — see "Physical-device verification
+  — S5, passed" above), so the scanner workstream may proceed to the next
+  task in `docs/plans/ghostmap-implementation-plan.md`: **S6**. S6 has not
+  been started in this session.
+- S6 inherits real `openings`/`objects` arrays on every snapshot for the
+  first time (S5's contribution), and is expected to replace the S2-S5
+  bring-up readouts/buttons with the plan's actual capture UI (implementation
+  plan section 19) alongside the TCP client, connection screen and
+  reconnection behavior (section 7 / protocol v1).
 
 ## Do not touch
 - `shared/**`, `fixtures/**`, `tools/**`, `docs/contracts/**`, `docs/decisions/**`

@@ -35,8 +35,10 @@ namespace GhostMap.Scanner.Tests.EditMode
             var floorLock = new FloorLockController(provider);
             var corners = new CornerCaptureController(provider, floorLock);
             var height = new HeightCaptureController(provider, floorLock, corners);
+            var openingCapture = new OpeningCaptureController(provider, floorLock, corners, height);
+            var objectPlacement = new ObjectPlacementController(provider, floorLock);
 
-            return new ScanWorkflowController(floorLock, corners, height);
+            return new ScanWorkflowController(floorLock, corners, height, openingCapture, objectPlacement);
         }
 
         /// <summary>Ticks to FindFloor and locks, leaving the phase at FloorLocked.</summary>
@@ -755,6 +757,209 @@ namespace GhostMap.Scanner.Tests.EditMode
                 Assert.AreEqual(beforeCorners[i].position.y, workflow.Snapshot.room.corners[i].position.y);
                 Assert.AreEqual(beforeCorners[i].position.z, workflow.Snapshot.room.corners[i].position.z);
             }
+        }
+
+        // -------------------------------------------------------------------
+        // Task S5 Part 1 — openings
+        // -------------------------------------------------------------------
+
+        /// <summary>Captures a legal room, a good closure and a 2.5 m height, landing at AddOpenings.</summary>
+        private static ScanWorkflowController RoomAtAddOpenings(FakeSpatialProvider provider)
+        {
+            ScanWorkflowController workflow = RoomAtCaptureHeight(provider);
+
+            Assert.IsTrue(workflow.SelectHeightWall(0));
+            AimAtWallHeight(provider, workflow.Frame, 1.5f, 2.5f);
+            Assert.IsTrue(workflow.TryCaptureHeight(out _));
+            Assert.AreEqual(ScanPhase.AddOpenings, workflow.Phase);
+
+            return workflow;
+        }
+
+        [Test]
+        public void ACompleteDoorCaptureAppendsAnOpeningAndAdvancesTheRevision()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtAddOpenings(provider);
+
+            Assert.IsTrue(workflow.SelectOpeningWall(0));
+            Assert.IsTrue(workflow.SetOpeningType(OpeningValidator.TypeDoor));
+
+            int revision = workflow.Revision;
+
+            AimAtWallHeight(provider, workflow.Frame, 0.5f, 0f);
+            Assert.IsTrue(workflow.TryCaptureOpeningStartPoint(out _));
+
+            AimAtWallHeight(provider, workflow.Frame, 1.5f, 2.05f);
+            Assert.IsTrue(workflow.TryCaptureOpeningEndPoint(out OpeningCaptureRejection rejection));
+
+            Assert.AreEqual(OpeningCaptureRejection.None, rejection);
+            Assert.AreEqual(1, workflow.Snapshot.room.openings.Length);
+            Assert.Greater(workflow.Revision, revision);
+            Assert.AreEqual(workflow.Revision, workflow.Snapshot.revision);
+        }
+
+        [Test]
+        public void OpeningCaptureCannotHappenOutsideAddOpeningsPhase()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtCaptureHeight(provider);
+
+            Assert.IsFalse(workflow.TryCaptureOpeningStartPoint(out OpeningCaptureRejection rejection));
+            Assert.AreEqual(OpeningCaptureRejection.WrongPhase, rejection);
+        }
+
+        [Test]
+        public void FinishingOpeningsWithNoneCapturedIsAllowedAndAdvancesToAddObjects()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtAddOpenings(provider);
+
+            Assert.IsTrue(workflow.FinishAddingOpenings());
+
+            Assert.AreEqual(ScanPhase.AddObjects, workflow.Phase);
+            Assert.IsEmpty(workflow.Snapshot.room.openings);
+        }
+
+        [Test]
+        public void FinishAddingOpeningsIncreasesTheRevision()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtAddOpenings(provider);
+            int revision = workflow.Revision;
+
+            Assert.IsTrue(workflow.FinishAddingOpenings());
+
+            Assert.Greater(workflow.Revision, revision);
+            Assert.AreEqual(workflow.Revision, workflow.Snapshot.revision);
+        }
+
+        // -------------------------------------------------------------------
+        // Task S5 Part 2 — furniture / objects
+        // -------------------------------------------------------------------
+
+        /// <summary>Skips straight through AddOpenings with none captured, landing at AddObjects.</summary>
+        private static ScanWorkflowController RoomAtAddObjects(FakeSpatialProvider provider)
+        {
+            ScanWorkflowController workflow = RoomAtAddOpenings(provider);
+            Assert.IsTrue(workflow.FinishAddingOpenings());
+            return workflow;
+        }
+
+        [Test]
+        public void PlacingAnObjectAppendsItAndAdvancesTheRevision()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtAddObjects(provider);
+
+            Assert.IsTrue(workflow.SetObjectType("bed"));
+            AimAtGhost(provider, workflow.Frame, 1.5f, 1.25f);
+
+            int revision = workflow.Revision;
+
+            Assert.IsTrue(workflow.TryPlaceObject(out ObjectPlacementRejection rejection));
+
+            Assert.AreEqual(ObjectPlacementRejection.None, rejection);
+            Assert.AreEqual(1, workflow.Snapshot.room.objects.Length);
+            Assert.AreEqual("bed", workflow.Snapshot.room.objects[0].type);
+            Assert.Greater(workflow.Revision, revision);
+            Assert.AreEqual(workflow.Revision, workflow.Snapshot.revision);
+        }
+
+        [Test]
+        public void ObjectPlacementCannotHappenOutsideAddObjectsPhase()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtAddOpenings(provider);
+
+            Assert.IsFalse(workflow.TryPlaceObject(out ObjectPlacementRejection rejection));
+            Assert.AreEqual(ObjectPlacementRejection.WrongPhase, rejection);
+        }
+
+        [Test]
+        public void FinishingObjectsWithNoneCapturedIsAllowedAndAdvancesToReadyToFinalize()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtAddObjects(provider);
+
+            Assert.IsTrue(workflow.FinishAddingObjects());
+
+            Assert.AreEqual(ScanPhase.ReadyToFinalize, workflow.Phase);
+            Assert.IsEmpty(workflow.Snapshot.room.objects);
+        }
+
+        /// <summary>
+        /// S5 stops at ReadyToFinalize. Actually finalizing — sending
+        /// <c>scan.finalized</c> and setting <c>SceneSnapshot.finalized</c> —
+        /// is Task S6's networking work, not S5's.
+        /// </summary>
+        [Test]
+        public void ReachingReadyToFinalizeDoesNotFinalizeTheScan()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtAddObjects(provider);
+
+            Assert.IsTrue(workflow.FinishAddingObjects());
+
+            Assert.AreEqual(ScanPhase.ReadyToFinalize, workflow.Phase);
+            Assert.IsFalse(workflow.Snapshot.finalized);
+            Assert.AreNotEqual(ScanPhase.Finalized, workflow.Phase);
+        }
+
+        [Test]
+        public void RevisionIncreasesMonotonicallyThroughOpeningsAndObjects()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtAddOpenings(provider);
+            int revision = workflow.Revision;
+
+            Assert.IsTrue(workflow.SelectOpeningWall(0));
+            AimAtWallHeight(provider, workflow.Frame, 0.5f, 0f);
+            Assert.IsTrue(workflow.TryCaptureOpeningStartPoint(out _));
+            AimAtWallHeight(provider, workflow.Frame, 1.5f, 2.05f);
+            Assert.IsTrue(workflow.TryCaptureOpeningEndPoint(out _));
+            Assert.Greater(workflow.Revision, revision);
+            revision = workflow.Revision;
+
+            Assert.IsTrue(workflow.FinishAddingOpenings());
+            Assert.Greater(workflow.Revision, revision);
+            revision = workflow.Revision;
+
+            Assert.IsTrue(workflow.SetObjectType("chair"));
+            AimAtGhost(provider, workflow.Frame, 1.5f, 1.25f);
+            Assert.IsTrue(workflow.TryPlaceObject(out _));
+            Assert.Greater(workflow.Revision, revision);
+            revision = workflow.Revision;
+
+            Assert.IsTrue(workflow.FinishAddingObjects());
+            Assert.Greater(workflow.Revision, revision);
+
+            Assert.AreEqual(workflow.Revision, workflow.Snapshot.revision);
+        }
+
+        [Test]
+        public void TheFrameCornersAndHeightSurviveOpeningAndObjectCapture()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtAddOpenings(provider);
+
+            GhostCoordinateFrame frame = workflow.Frame;
+            float capturedHeight = workflow.Snapshot.room.heightM;
+            int cornerCount = workflow.Snapshot.room.corners.Length;
+
+            Assert.IsTrue(workflow.SelectOpeningWall(0));
+            AimAtWallHeight(provider, workflow.Frame, 0.5f, 0f);
+            Assert.IsTrue(workflow.TryCaptureOpeningStartPoint(out _));
+            AimAtWallHeight(provider, workflow.Frame, 1.5f, 2.05f);
+            Assert.IsTrue(workflow.TryCaptureOpeningEndPoint(out _));
+            Assert.IsTrue(workflow.FinishAddingOpenings());
+
+            AimAtGhost(provider, workflow.Frame, 1.5f, 1.25f);
+            Assert.IsTrue(workflow.TryPlaceObject(out _));
+
+            Assert.AreSame(frame, workflow.Frame);
+            Assert.AreEqual(capturedHeight, workflow.Snapshot.room.heightM);
+            Assert.AreEqual(cornerCount, workflow.Snapshot.room.corners.Length);
         }
     }
 }

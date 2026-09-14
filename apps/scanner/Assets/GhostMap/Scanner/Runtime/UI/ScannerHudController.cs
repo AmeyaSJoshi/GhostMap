@@ -228,9 +228,31 @@ namespace GhostMap.Scanner.UI
 
             builder.Append("Closure error: ").Append(workflow.Snapshot.closureErrorM.ToString("F3")).Append(" m\n");
 
-            builder.Append(workflow.Phase == ScanPhase.Finalized ? "FINALIZED" : "Not finalized");
+            builder.Append(workflow.Phase == ScanPhase.Finalized ? "FINALIZED" : "Not finalized").Append('\n');
+
+            AppendDiagnostics(builder);
 
             return builder.ToString();
+        }
+
+        /// <summary>
+        /// Proves, on the phone's own screen, that this component is actually
+        /// running and that <see cref="finalizeButton"/> is in the state the
+        /// current phase implies — added after a device pass where no
+        /// Finalize button was visible at <see cref="ScanPhase.ReadyToFinalize"/>
+        /// and the underlying scene/wiring could not be reproduced as broken
+        /// from the Editor (see the S6 hardening handoff). If this line is
+        /// ever missing from the screen, <see cref="ScannerHudController"/>
+        /// itself is not running — the deployed build predates this wiring,
+        /// or the component/scene reference is broken. If it is present but
+        /// the values are wrong, that pinpoints exactly which one.
+        /// </summary>
+        private void AppendDiagnostics(StringBuilder target)
+        {
+            target.Append("S6 diag: hud.enabled=").Append(enabled)
+                .Append(" finalizeBtn.active=").Append(finalizeButton != null ? finalizeButton.gameObject.activeSelf.ToString() : "NULL")
+                .Append(" .interactable=").Append(finalizeButton != null ? finalizeButton.interactable.ToString() : "NULL")
+                .Append(" resetBtn.active=").Append(resetButton != null ? resetButton.gameObject.activeSelf.ToString() : "NULL");
         }
     }
 }

@@ -117,7 +117,50 @@
 
 ## Physical-device verification needed — S6
 
-Not yet run. This is the exact procedure for whoever runs it next.
+Not yet run against the current build. This is the exact procedure for
+whoever runs it next.
+
+### First device attempt — inconclusive, no code defect found
+A first physical pass reached `ReadyToFinalize` correctly (the S5 object
+controls hid themselves, which only happens once `Phase` leaves
+`AddObjects`), but no **Finalize GhostMap** button, and none of the other
+S6 top-anchored controls besides Connect, were visible on screen.
+
+A ground-truth dump of the actual committed `Scanner.unity` (opened
+in-Editor, walking the real GameObject hierarchy rather than re-reading the
+scene-builder source) found **no defect**: `ScannerHudController` is active
+and enabled, every serialized reference resolves, `FinalizeButton` is
+`activeSelf=true`/`activeInHierarchy=true`, positioned at a reasonable
+on-canvas offset, and — critically — sits at the highest sibling index under
+`Canvas` of any element built by `ScannerSceneBuilder`, so it renders on top
+of everything else rather than being covered by an S1-S5 panel. Every one of
+the 361 EditMode tests, including `ScannerSceneTests`, passes against this
+same scene.
+
+The leading hypothesis is therefore a **stale deployed build**: the `.app`
+actually installed on the phone predated this session's `ScannerHudController`
+work, most likely because Xcode's own incremental build/derived-data cache
+did not fully pick up a freshly-regenerated `Builds/iOS` project. This cannot
+be confirmed or ruled out from the Mac side alone.
+
+Two things changed to make the next pass conclusive either way:
+1. **On-screen diagnostics.** The consolidated status line now ends with a
+   `S6 diag: hud.enabled=... finalizeBtn.active=... .interactable=...
+   resetBtn.active=...` line. If this line is missing entirely, the running
+   build does not contain this component — conclusive proof of a stale
+   build, not a scene bug. If it is present, its values pinpoint the exact
+   broken link directly on the phone's own screen.
+2. **A guaranteed-fresh rebuild.** The scene, the Xcode project (`BuildScanner`
+   always deletes and regenerates `Builds/iOS` from scratch) and the
+   `xcodebuild` verification were all re-run after the diagnostics were
+   added, and all pass — see "Tests run" below.
+
+**Before the next device pass: do a clean rebuild in Xcode**, not an
+incremental one — delete the app from the phone first (or at minimum
+Product > Clean Build Folder, and open the just-regenerated
+`Builds/iOS/Unity-iPhone.xcodeproj` fresh rather than reusing an already-open
+Xcode window) — to eliminate any possibility of installing a cached binary
+that predates this fix.
 
 ### What the Scanner UI should show
 On launch the screen still carries every S2-S5 element, but each phase's own
@@ -127,7 +170,13 @@ the screen only shows the controls for the phase you are actually in, plus
 four things that are **always** visible near the top, just below the S1
 diagnostics block:
 - **Scan status** — phase, revision, tracking (good/poor + reason), closure
-  error, and `FINALIZED`/`Not finalized`.
+  error, `FINALIZED`/`Not finalized`, and (added after the first device
+  attempt) a final `S6 diag: ...` line reporting whether
+  `ScannerHudController` is enabled and the Finalize/Reset buttons'
+  `activeSelf`/`interactable` state directly. **If this whole "Scan status"
+  block, including the `S6 diag:` line, is not visible at all, the deployed
+  build predates this fix — stop and rebuild/redeploy fresh rather than
+  continuing the test.**
 - **Network status** — `Disconnected` / `Connecting` / `Connected` /
   `Retrying`, the target host:port once one is set, and the last error when
   not connected.
@@ -797,6 +846,26 @@ session reaches tracking, the plane manager reports a floor candidate, and the
 screen shows session state, notTrackingReason and camera pose.
 
 ## Tests run
+
+### S6 — after adding on-screen diagnostics (post first device attempt)
+Re-run after the `S6 diag: ...` line was added to `ScannerHudController`
+(see "First device attempt — inconclusive, no code defect found" above) and
+the scene/Xcode project were regenerated fresh:
+```bash
+/Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -projectPath apps/scanner -buildTarget iOS \
+  -runTests -testPlatform EditMode \
+  -testResults /tmp/ghostmap-s6fix-run.xml -logFile /tmp/ghostmap-s6fix-run.log
+```
+**361 tests, 361 passed, 0 failed, 0 skipped.** Unity exit code 0 — same
+count and result as before; the diagnostics addition is a pure string-append
+to an existing readout, so no test's expectations changed.
+
+Shared standalone, unchanged: **156/156**. `ScannerBuild.ConfigureXr` and
+`ScannerBuild.BuildScanner` both exited 0, producing a freshly-regenerated
+`Builds/iOS` (old one deleted first, per `BuildScanner`'s own logic), and
+`xcodebuild -target Unity-iPhone -configuration Release -sdk iphoneos
+CODE_SIGNING_ALLOWED=NO` reported **BUILD SUCCEEDED** again.
 
 ### S6 — latest
 ```bash

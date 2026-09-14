@@ -7,7 +7,7 @@
 `82d27ef` (S6 implementation, `docs(handoffs): record S6 implementation commit sha`)
 
 ## Head commit
-`<filled in by the follow-up "docs(handoffs): record S6 diagnostics commit sha" commit>`
+`f087aaa`
 
 ## What changed
 A first physical-device pass of S6 reached `ReadyToFinalize` (confirmed by

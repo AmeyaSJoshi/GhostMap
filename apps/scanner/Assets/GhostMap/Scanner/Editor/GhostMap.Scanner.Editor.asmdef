@@ -3,6 +3,7 @@
     "rootNamespace": "GhostMap.Scanner.Editor",
     "references": [
         "GhostMap.Scanner.Runtime",
+        "GhostMap.Shared",
         "Unity.XR.ARFoundation",
         "Unity.XR.ARSubsystems",
         "Unity.XR.CoreUtils",

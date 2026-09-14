@@ -105,9 +105,18 @@ namespace GhostMap.Scanner.UI
             UpdateControls(workflow);
             UpdateMarkers(workflow);
 
+            // The world-space corner/closure markers stay drawn in every later
+            // phase so device verification can still see the S2 frame and S3
+            // footprint hold still (see the S4/S5 handoffs' device-test
+            // procedures); only the readout text — redundant once corner
+            // capture is done — is cleared, the same way the S4/S5 HUDs
+            // already clear theirs outside their own phase.
+            bool inCornerPhase =
+                workflow.Phase == ScanPhase.CaptureCorners || workflow.Phase == ScanPhase.VerifyClosure;
+
             if (readoutText != null)
             {
-                readoutText.text = BuildReadout(workflow);
+                readoutText.text = inCornerPhase ? BuildReadout(workflow) : string.Empty;
             }
         }
 

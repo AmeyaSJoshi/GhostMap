@@ -3,6 +3,7 @@ using System.IO;
 using GhostMap.Scanner.AR;
 using GhostMap.Scanner.Bootstrap;
 using GhostMap.Scanner.UI;
+using GhostMap.Shared.Protocol;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -63,6 +64,23 @@ namespace GhostMap.Scanner.Editor
         private const float S5ObjectsRow3Y = 1900f;
 
         private const float S5ObjectsReadoutY = 1990f;
+
+        /// <summary>
+        /// Task S6 elements are top-anchored rather than added to the bottom
+        /// stack above: the bottom stack already runs past the 1920-tall
+        /// reference resolution (see the S5 handoff's "screen is now extremely
+        /// crowded" note), so status, networking and finalization — controls
+        /// that must stay reachable regardless of that overflow — sit just
+        /// below the Task S1 diagnostics block instead, measured in pixels
+        /// down from the top of the canvas.
+        /// </summary>
+        private const float S6StatusY = 400f;
+
+        private const float S6NetworkStatusY = 520f;
+
+        private const float S6ConnectRowY = 580f;
+
+        private const float S6ActionRowY = 660f;
 
         [MenuItem("GhostMap/Build Scanner Scene")]
         public static void BuildScene()
@@ -263,6 +281,38 @@ namespace GhostMap.Scanner.Editor
                 ("finishObjectsButton", finishObjectsButton),
                 ("readoutText", objectReadout));
 
+            // Task S6: networking, finalization and one consolidated status line.
+            Text scanStatusText = CreateTopAnchoredText(canvasGo, "ScanStatusText", 26, S6StatusY, 110f);
+            Text networkStatusText = CreateTopAnchoredText(canvasGo, "NetworkStatusText", 24, S6NetworkStatusY, 50f);
+
+            InputField hostInput = CreateTopAnchoredInputField(
+                canvasGo, "HostInput", "Laptop IP", 24f, S6ConnectRowY, new Vector2(420f, 70f));
+            InputField portInput = CreateTopAnchoredInputField(
+                canvasGo, "PortInput", "Port", 460f, S6ConnectRowY, new Vector2(160f, 70f));
+            portInput.text = ProtocolConstants.Port.ToString();
+            portInput.contentType = InputField.ContentType.IntegerNumber;
+
+            Button connectButton = CreateTopAnchoredButton(
+                canvasGo, "ConnectButton", "Connect", 640f, S6ConnectRowY, new Vector2(220f, 70f), 30, out _);
+
+            Button resetButton = CreateTopAnchoredButton(
+                canvasGo, "ResetButton", "Reset", 24f, S6ActionRowY, new Vector2(260f, 70f), 30, out _);
+            Button finalizeButton = CreateTopAnchoredButton(
+                canvasGo, "FinalizeButton", "Finalize GhostMap", 300f, S6ActionRowY, new Vector2(360f, 70f), 26, out _);
+
+            var scannerHudGo = new GameObject("ScannerHudController", typeof(ScannerHudController));
+            AssignSerializedReferences(
+                scannerHudGo.GetComponent<ScannerHudController>(),
+                ("floorLockHud", floorLockHud),
+                ("spatialProvider", spatialProvider),
+                ("hostInput", hostInput),
+                ("portInput", portInput),
+                ("connectButton", connectButton),
+                ("networkStatusText", networkStatusText),
+                ("resetButton", resetButton),
+                ("finalizeButton", finalizeButton),
+                ("statusText", scanStatusText));
+
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath) !);
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
@@ -370,6 +420,20 @@ namespace GhostMap.Scanner.Editor
                     "yawMinusButton",
                     "finishObjectsButton",
                     "readoutText");
+
+                var scannerHud = FindInScene<ScannerHudController>(scene);
+                Require(scannerHud != null, "no ScannerHudController");
+                RequireAssigned(
+                    scannerHud,
+                    "floorLockHud",
+                    "spatialProvider",
+                    "hostInput",
+                    "portInput",
+                    "connectButton",
+                    "networkStatusText",
+                    "resetButton",
+                    "finalizeButton",
+                    "statusText");
             }
             finally
             {
@@ -613,6 +677,117 @@ namespace GhostMap.Scanner.Editor
             field.textComponent = text;
             field.placeholder = placeholder;
             field.contentType = InputField.ContentType.DecimalNumber;
+
+            return field;
+        }
+
+        /// <summary>
+        /// A top-anchored, full-width readout. Used by Task S6's status lines,
+        /// which must stay visible regardless of how far the bottom button/
+        /// readout stack already runs past the reference resolution.
+        /// </summary>
+        private static Text CreateTopAnchoredText(GameObject canvasGo, string name, int fontSize, float yFromTop, float height)
+        {
+            Text text = CreateText(canvasGo, name, fontSize);
+
+            RectTransform rect = text.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = new Vector2(24f, -yFromTop);
+            rect.sizeDelta = new Vector2(-48f, height);
+
+            return text;
+        }
+
+        /// <summary>A top-anchored button at an explicit x offset, for Task S6's connection/action row.</summary>
+        private static Button CreateTopAnchoredButton(
+            GameObject canvasGo,
+            string name,
+            string labelText,
+            float x,
+            float yFromTop,
+            Vector2 size,
+            int fontSize,
+            out Text label)
+        {
+            var buttonGo = new GameObject(name, typeof(Image), typeof(Button));
+            buttonGo.transform.SetParent(canvasGo.transform, false);
+
+            var background = buttonGo.GetComponent<Image>();
+            background.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+            background.type = Image.Type.Sliced;
+            background.color = new Color(0.16f, 0.16f, 0.18f, 0.92f);
+
+            RectTransform rect = buttonGo.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = new Vector2(x, -yFromTop);
+            rect.sizeDelta = size;
+
+            var button = buttonGo.GetComponent<Button>();
+            button.targetGraphic = background;
+
+            label = CreateText(buttonGo, "Label", fontSize);
+            label.text = labelText;
+            label.alignment = TextAnchor.MiddleCenter;
+            label.raycastTarget = false;
+
+            RectTransform labelRect = label.GetComponent<RectTransform>();
+            labelRect.anchorMin = Vector2.zero;
+            labelRect.anchorMax = Vector2.one;
+            labelRect.pivot = new Vector2(0.5f, 0.5f);
+            labelRect.anchoredPosition = Vector2.zero;
+            labelRect.sizeDelta = Vector2.zero;
+
+            return button;
+        }
+
+        /// <summary>A top-anchored text input at an explicit x offset, for Task S6's laptop IP / port fields.</summary>
+        private static InputField CreateTopAnchoredInputField(
+            GameObject canvasGo, string name, string placeholderText, float x, float yFromTop, Vector2 size)
+        {
+            var fieldGo = new GameObject(name, typeof(Image), typeof(InputField));
+            fieldGo.transform.SetParent(canvasGo.transform, false);
+
+            var background = fieldGo.GetComponent<Image>();
+            background.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+            background.type = Image.Type.Sliced;
+            background.color = new Color(0.92f, 0.92f, 0.92f, 0.95f);
+
+            RectTransform rect = fieldGo.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = new Vector2(x, -yFromTop);
+            rect.sizeDelta = size;
+
+            Text text = CreateText(fieldGo, "Text", 30);
+            text.color = Color.black;
+            text.alignment = TextAnchor.MiddleLeft;
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+
+            RectTransform textRect = text.GetComponent<RectTransform>();
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = new Vector2(16f, 6f);
+            textRect.offsetMax = new Vector2(-16f, -6f);
+
+            Text placeholder = CreateText(fieldGo, "Placeholder", 30);
+            placeholder.text = placeholderText;
+            placeholder.color = new Color(0f, 0f, 0f, 0.4f);
+            placeholder.fontStyle = FontStyle.Italic;
+
+            RectTransform placeholderRect = placeholder.GetComponent<RectTransform>();
+            placeholderRect.anchorMin = Vector2.zero;
+            placeholderRect.anchorMax = Vector2.one;
+            placeholderRect.offsetMin = new Vector2(16f, 6f);
+            placeholderRect.offsetMax = new Vector2(-16f, -6f);
+
+            var field = fieldGo.GetComponent<InputField>();
+            field.textComponent = text;
+            field.placeholder = placeholder;
 
             return field;
         }

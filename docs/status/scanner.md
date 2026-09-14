@@ -1,8 +1,8 @@
 # Scanner Status
 
 ## Current state
-- **S6 implemented and passing all automated tests; not yet verified on a
-  physical iPhone.** The scanner now has a real TCP client
+- **S6 complete and verified on a physical iPhone against a real TCP
+  listener.** The scanner now has a real TCP client
   (`ScannerNetworkClient`) implementing protocol v1 exactly: connect, `hello`
   then the current snapshot, a heartbeat every 2 s, and a reconnect every 2 s
   that resends the latest snapshot. `ScannerSnapshotPublisher` watches
@@ -25,9 +25,18 @@
   outside their own phase (`CornerCaptureHud` gained the same behavior its
   S4/S5 siblings already had), which meaningfully de-clutters the screen
   without removing any diagnostic capability — the world-space markers they
-  draw are unaffected. See "Task S6" below for the full design and "Tests
-  run" for the automated results; see "Physical-device verification needed —
-  S6" for exactly what a hardware pass must exercise before S6 can be closed.
+  draw are unaffected. On device: connected to a real TCP listener over
+  Wi-Fi, sent `hello` then the current snapshot on every connect/reconnect,
+  a `scene.snapshot` after every structural mutation (floor lock, all four
+  corners, undo, closure, height, an opening, `Finish Openings`/
+  `Finish Objects`) with a strictly monotonic revision across two full
+  sessions (including a Reset in between), heartbeats while idle, a real
+  finalization (`scan.finalized` with the correct `finalRevision`
+  immediately after the finalized `scene.snapshot`), and three consecutive
+  real reconnects after finalization each correctly resending the same
+  finalized session/revision/room data. See "Task S6" below for the full
+  design, "Tests run" for the automated results, and "Physical-device
+  verification — S6, passed" for the complete device-test record.
 - **S5 complete and verified on a physical iPhone.** Doors and windows are
   captured on one of the four S3/S4-derived walls by intersecting the
   center-screen ray with that wall's mathematical plane at a lower-left then
@@ -95,13 +104,14 @@
   root cause. Both are recorded below and in their handoffs.
 
 ## Last verified commit
-- S6 is **implemented and passing 361/361 automated EditMode tests (Scanner +
-  embedded Shared), plus a successful `ScannerBuild.BuildScanner` and
-  `xcodebuild ... BUILD SUCCEEDED`**, but has **not yet been verified on a
-  real iPhone** — see "Physical-device verification needed — S6" below.
-  `AGENTS.md` rule 12 applies: do not treat S6 as done until that pass
-  succeeds.
-- `96b5de0` — S6 implementation, not yet verified on a real iPhone.
+- `f087aaa` — S6, verified on a real iPhone against a real TCP listener. The
+  commit that follows it changes only documentation, so its scanner sources
+  are byte-identical. See "Physical-device verification — S6, passed" below
+  for the complete record.
+- `96b5de0` — S6 implementation, superseded by `f087aaa` (on-screen
+  diagnostics added after a first device pass could not be conclusively
+  explained from the Mac side alone — see the
+  `2026-09-13-scanner-s6-finalize-ui-investigation.md` handoff).
 - `7274cfe` — S5, verified on a real iPhone. The commit that follows it
   changes only documentation, so its scanner sources are byte-identical.
 - `1b8a6ce` — S4, verified on a real iPhone. The commits that follow it change
@@ -115,10 +125,74 @@
   `a3f15f8` (PR #2). Both were merged with a merge commit so the original task
   SHAs stay reachable from the handoff documents that cite them.
 
-## Physical-device verification needed — S6
+## Physical-device verification — S6, passed
 
-Not yet run against the current build. This is the exact procedure for
-whoever runs it next.
+Observed on a real iPhone (build from `f087aaa`) against a real TCP listener
+on the laptop — a small standalone Python script bound to
+`0.0.0.0:47831` that parsed and verified every message live rather than a
+plain `nc -l 47831`, so the checks below are drawn from the actual traffic,
+not eyeballed JSON.
+
+- **Connection**: the phone connected over Wi-Fi to the laptop's LAN IP;
+  confirmed by a real accepted TCP connection on the listener side.
+- **`hello`**: received on every connect and every reconnect (6 total across
+  the session), each carrying the correct `sessionId`, `appVersion`,
+  `deviceName`.
+- **`scene.snapshot`**: received after every structural mutation — floor
+  lock, each corner, an undo (twice), closure verification (**0.027 m,
+  Excellent**), height capture (**2.58 m**), an opening, `Finish Openings`,
+  `Finish Objects` — 22 snapshots total across two sessions (one before, one
+  after a mid-test Reset), every field (`corners`/`openings`/`objects`
+  count, `heightM`, `closureErrorM`) matching what was actually captured.
+- **Heartbeat**: observed firing during an idle gap, consistent with the
+  2 s interval.
+- **Monotonic revisions**: both sessions' revisions were non-decreasing
+  start to finish — `[0,0,0,1..10]` for the first (pre-Reset) session and
+  `[0,1..12,12,12,12]` for the second (the trailing repeated `12`s are the
+  three post-finalize reconnects correctly resending a duplicate, not a
+  regression) — with zero violations flagged, including across an in-scan
+  Reset (which correctly started a brand-new `sessionId` at revision 0
+  rather than corrupting the old one) and across three unplanned early
+  reconnects (a brief connect/reconnect cycle right after the first
+  **Connect** tap, most likely iOS's local-network permission prompt) that
+  never lost or reordered a revision.
+- **Room data preserved**: corners/openings/height/closure carried through
+  every mutation, the Reset, and every reconnect without ever reverting or
+  going stale.
+- **Finalization**: tapping **Finalize GhostMap** at `ReadyToFinalize`
+  produced the final `scene.snapshot` (`finalized:true`,
+  `scanPhase:"Finalized"`, revision 12) immediately followed by
+  `scan.finalized` with `finalRevision:12` — matching revision, correct
+  order, in the same message burst. This also resolves the first device
+  attempt's ambiguity (see below): the Finalize button was visible,
+  interactable, and worked correctly once a genuinely fresh build was
+  deployed, confirming the stale-build hypothesis rather than a code defect.
+- **Reconnect / latest-snapshot resend**: the listener was deliberately
+  stopped and restarted once, mid-`Finalized`. The scanner reconnected on
+  its own (three connection attempts in quick succession before settling,
+  self-resolving) and every one resent `hello` then the exact same
+  finalized snapshot — same `sessionId`, same revision 12, `finalized:true`
+  — never a reset session or a stale/lower revision.
+
+### Not covered by the S6 device test
+The device pass exercised the golden path plus an in-scan Reset, several
+undos, and a deliberate post-finalize reconnect. These are covered by
+EditMode tests but **not** seen on a phone:
+
+- a window (only a door/generic opening was captured);
+- an actual Wi-Fi radio toggle on the phone (the reconnect test dropped the
+  *listener*, not the phone's network interface);
+- a malformed or oversized line reaching the scanner (there is no
+  viewer-&gt;scanner channel to send one from; `ProtocolSerializer`'s own
+  rejection paths are shared-package-tested);
+- a network failure specifically during a heartbeat write outside of the
+  one deliberate listener-restart window;
+- the manual height fallback, an out-of-range closure band, or a
+  non-rectangular room (all already flagged as not covered by earlier S3/S4
+  device passes and still true here).
+
+None of these is suspected broken — each has a passing, in some cases
+mutation-checked, EditMode test.
 
 ### First device attempt — inconclusive, no code defect found
 A first physical pass reached `ReadyToFinalize` correctly (the S5 object
@@ -847,6 +921,12 @@ screen shows session state, notTrackingReason and camera pose.
 
 ## Tests run
 
+### S6 — final, physical-device pass at `f087aaa`
+The re-run below was followed immediately by the physical-device pass
+recorded in "Physical-device verification — S6, passed" above — same
+commit, same build, no further code changes between the automated run and
+the device test.
+
 ### S6 — after adding on-screen diagnostics (post first device attempt)
 Re-run after the `S6 diag: ...` line was added to `ScannerHudController`
 (see "First device attempt — inconclusive, no code defect found" above) and
@@ -1355,18 +1435,13 @@ passing test is not the same evidence as a passing phone.
   trampoline sources.
 
 ## Next safe task
-- **Physical-device verification of S6.** S6's implementation is complete —
-  networking, finalization, Reset, the consolidated status/network HUD — and
-  passes all 361 automated Scanner+Shared EditMode tests plus a real
-  `xcodebuild ... BUILD SUCCEEDED`, but `AGENTS.md` rule 12 means it cannot be
-  marked done until it is exercised on a real iPhone against a real TCP
-  listener. See "Physical-device verification needed — S6" above for the
-  exact procedure (a bare `nc -l 47831` on the laptop is enough; the Viewer
-  does not need to exist yet).
-- Once that pass succeeds, the Scanner-side MVP (S1-S6) is complete. The
-  implementation plan's next stage is Integration (`I1`-`I4`), which needs
-  both this workstream and the Viewer's `V1`-`V6` — do not start it from
-  here; it is explicitly out of scope for this task.
+- **None in the Scanner workstream. S1-S6 are all complete and verified on
+  a physical iPhone**, S6 most recently at `f087aaa` (see "Physical-device
+  verification — S6, passed" above). The Scanner-side MVP is done.
+- The implementation plan's next stage is Integration (`I1`-`I4`), which
+  needs both this workstream and the Viewer's `V1`-`V6` — the Viewer has not
+  been started. Do not begin Viewer or Integration work from the Scanner
+  workstream; that is a separate workstream's task, per `AGENTS.md` rule 7.
 
 ## Do not touch
 - `shared/**`, `fixtures/**`, `tools/**`, `docs/contracts/**`, `docs/decisions/**`

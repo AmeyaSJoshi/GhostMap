@@ -87,3 +87,4 @@ or
 | 2026-09-13 | scanner | [S5 — openings and furniture](2026-09-13-scanner-s5-openings-furniture.md) |
 | 2026-09-13 | scanner | [S6 — networking and finalization](2026-09-13-scanner-s6-networking-finalization.md) |
 | 2026-09-13 | scanner | [S6 — Finalize button UI investigation](2026-09-13-scanner-s6-finalize-ui-investigation.md) |
+| 2026-09-13 | scanner | [S6 — close, physical-device verified](2026-09-13-scanner-s6-close-device-verified.md) |

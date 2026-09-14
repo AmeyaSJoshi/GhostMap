@@ -1,18 +1,23 @@
 # Scanner Status
 
 ## Current state
-- **S5 implemented (openings + furniture), verified in the Unity Editor and
-  by EditMode tests only — NOT YET verified on a physical iPhone.** Doors and
-  windows are captured on one of the four S3/S4-derived walls by intersecting
-  the center-screen ray with that wall's mathematical plane at a lower-left
-  then an upper-right point; furniture is placed by intersecting the
-  center-screen ray with the locked floor plane and applying the type's MVP
-  default dimensions. Both use the shared `OpeningValidator` /
-  `FurnitureValidator` for all validation. The scan phase advances
+- **S5 complete and verified on a physical iPhone.** Doors and windows are
+  captured on one of the four S3/S4-derived walls by intersecting the
+  center-screen ray with that wall's mathematical plane at a lower-left then
+  an upper-right point; furniture is placed by intersecting the center-screen
+  ray with the locked floor plane and applying the type's MVP default
+  dimensions. Both use the shared `OpeningValidator` / `FurnitureValidator`
+  for all validation. The scan phase advances
   `AddOpenings -> AddObjects -> ReadyToFinalize`; S6 owns finalization itself.
-  See "Task S5" below for the full design and "Physical-device test procedure
-  for S5" for exact instructions. **Do not mark S5 complete or physically
-  verified until a real-device pass is reported back.**
+  On device: door capture worked and produced physically plausible
+  dimensions, window capture worked with the sill correctly reading above
+  0, wall selection worked and opening markers stayed on the correct walls,
+  furniture placement and its width/depth/height/yaw adjustment controls
+  worked, the S2 frame and S3 corner markers stayed fixed throughout, and
+  both `Finish Openings` and `Finish Objects` advanced the phase correctly
+  (`AddOpenings -> AddObjects -> ReadyToFinalize`). See "Task S5" below for
+  the full design and "Physical-device verification — S5, passed" below for
+  the complete device-test record.
 - Delivered in S5: `OpeningCaptureController`, `ObjectPlacementController`,
   `OpeningCaptureHud`, `ObjectPlacementHud`, the S5 transitions and real
   `openings`/`objects` arrays on `ScanWorkflowController`'s snapshot, and the
@@ -63,9 +68,8 @@
   root cause. Both are recorded below and in their handoffs.
 
 ## Last verified commit
-- S5 is **not yet physically verified**; there is no verified S5 commit yet.
-  The working tree at the time of this update reflects S5's implementation,
-  tests, and the Editor/EditMode-only verification described below.
+- `7274cfe` — S5, verified on a real iPhone. The commit that follows it
+  changes only documentation, so its scanner sources are byte-identical.
 - `1b8a6ce` — S4, verified on a real iPhone. The commits that follow it change
   only documentation, so their scanner sources are byte-identical.
 - `1e04d02` — S3, verified on a real iPhone. The commits that follow it change
@@ -77,9 +81,50 @@
   `a3f15f8` (PR #2). Both were merged with a merge commit so the original task
   SHAs stay reachable from the handoff documents that cite them.
 
-## Physical-device test procedure for S5 (not yet performed)
+## Physical-device verification — S5, passed
 
-Build from the current working tree with `ScannerBuild.ConfigureXr` then
+Observed on a real iPhone against the build produced from `7274cfe`:
+
+- door capture worked and produced physically plausible dimensions
+- window capture worked, with the sill correctly reading above 0
+- wall selection worked
+- opening markers stayed on the correct walls
+- furniture placement worked
+- furniture width/depth/height/yaw adjustment controls worked
+- the S2 frame readout and the S3 corner markers stayed fixed throughout
+  openings and furniture capture
+- `Finish Openings` advanced `Phase` from `AddOpenings` to `AddObjects`
+- `Finish Objects` advanced `Phase` from `AddObjects` to `ReadyToFinalize`
+
+That covers the golden path of the device procedure below, and confirms on
+hardware what the automated tests assert off it: the wall-plane and
+floor-plane ray intersections land correctly, offset/width/sill/height derive
+correctly from the two captured points, the S2 frame and S3/S4 footprint and
+height are untouched by S5 capture, and the workflow's forward transitions
+fire on the expected user actions.
+
+### Not covered by the S5 device test
+The S5 hardware run exercised the golden path: valid door capture, valid
+window capture, wall selection, furniture placement and adjustment, and both
+`Finish` transitions. These paths are covered by EditMode tests but have
+**not** been seen on a phone:
+
+- an opening whose two points fall outside the selected wall's length;
+- a window whose lower-left point is aimed below the physical floor line;
+- a window/door whose sill + height would exceed the captured room height;
+- two overlapping openings on the same wall;
+- tapping **Capture Upper-Right** before ever tapping **Capture Lower-Left**;
+- undoing a captured opening or a placed object with **Undo Opening** /
+  **Undo Object**;
+- finishing either phase with zero items captured (continuing without
+  openings or without furniture).
+
+None of these is suspected broken — each has a passing, mutation-checked
+EditMode test. They are recorded because a passing test is not the same
+evidence as a passing phone.
+
+### The S5 device procedure
+Build from the working tree at `7274cfe` with `ScannerBuild.ConfigureXr` then
 `ScannerBuild.BuildScanner` (two separate Unity invocations — see "Known
 issues" / "Build process" below), deploy to a physical iPhone, and drive the
 scan through S1-S4 exactly as before (lock floor, capture four corners,
@@ -164,9 +209,6 @@ No screen in S5 should ever show `Finalized` — that is Task S6's job.
 - Which wall (`Wall x/y: <start>-><end>`) was selected.
 - The room's captured height from the S4 readout, for context on the
   ceiling-rule checks.
-
-**Do not claim S5 hardware accuracy until this procedure is actually run on
-a real iPhone and the results are reported back.**
 
 ## Physical-device verification — S4, passed
 Observed on a real iPhone against the build produced from `1b8a6ce`:
@@ -506,7 +548,7 @@ screen shows session state, notTrackingReason and camera pose.
 
 ## Tests run
 
-### S5 — latest, NOT YET physically verified
+### S5 — latest
 ```bash
 /Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app/Contents/MacOS/Unity \
   -batchmode -nographics -projectPath apps/scanner -buildTarget iOS \
@@ -549,9 +591,12 @@ confirm S5 changed nothing under `shared/`:
 **156 tests, 156 passed, 0 failed, 0 skipped.** Unity exit code 0 — unchanged
 from S4.
 
-**The S5 physical-device test has not been run.** Everything above is
-Editor/EditMode evidence only. See "Physical-device test procedure for S5"
-below for exact instructions once a device pass is performed.
+Re-run after physical-device verification, against the same `7274cfe`, to
+confirm nothing drifted between the build used on device and the final
+state: Scanner **339/339**, Shared **156/156**, both exit code 0.
+
+The S5 physical-device test was then run on a real iPhone and **passed** —
+see "Physical-device verification — S5, passed" above.
 
 ### S4 — latest
 ```bash
@@ -896,15 +941,17 @@ passing test is not the same evidence as a passing phone.
   trampoline sources.
 
 ## Next safe task
-- **S5 physical-device verification.** S5 (openings + furniture) is
-  implemented, tested (339/339 EditMode, mutation-checked), and builds clean
-  to an Xcode project (`xcodebuild` `BUILD SUCCEEDED`), but has **not** been
-  run on a real iPhone. Follow "Physical-device test procedure for S5" above,
-  report the results, and only then should this file, the S5 handoff, and
-  the branch be closed as physically verified.
-- Do **not** begin S6 until S5's device pass is reported and this status file
-  is updated to reflect it. S6 — the scanner TCP client and the real capture
-  UI — is the next task after that in `docs/plans/ghostmap-implementation-plan.md`.
+- **S6** — scanner TCP client and the complete capture UI. S5 is complete
+  and verified on hardware (door/window capture, furniture placement and
+  adjustment, both `Finish` transitions — see "Physical-device verification
+  — S5, passed" above), so the scanner workstream may proceed to the next
+  task in `docs/plans/ghostmap-implementation-plan.md`: **S6**. S6 has not
+  been started in this session.
+- S6 inherits real `openings`/`objects` arrays on every snapshot for the
+  first time (S5's contribution), and is expected to replace the S2-S5
+  bring-up readouts/buttons with the plan's actual capture UI (implementation
+  plan section 19) alongside the TCP client, connection screen and
+  reconnection behavior (section 7 / protocol v1).
 
 ## Do not touch
 - `shared/**`, `fixtures/**`, `tools/**`, `docs/contracts/**`, `docs/decisions/**`

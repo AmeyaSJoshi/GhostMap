@@ -51,7 +51,7 @@
   for the two new controllers) and `Tests/EditMode/ScannerSceneTests.cs`
   (renamed test method to mention S5).
 - `docs/status/scanner.md`: S5 status, design notes, known issues, and the
-  physical-device test procedure below.
+  physical-device test procedure and verification record.
 
 ## Contract impact
 - None. No file under `shared/**`, `fixtures/**`, `tools/**`,
@@ -73,8 +73,9 @@
   -testResults /tmp/ghostmap-s5-final.xml -logFile /tmp/ghostmap-s5-final.log
 ```
 
-### Physical device (NOT YET run — see `docs/status/scanner.md`'s
-"Physical-device test procedure for S5" section for the full script)
+### Physical device (run — see "Test results" below and
+`docs/status/scanner.md`'s "Physical-device verification — S5, passed"
+section for the full record)
 1. Build with `ScannerBuild.ConfigureXr` then `ScannerBuild.BuildScanner`
    (two separate Unity invocations), deploy to a real iPhone.
 2. Run S1-S4 as before through a captured height; `Phase` should read
@@ -87,10 +88,12 @@
    move.
 5. `Finish Objects` -> `Phase` becomes `ReadyToFinalize`, and
    `SceneSnapshot.finalized` stays `false`.
-6. Deliberately test: an opening whose two points fall outside the selected
-   wall, a window sill aimed below the floor, an opening above the captured
-   ceiling, two overlapping openings on the same wall, and undoing the most
-   recently placed object.
+6. Deliberately test (not yet covered on device, still EditMode-only — see
+   `docs/status/scanner.md`'s "Not covered by the S5 device test"): an
+   opening whose two points fall outside the selected wall, a window sill
+   aimed below the floor, an opening above the captured ceiling, two
+   overlapping openings on the same wall, and undoing the most recently
+   placed object.
 
 ## Test results
 - **339 tests, 339 passed, 0 failed, 0 skipped.** Unity exit code 0.
@@ -106,9 +109,18 @@
   CODE_SIGNING_ALLOWED=NO` reported **BUILD SUCCEEDED**.
 - The shared package, run standalone in `shared/TestProject`: **156/156**,
   unchanged from S4 — confirms S5 touched nothing under `shared/`.
-- **The physical-device test has NOT been run.** All of the above is
-  Editor/EditMode evidence only. Per `AGENTS.md` rule 12, S5 must not be
-  declared fixed or complete until it is verified on a real iPhone.
+- Re-run after physical-device verification, against the same `7274cfe`, to
+  confirm nothing drifted between the build used on device and the final
+  state: Scanner **339/339**, Shared **156/156**, both exit code 0.
+- **The S5 physical-device test was run on a real iPhone and passed.**
+  Confirmed: door capture with physically plausible dimensions, window
+  capture with the sill correctly above 0, wall selection, opening markers
+  staying on the correct walls, furniture placement, furniture
+  width/depth/height/yaw adjustment, the S2 frame and S3 corner markers
+  staying fixed throughout, and both `Finish Openings` and `Finish Objects`
+  advancing the phase correctly. See `docs/status/scanner.md`'s
+  "Physical-device verification — S5, passed" for the full record and what
+  the device pass did not cover.
 
 ## Known failures
 - None found. See `docs/status/scanner.md`'s "Scene / runtime — new in S5"
@@ -117,9 +129,9 @@
   item only) — all deliberate MVP/bring-up trade-offs, not bugs.
 
 ## Files most important to read next
-- `docs/status/scanner.md` — "Physical-device test procedure for S5" for the
-  exact device-test script, and "Task S5 — openings and furniture" for the
-  full design rationale.
+- `docs/status/scanner.md` — "Physical-device verification — S5, passed" for
+  the device-test record and what it did not cover, and "Task S5 — openings
+  and furniture" for the full design rationale.
 - `apps/scanner/Assets/GhostMap/Scanner/Runtime/Capture/OpeningCaptureController.cs`
   and `.../ObjectPlacementController.cs` — the actual capture/validation
   logic.
@@ -127,9 +139,10 @@
   — the S5 state-machine wiring.
 
 ## Next task
-- Run the S5 physical-device test procedure on a real iPhone and report the
-  results. Only then update `docs/status/scanner.md`'s S5 section to
-  "complete and verified," add a "Physical-device verification — S5, passed"
-  section, and close this branch.
-- Do not begin Task S6 (scanner TCP client and the real capture UI) before
-  that.
+- **S5 is complete and verified.** The scanner workstream may proceed to
+  **S6** — the scanner TCP client and the real capture UI
+  (`docs/plans/ghostmap-implementation-plan.md`). S6 has not been started.
+  S6 inherits real `openings`/`objects` arrays on every snapshot for the
+  first time and is expected to consolidate the S2-S5 bring-up readouts and
+  buttons into the plan's actual capture UI (implementation plan section 19)
+  alongside the TCP client and reconnection behavior.

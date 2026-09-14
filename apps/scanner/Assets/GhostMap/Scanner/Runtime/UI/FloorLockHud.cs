@@ -55,6 +55,37 @@ namespace GhostMap.Scanner.UI
 
         private void Awake()
         {
+            BuildWorkflow();
+
+            if (lockFloorButton != null)
+            {
+                lockFloorButton.onClick.AddListener(OnLockFloorPressed);
+            }
+        }
+
+        /// <summary>
+        /// Task S6's Reset: discards the entire controller graph and rebuilds
+        /// it from scratch, exactly as <see cref="Awake"/> did. A fresh
+        /// <see cref="ScanWorkflowController"/> means a fresh session id, a
+        /// fresh room id, phase <see cref="ScanPhase.Boot"/> and revision 0 —
+        /// implementation plan section 10's "Reset starts a new AR session and
+        /// new session ID" for the scan's logical state.
+        ///
+        /// <para>The actual AR tracking session is deliberately left alone:
+        /// tearing down ARKit tracking to reset scan bookkeeping would cost the
+        /// user their tracking quality for no reason. Every other HUD already
+        /// reads <see cref="Workflow"/> freshly every frame rather than caching
+        /// it (see the class remarks on <see cref="CornerCaptureHud"/>), so
+        /// swapping the instance here is enough for the whole scene to pick up
+        /// the reset on the next frame.</para>
+        /// </summary>
+        public void ResetScan()
+        {
+            BuildWorkflow();
+        }
+
+        private void BuildWorkflow()
+        {
             floorLock = new FloorLockController(spatialProvider);
             cornerCapture = new CornerCaptureController(spatialProvider, floorLock);
             heightCapture = new HeightCaptureController(spatialProvider, floorLock, cornerCapture);
@@ -63,10 +94,8 @@ namespace GhostMap.Scanner.UI
             workflow = new ScanWorkflowController(
                 floorLock, cornerCapture, heightCapture, openingCapture, objectPlacement);
 
-            if (lockFloorButton != null)
-            {
-                lockFloorButton.onClick.AddListener(OnLockFloorPressed);
-            }
+            hasAttempted = false;
+            lastAttemptRejection = FloorLockRejection.None;
         }
 
         private void OnDestroy()

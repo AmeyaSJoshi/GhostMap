@@ -9,6 +9,17 @@ using GhostMap.Shared.Validation;
 namespace GhostMap.Scanner.Workflow
 {
     /// <summary>
+    /// Why finalization was refused. <see cref="None"/> means it succeeded.
+    /// </summary>
+    public enum FinalizeRejection
+    {
+        None = 0,
+
+        /// <summary>The scan phase does not permit finalization.</summary>
+        WrongPhase
+    }
+
+    /// <summary>
     /// Owns the scan phase, the session identity, the revision counter and the
     /// current <see cref="SceneSnapshot"/>. It is the only thing permitted to
     /// change <see cref="Phase"/>.
@@ -50,6 +61,8 @@ namespace GhostMap.Scanner.Workflow
         private readonly HeightCaptureController height;
         private readonly OpeningCaptureController openingCapture;
         private readonly ObjectPlacementController objectPlacement;
+
+        private bool isFinalized;
 
         public ScanWorkflowController(
             FloorLockController floorLock,
@@ -585,6 +598,40 @@ namespace GhostMap.Scanner.Workflow
             return true;
         }
 
+        // -------------------------------------------------------------------
+        // Task S6 — finalization
+        // -------------------------------------------------------------------
+
+        /// <summary>
+        /// Hands scan authority from the scanner to the viewer
+        /// (<c>docs/decisions/ADR-0003-scanner-authority.md</c>). Moves
+        /// <see cref="ScanPhase.ReadyToFinalize"/> to
+        /// <see cref="ScanPhase.Finalized"/>, sets
+        /// <see cref="SceneSnapshot.finalized"/> on every snapshot from here on,
+        /// and republishes once more so the final snapshot carries both.
+        ///
+        /// <para>Every scan-mutating method on this class already gates on a
+        /// specific phase (<c>AddObjects</c>, <c>AddOpenings</c>, ...), none of
+        /// which is <see cref="ScanPhase.Finalized"/>, so no additional guard is
+        /// needed to reject structural mutations once finalized — they are
+        /// already unreachable.</para>
+        /// </summary>
+        public bool TryFinalize(out FinalizeRejection rejection)
+        {
+            if (Phase != ScanPhase.ReadyToFinalize)
+            {
+                rejection = FinalizeRejection.WrongPhase;
+                return false;
+            }
+
+            isFinalized = true;
+            TransitionTo(ScanPhase.Finalized);
+            Publish();
+
+            rejection = FinalizeRejection.None;
+            return true;
+        }
+
         /// <summary>
         /// Moves to <paramref name="next"/>, or throws when the plan does not
         /// allow that transition.
@@ -636,7 +683,7 @@ namespace GhostMap.Scanner.Workflow
                 sessionId = SessionId,
                 revision = Revision,
                 scanPhase = Phase.ToString(),
-                finalized = false,
+                finalized = isFinalized,
                 closureErrorM = corners.HasClosureMeasurement ? corners.ClosureErrorM : 0f,
                 room = new RoomModel
                 {

@@ -1,6 +1,42 @@
 # Scanner Status
 
 ## Current state
+- **S6 complete and verified on a physical iPhone against a real TCP
+  listener.** The scanner now has a real TCP client
+  (`ScannerNetworkClient`) implementing protocol v1 exactly: connect, `hello`
+  then the current snapshot, a heartbeat every 2 s, and a reconnect every 2 s
+  that resends the latest snapshot. `ScannerSnapshotPublisher` watches
+  `ScanWorkflowController` for a revision change or a transition to
+  `Finalized` and turns each into the wire message(s) protocol v1 requires,
+  batching a final `scene.snapshot` and the following `scan.finalized`
+  together so nothing draining the queue concurrently can reorder them.
+  `ScanWorkflowController.TryFinalize()` is the real finalization path:
+  `ReadyToFinalize -> Finalized`, `SceneSnapshot.finalized = true`, revision
+  incremented once more, and every existing mutation method already refuses
+  outside its own phase — none of them is `Finalized` — so structural
+  mutations are rejected automatically, with no separate guard needed. A new
+  in-app **Reset** (`FloorLockHud.ResetScan()`) rebuilds the entire S2-S5
+  controller graph from scratch, producing a fresh session id, room id,
+  `Boot` phase and revision 0, without tearing down the underlying AR
+  tracking session. `ScannerHudController` is the new networking/finalization
+  HUD: laptop IP/port fields, Connect, a live network-status line, Reset,
+  Finalize, and one consolidated status line (phase, tracking, closure
+  error, finalized). The S2-S5 per-phase readouts now hide themselves
+  outside their own phase (`CornerCaptureHud` gained the same behavior its
+  S4/S5 siblings already had), which meaningfully de-clutters the screen
+  without removing any diagnostic capability — the world-space markers they
+  draw are unaffected. On device: connected to a real TCP listener over
+  Wi-Fi, sent `hello` then the current snapshot on every connect/reconnect,
+  a `scene.snapshot` after every structural mutation (floor lock, all four
+  corners, undo, closure, height, an opening, `Finish Openings`/
+  `Finish Objects`) with a strictly monotonic revision across two full
+  sessions (including a Reset in between), heartbeats while idle, a real
+  finalization (`scan.finalized` with the correct `finalRevision`
+  immediately after the finalized `scene.snapshot`), and three consecutive
+  real reconnects after finalization each correctly resending the same
+  finalized session/revision/room data. See "Task S6" below for the full
+  design, "Tests run" for the automated results, and "Physical-device
+  verification — S6, passed" for the complete device-test record.
 - **S5 complete and verified on a physical iPhone.** Doors and windows are
   captured on one of the four S3/S4-derived walls by intersecting the
   center-screen ray with that wall's mathematical plane at a lower-left then
@@ -68,6 +104,14 @@
   root cause. Both are recorded below and in their handoffs.
 
 ## Last verified commit
+- `f087aaa` — S6, verified on a real iPhone against a real TCP listener. The
+  commit that follows it changes only documentation, so its scanner sources
+  are byte-identical. See "Physical-device verification — S6, passed" below
+  for the complete record.
+- `96b5de0` — S6 implementation, superseded by `f087aaa` (on-screen
+  diagnostics added after a first device pass could not be conclusively
+  explained from the Mac side alone — see the
+  `2026-09-13-scanner-s6-finalize-ui-investigation.md` handoff).
 - `7274cfe` — S5, verified on a real iPhone. The commit that follows it
   changes only documentation, so its scanner sources are byte-identical.
 - `1b8a6ce` — S4, verified on a real iPhone. The commits that follow it change
@@ -80,6 +124,228 @@
 - S1 reached `main` as merge commit `150512d` (PR #1) and S2 as merge commit
   `a3f15f8` (PR #2). Both were merged with a merge commit so the original task
   SHAs stay reachable from the handoff documents that cite them.
+
+## Physical-device verification — S6, passed
+
+Observed on a real iPhone (build from `f087aaa`) against a real TCP listener
+on the laptop — a small standalone Python script bound to
+`0.0.0.0:47831` that parsed and verified every message live rather than a
+plain `nc -l 47831`, so the checks below are drawn from the actual traffic,
+not eyeballed JSON.
+
+- **Connection**: the phone connected over Wi-Fi to the laptop's LAN IP;
+  confirmed by a real accepted TCP connection on the listener side.
+- **`hello`**: received on every connect and every reconnect (6 total across
+  the session), each carrying the correct `sessionId`, `appVersion`,
+  `deviceName`.
+- **`scene.snapshot`**: received after every structural mutation — floor
+  lock, each corner, an undo (twice), closure verification (**0.027 m,
+  Excellent**), height capture (**2.58 m**), an opening, `Finish Openings`,
+  `Finish Objects` — 22 snapshots total across two sessions (one before, one
+  after a mid-test Reset), every field (`corners`/`openings`/`objects`
+  count, `heightM`, `closureErrorM`) matching what was actually captured.
+- **Heartbeat**: observed firing during an idle gap, consistent with the
+  2 s interval.
+- **Monotonic revisions**: both sessions' revisions were non-decreasing
+  start to finish — `[0,0,0,1..10]` for the first (pre-Reset) session and
+  `[0,1..12,12,12,12]` for the second (the trailing repeated `12`s are the
+  three post-finalize reconnects correctly resending a duplicate, not a
+  regression) — with zero violations flagged, including across an in-scan
+  Reset (which correctly started a brand-new `sessionId` at revision 0
+  rather than corrupting the old one) and across three unplanned early
+  reconnects (a brief connect/reconnect cycle right after the first
+  **Connect** tap, most likely iOS's local-network permission prompt) that
+  never lost or reordered a revision.
+- **Room data preserved**: corners/openings/height/closure carried through
+  every mutation, the Reset, and every reconnect without ever reverting or
+  going stale.
+- **Finalization**: tapping **Finalize GhostMap** at `ReadyToFinalize`
+  produced the final `scene.snapshot` (`finalized:true`,
+  `scanPhase:"Finalized"`, revision 12) immediately followed by
+  `scan.finalized` with `finalRevision:12` — matching revision, correct
+  order, in the same message burst. This also resolves the first device
+  attempt's ambiguity (see below): the Finalize button was visible,
+  interactable, and worked correctly once a genuinely fresh build was
+  deployed, confirming the stale-build hypothesis rather than a code defect.
+- **Reconnect / latest-snapshot resend**: the listener was deliberately
+  stopped and restarted once, mid-`Finalized`. The scanner reconnected on
+  its own (three connection attempts in quick succession before settling,
+  self-resolving) and every one resent `hello` then the exact same
+  finalized snapshot — same `sessionId`, same revision 12, `finalized:true`
+  — never a reset session or a stale/lower revision.
+
+### Not covered by the S6 device test
+The device pass exercised the golden path plus an in-scan Reset, several
+undos, and a deliberate post-finalize reconnect. These are covered by
+EditMode tests but **not** seen on a phone:
+
+- a window (only a door/generic opening was captured);
+- an actual Wi-Fi radio toggle on the phone (the reconnect test dropped the
+  *listener*, not the phone's network interface);
+- a malformed or oversized line reaching the scanner (there is no
+  viewer-&gt;scanner channel to send one from; `ProtocolSerializer`'s own
+  rejection paths are shared-package-tested);
+- a network failure specifically during a heartbeat write outside of the
+  one deliberate listener-restart window;
+- the manual height fallback, an out-of-range closure band, or a
+  non-rectangular room (all already flagged as not covered by earlier S3/S4
+  device passes and still true here).
+
+None of these is suspected broken — each has a passing, in some cases
+mutation-checked, EditMode test.
+
+### First device attempt — inconclusive, no code defect found
+A first physical pass reached `ReadyToFinalize` correctly (the S5 object
+controls hid themselves, which only happens once `Phase` leaves
+`AddObjects`), but no **Finalize GhostMap** button, and none of the other
+S6 top-anchored controls besides Connect, were visible on screen.
+
+A ground-truth dump of the actual committed `Scanner.unity` (opened
+in-Editor, walking the real GameObject hierarchy rather than re-reading the
+scene-builder source) found **no defect**: `ScannerHudController` is active
+and enabled, every serialized reference resolves, `FinalizeButton` is
+`activeSelf=true`/`activeInHierarchy=true`, positioned at a reasonable
+on-canvas offset, and — critically — sits at the highest sibling index under
+`Canvas` of any element built by `ScannerSceneBuilder`, so it renders on top
+of everything else rather than being covered by an S1-S5 panel. Every one of
+the 361 EditMode tests, including `ScannerSceneTests`, passes against this
+same scene.
+
+The leading hypothesis is therefore a **stale deployed build**: the `.app`
+actually installed on the phone predated this session's `ScannerHudController`
+work, most likely because Xcode's own incremental build/derived-data cache
+did not fully pick up a freshly-regenerated `Builds/iOS` project. This cannot
+be confirmed or ruled out from the Mac side alone.
+
+Two things changed to make the next pass conclusive either way:
+1. **On-screen diagnostics.** The consolidated status line now ends with a
+   `S6 diag: hud.enabled=... finalizeBtn.active=... .interactable=...
+   resetBtn.active=...` line. If this line is missing entirely, the running
+   build does not contain this component — conclusive proof of a stale
+   build, not a scene bug. If it is present, its values pinpoint the exact
+   broken link directly on the phone's own screen.
+2. **A guaranteed-fresh rebuild.** The scene, the Xcode project (`BuildScanner`
+   always deletes and regenerates `Builds/iOS` from scratch) and the
+   `xcodebuild` verification were all re-run after the diagnostics were
+   added, and all pass — see "Tests run" below.
+
+**Before the next device pass: do a clean rebuild in Xcode**, not an
+incremental one — delete the app from the phone first (or at minimum
+Product > Clean Build Folder, and open the just-regenerated
+`Builds/iOS/Unity-iPhone.xcodeproj` fresh rather than reusing an already-open
+Xcode window) — to eliminate any possibility of installing a cached binary
+that predates this fix.
+
+### What the Scanner UI should show
+On launch the screen still carries every S2-S5 element, but each phase's own
+button row and readout now hide themselves outside their phase (this was
+already true for buttons; S6 added it for the S4/S5/now-S3 readouts too), so
+the screen only shows the controls for the phase you are actually in, plus
+four things that are **always** visible near the top, just below the S1
+diagnostics block:
+- **Scan status** — phase, revision, tracking (good/poor + reason), closure
+  error, `FINALIZED`/`Not finalized`, and (added after the first device
+  attempt) a final `S6 diag: ...` line reporting whether
+  `ScannerHudController` is enabled and the Finalize/Reset buttons'
+  `activeSelf`/`interactable` state directly. **If this whole "Scan status"
+  block, including the `S6 diag:` line, is not visible at all, the deployed
+  build predates this fix — stop and rebuild/redeploy fresh rather than
+  continuing the test.**
+- **Network status** — `Disconnected` / `Connecting` / `Connected` /
+  `Retrying`, the target host:port once one is set, and the last error when
+  not connected.
+- A **Laptop IP** field, a **Port** field (pre-filled `47831`), and a
+  **Connect** button.
+- A **Reset** button and a **Finalize GhostMap** button (the latter only
+  interactable in `ReadyToFinalize`).
+
+### How to connect it to the laptop/listener
+1. On the laptop, start a bare TCP listener on port 47831 so there is
+   something for the scanner to talk to — the Viewer does not exist yet.
+   The simplest option needs nothing installed: `nc -l 47831` in a terminal
+   (macOS/Linux `netcat`). Leave it running.
+2. Find the laptop's LAN IP (`ipconfig getifaddr en0` on macOS, or read it
+   off the Wi-Fi settings) and confirm the iPhone is on the **same Wi-Fi**.
+3. Deploy the Scanner build to the iPhone (see "Build process" in Known
+   issues — the two-step `ConfigureXr` then `BuildScanner` is unchanged).
+4. On the phone, type the laptop's IP into **Laptop IP**, leave Port at
+   `47831`, tap **Connect**.
+
+### How to know connection succeeded
+The **Network status** line reads `Connected (<ip>:47831)`, and on the
+laptop's `nc` terminal you should immediately see two lines of JSON text
+appear (a `hello` line, then a `scene.snapshot` line) — `nc` prints raw text,
+so this is a direct, unmediated look at the wire.
+
+### How to know snapshots are being sent
+Every structural mutation (locking the floor, a corner, a height, an
+opening, an object, undo, `Finish Openings`/`Finish Objects`) should print
+one more `scene.snapshot` JSON line in the `nc` terminal, and its `revision`
+field should be one higher than the previous line's. Roughly every 2 seconds
+of no mutation, a short `heartbeat` line should also appear.
+
+### What to do from floor lock through ReadyToFinalize
+Exactly the S2-S5 procedure already documented above (lock floor, four
+corners, verify closure, capture height, doors/windows, furniture, `Finish
+Openings`, `Finish Objects`) — S6 changes nothing about capture itself.
+
+### What button finalizes the scan
+**Finalize GhostMap**, enabled only once `Phase` reads `ReadyToFinalize`.
+
+### What should happen after finalization
+- The **Scan status** line changes from `Not finalized` to `FINALIZED`.
+- `Phase` becomes `Finalized`.
+- The `nc` terminal should show one more `scene.snapshot` line (with
+  `"finalized":true` in it) immediately followed by a `scan.finalized` line —
+  in that order, in the same burst.
+- Every button belonging to an earlier phase should already be hidden (they
+  hide themselves once their phase is behind you), and nothing on screen
+  should be able to mutate the room further except **Reset**.
+
+### What diagnostics should remain fixed
+The S1 diagnostics block, the S2 frame readout (`Frame O`/`Frame X`/`Frame
+Z`/`Handedness`), and the S3 corner markers, S4 captured height and S5
+opening/object markers in world space — none of these are touched by
+networking or finalization and should look exactly as they did at the end of
+the S5 device pass.
+
+### Network behavior to test by disconnecting/reconnecting
+1. **Kill the `nc` listener** (Ctrl-C) while mid-scan, continue capturing on
+   the phone for a bit, then confirm nothing on the phone changes — the room
+   keeps building, only **Network status** should flip to `Retrying` (after
+   at most one heartbeat interval's delay) with a short OS-level error
+   message.
+2. **Restart `nc -l 47831`** and wait up to a few seconds: **Network status**
+   should return to `Connected`, and the very next lines `nc` prints should
+   be a fresh `hello` followed by a `scene.snapshot` carrying the room's
+   **current** revision (not revision 0 — the whole scan is not lost).
+3. **Turn the iPhone's Wi-Fi off and back on** mid-scan: same expectation as
+   above — the phone's own local scan state must be completely unaffected;
+   only the network status and eventual reconnect should be visible.
+4. **Finalize, then repeat step 1-2**: after reconnecting, the very first
+   `scene.snapshot` line `nc` prints should already carry
+   `"finalized":true` and `"scanPhase":"Finalized"` — the finalized room
+   must survive a reconnect, not just an in-progress one.
+5. **Tap Reset** at any point, confirm the phase returns to `Boot` /
+   `WaitingForTracking`, a fresh floor lock is required, and (if still
+   connected) `nc` shows a new `scene.snapshot` line with a **different
+   `sessionId`** and revision 0.
+
+### What failure symptoms to report
+- Any Console exception, especially anything naming `ScannerNetworkClient`,
+  `ScannerSnapshotPublisher` or `ScannerHudController`.
+- **Network status** stuck on `Connecting` for longer than a couple of
+  seconds after a valid IP/port (suggests the background thread or the
+  socket connect itself is hanging).
+- A `scene.snapshot` line that does not parse as JSON, or that is missing a
+  trailing newline before the next line starts (framing bug).
+- A reconnect whose resent snapshot's `revision` is lower than what was last
+  seen before the drop (should be impossible per `SnapshotRevisionPolicy`,
+  but this is exactly the failure mode to watch for).
+- Any case where a disconnect/reconnect visibly altered the room's geometry,
+  the captured height, or the finalized flag.
+- Which exact step above the phone was on when something looked wrong, plus
+  the **Scan status** and **Network status** line text at that moment.
 
 ## Physical-device verification — S5, passed
 
@@ -266,6 +532,113 @@ during or after corner capture, and the closure bands behave as specified.
 The 0.031 m closure is the strongest on-device evidence available that the frame
 did not drift across the scan. A frame that had moved would have surfaced here as
 accumulated error rather than as a clean re-aim onto the stored first corner.
+
+## Task S6 — networking and finalization
+
+### The network client
+```text
+ScannerNetworkClient(latestSnapshotProvider, appVersion, deviceName, nowSecondsProvider?)
+  .RequestConnect(host, port)   -> schedules an immediate connect attempt
+  .Enqueue(...messages)         -> thread-safe; queued for the next drain
+  .PumpOnce()                   -> one step: connect-if-due, else drain+heartbeat
+```
+
+`PumpOnce` is the entire state machine and touches only `TcpClient`/
+`StreamWriter`/the outgoing queue — never a Unity API — so it can run on a
+real background `Thread` on device (`ScannerHudController` starts one in
+`Awake`, sleeping 100 ms between calls) and be driven directly, synchronously,
+from an EditMode test with a fake clock. This is exactly why the client takes
+no dependency on `ScanWorkflowController`: it only ever reads the *current*
+snapshot through `latestSnapshotProvider`, at the two moments protocol v1
+requires it (`docs/contracts/protocol-v1.md` section 6) — right after connect,
+and right after every reconnect. A connection failure, a write failure, or an
+unreachable host therefore cannot corrupt or lose the captured room; the next
+successful connect just reads whatever the workflow currently holds.
+
+On every fresh connection the outgoing queue is cleared before the handshake:
+implementation plan section 1.4's "snapshot synchronization, not event replay"
+means only the *latest* snapshot is ever worth sending, so anything still
+queued from before a drop is stale by definition once a new connection resends
+the current one.
+
+### The publisher
+```text
+ScannerSnapshotPublisher(sink).Tick()
+  revisionChanged = workflow.Revision != lastSeenRevision
+  justFinalized   = workflow.Phase == Finalized && !hasSentFinalized
+  -> sink.Enqueue(snapshotMessage?, finalizedMessage?)   // one batch, in order
+```
+
+Both the final `scene.snapshot` and the following `scan.finalized`
+(protocol v1 section 3.5) become true in the exact same `Tick()` — because
+`ScanWorkflowController.TryFinalize()` increments the revision and sets
+`Phase = Finalized` in one call — so they are handed to the sink as a single
+`Enqueue(...)` batch. `ScannerNetworkClient.Enqueue` keeps a batch's messages
+adjacent in its queue even while a background thread is concurrently
+draining it, which is what actually guarantees the final snapshot is written
+to the socket before `scan.finalized` rather than merely usually being first.
+
+`Rebind(workflow)` resets `lastSeenRevision` to an impossible value and
+`hasSentFinalized` to false, so `ScannerHudController` calling it whenever
+`FloorLockHud.Workflow` changes reference (i.e., after **Reset**) makes the
+very next `Tick()` publish the fresh session's revision-0 snapshot, exactly
+as any other structural mutation would be.
+
+### Finalization
+```text
+ScanWorkflowController.TryFinalize()
+  Phase must be ReadyToFinalize
+  isFinalized = true
+  TransitionTo(Finalized)
+  Publish()   // revision++, SceneSnapshot.finalized = true, scanPhase = "Finalized"
+```
+
+No new guard rejects mutations after finalization: every mutating method
+already checks for a specific phase (`AddObjects`, `AddOpenings`,
+`CaptureCorners`, ...), none of which is `Finalized`, so they are already
+unreachable — confirmed by
+`StructuralMutationsAreRejectedAfterFinalization` deliberately trying four of
+them (an object placement, an opening capture, a corner capture, a manual
+height) plus a second `TryFinalize()` call, all of which fail with
+`WrongPhase`.
+
+### Reset
+`FloorLockHud.ResetScan()` calls the same `BuildWorkflow()` private method
+`Awake()` uses, replacing every S2-S5 controller and the
+`ScanWorkflowController` itself with fresh instances. Every other HUD already
+reads `floorLockHud.Workflow` freshly every `Update()` rather than caching it
+(a design choice S3's `CornerCaptureHud` remarks on), so the swap is picked
+up scene-wide on the very next frame with no additional wiring. The
+underlying AR session and `ArSpatialProvider` are untouched — only the
+scan's logical state (session id, room id, phase, revision, every captured
+corner/opening/object) resets, matching implementation plan section 10's
+"Reset starts a new AR session and new session ID" without the cost of
+actually tearing down ARKit tracking for no reason.
+
+### UI consolidation
+`ScannerHudController` adds the connection screen (host/port fields, Connect),
+a live network-status line, Reset, Finalize, and one consolidated status line
+(phase, tracking, closure error, finalized) — all top-anchored, just below
+the S1 diagnostics block, since the S2-S5 bottom button/readout stack already
+runs past the 1920-tall reference resolution (see the S5 handoff's "screen is
+now extremely crowded" note) and new controls that must stay reachable
+regardless of that overflow cannot safely be added to it. Separately, every
+S2-S5 phase readout (buttons already did this) now hides itself outside its
+own phase — `CornerCaptureHud` gained this in S6, matching what
+`HeightCaptureHud`/`OpeningCaptureHud`/`ObjectPlacementHud` already did — which
+meaningfully reduces on-screen clutter without touching any diagnostic
+capability, since the world-space markers each HUD draws are unaffected by
+hiding their readout text. This is a deliberate, scoped consolidation, not the
+full single "Door / Window / Furniture / Finish" screen implementation plan
+section 19 describes; see "Known issues" for what is intentionally left for
+later.
+
+### Contract impact
+**None.** No file under `shared/**`, `fixtures/**`, `tools/**`,
+`docs/contracts/**` or `docs/decisions/**` was touched, and no
+`apps/viewer/**` file was touched. Every message type, field and timing
+constant S6 uses already existed in protocol v1; S6 is the first task to
+actually open a socket and drive them.
 
 ## Task S5 — openings and furniture
 
@@ -547,6 +920,85 @@ session reaches tracking, the plane manager reports a floor candidate, and the
 screen shows session state, notTrackingReason and camera pose.
 
 ## Tests run
+
+### S6 — final, physical-device pass at `f087aaa`
+The re-run below was followed immediately by the physical-device pass
+recorded in "Physical-device verification — S6, passed" above — same
+commit, same build, no further code changes between the automated run and
+the device test.
+
+### S6 — after adding on-screen diagnostics (post first device attempt)
+Re-run after the `S6 diag: ...` line was added to `ScannerHudController`
+(see "First device attempt — inconclusive, no code defect found" above) and
+the scene/Xcode project were regenerated fresh:
+```bash
+/Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -projectPath apps/scanner -buildTarget iOS \
+  -runTests -testPlatform EditMode \
+  -testResults /tmp/ghostmap-s6fix-run.xml -logFile /tmp/ghostmap-s6fix-run.log
+```
+**361 tests, 361 passed, 0 failed, 0 skipped.** Unity exit code 0 — same
+count and result as before; the diagnostics addition is a pure string-append
+to an existing readout, so no test's expectations changed.
+
+Shared standalone, unchanged: **156/156**. `ScannerBuild.ConfigureXr` and
+`ScannerBuild.BuildScanner` both exited 0, producing a freshly-regenerated
+`Builds/iOS` (old one deleted first, per `BuildScanner`'s own logic), and
+`xcodebuild -target Unity-iPhone -configuration Release -sdk iphoneos
+CODE_SIGNING_ALLOWED=NO` reported **BUILD SUCCEEDED** again.
+
+### S6 — latest
+```bash
+/Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -projectPath apps/scanner -buildTarget iOS \
+  -runTests -testPlatform EditMode \
+  -testResults /tmp/ghostmap-s6-run4.xml -logFile /tmp/ghostmap-s6-run4.log
+```
+**361 tests, 361 passed, 0 failed, 0 skipped.** Unity exit code 0.
+`ScannerNetworkClientTests` 8 (new), `ScannerSnapshotPublisherTests` 8 (new),
+`ScanWorkflowControllerTests` 55 (49 + 6 new finalization tests), plus all
+290 pre-existing Scanner/Shared tests unchanged. S5 finished at 339 (Scanner
+sources only; this count also includes the 156 embedded `GhostMap.Shared.Tests`
+as S5's own count did).
+
+Covered by the new tests, matching the task's required list: hello/heartbeat/
+snapshot/finalized message creation and header stamping; snapshot
+serialization carrying corners, height, openings and objects; monotonic
+revisions including across finalization; `finalized` flag and `Finalized`
+phase set correctly; structural mutations rejected after finalization
+(object, opening, corner, manual height, and a second finalize, each
+checked individually); an actual loopback TCP connection receiving real
+NDJSON — hello then snapshot, each exactly one line; heartbeat timing against
+a fake clock; a real connection failure and a real mid-session socket
+failure (forced with an abortive `LingerState` close so the peer gets an
+immediate RST) each leaving the client `Retrying` with the workflow-standin
+snapshot object completely untouched; reconnect resending the same revision,
+not resetting it; reconnect after finalization resending the finalized
+snapshot; every line parsing as exactly one JSON object with no embedded
+newline; and a typical MVP-scale snapshot (4 corners, 1 door, bed+desk+chair)
+staying well under the 262144-byte line cap.
+
+`ScannerBuild.ConfigureXr` and `ScannerBuild.BuildScanner` both exited 0
+(`GhostMap: ARKit XR loader for iOS already enabled`, `GhostMap: scanner
+Xcode project written to Builds/iOS`, `libUnityARKit.a` verified present),
+and `xcodebuild -target Unity-iPhone -configuration Release -sdk iphoneos
+CODE_SIGNING_ALLOWED=NO` reported **BUILD SUCCEEDED**, with only the same
+stock toolchain warnings prior tasks already recorded (see "Toolchain
+warnings, stock noise" below).
+
+The shared package was also run standalone in its own host project, to
+confirm S6 changed nothing under `shared/`:
+```bash
+/Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -projectPath shared/TestProject \
+  -runTests -testPlatform EditMode \
+  -testResults /tmp/ghostmap-s6-shared.xml -logFile /tmp/ghostmap-s6-shared.log
+```
+**156 tests, 156 passed, 0 failed, 0 skipped.** Unity exit code 0 — unchanged
+from S5.
+
+**Not yet run: the S6 physical-device test.** See "Physical-device
+verification needed — S6" above for the exact procedure.
 
 ### S5 — latest
 ```bash
@@ -863,6 +1315,48 @@ physical-device test from passing.
   confirmation step. A mistyped value is only caught by the 2.0-4.0 m range
   check, not by asking the user to re-enter it.
 
+### Scene / runtime — new in S6
+- The S2-S5 bottom button/readout stack is untouched and still runs past the
+  1920-tall reference resolution (the S5 handoff's "screen is now extremely
+  crowded" note). S6 did not attempt the plan's full single "Door / Window /
+  Furniture / Finish" screen (implementation plan section 19); it added the
+  networking/finalization controls in a separate top-anchored area instead
+  (see "UI consolidation" above) and made every S2-S5 phase readout hide
+  itself outside its own phase, which reduces clutter without a full
+  rewrite. A genuine single-screen redesign remains future work, not S6's.
+- **Phone-pose streaming (`phone.pose`) was deliberately not implemented.**
+  Protocol v1 lists it among the five MVP message types, but it is
+  explicitly debug/display-only (`docs/contracts/protocol-v1.md` section
+  3.3: "the room is never reconstructed from pose messages"), it is absent
+  from every acceptance test in the implementation plan (section 23) and
+  from this task's own required-tests list, and the S6 instructions
+  themselves gate it on "only if the plan requires it, and no faster than
+  the documented limit." Implementing it would mean adding a 5 Hz-capped
+  path from `ArSpatialProvider`'s camera pose through the Ghost frame into a
+  new message with no test coverage to justify the risk. This is a scope
+  decision, not an oversight — flagged here so a future worker does not
+  assume it exists.
+- The background network thread polls every 100 ms
+  (`ScannerHudController.NetworkThreadPollIntervalMs`) rather than being
+  woken by a queued write; simple and sufficient at protocol v1's 2 s
+  heartbeat/reconnect cadence, but it means a just-enqueued snapshot can sit
+  for up to ~100 ms before being sent. Well inside the plan's 500 ms
+  local-update target (section 24).
+- **Reset has no confirmation step and no visible "are you sure."** A stray
+  tap discards the entire in-progress scan (though not the live TCP
+  connection, which Reset deliberately leaves alone). The implementation
+  plan does not ask for a confirmation dialog; this is the same
+  simplicity trade the rest of the bring-up UI makes.
+- `ScannerNetworkClient.RequestConnect` performs the TCP `Connect` call
+  synchronously inside `PumpOnce`, which runs on the background thread — a
+  connect attempt to an unreachable (rather than actively refusing) host can
+  block that thread for the platform's default TCP connect timeout, which on
+  some networks can be tens of seconds. This blocks only the background
+  networking thread, never the main/UI thread, and the existing capture UI
+  remains fully responsive throughout; this is recorded because it means
+  **Network status** can show `Connecting`-adjacent state for longer than a
+  user might expect on a genuinely bad IP, not because it risks a frozen app.
+
 ### Scene / runtime — new in S5
 - The screen is now extremely crowded: openings and furniture add two more
   readouts and thirteen more buttons on top of the four readouts and eleven
@@ -941,17 +1435,13 @@ passing test is not the same evidence as a passing phone.
   trampoline sources.
 
 ## Next safe task
-- **S6** — scanner TCP client and the complete capture UI. S5 is complete
-  and verified on hardware (door/window capture, furniture placement and
-  adjustment, both `Finish` transitions — see "Physical-device verification
-  — S5, passed" above), so the scanner workstream may proceed to the next
-  task in `docs/plans/ghostmap-implementation-plan.md`: **S6**. S6 has not
-  been started in this session.
-- S6 inherits real `openings`/`objects` arrays on every snapshot for the
-  first time (S5's contribution), and is expected to replace the S2-S5
-  bring-up readouts/buttons with the plan's actual capture UI (implementation
-  plan section 19) alongside the TCP client, connection screen and
-  reconnection behavior (section 7 / protocol v1).
+- **None in the Scanner workstream. S1-S6 are all complete and verified on
+  a physical iPhone**, S6 most recently at `f087aaa` (see "Physical-device
+  verification — S6, passed" above). The Scanner-side MVP is done.
+- The implementation plan's next stage is Integration (`I1`-`I4`), which
+  needs both this workstream and the Viewer's `V1`-`V6` — the Viewer has not
+  been started. Do not begin Viewer or Integration work from the Scanner
+  workstream; that is a separate workstream's task, per `AGENTS.md` rule 7.
 
 ## Do not touch
 - `shared/**`, `fixtures/**`, `tools/**`, `docs/contracts/**`, `docs/decisions/**`

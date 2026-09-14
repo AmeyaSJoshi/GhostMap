@@ -961,5 +961,122 @@ namespace GhostMap.Scanner.Tests.EditMode
             Assert.AreEqual(capturedHeight, workflow.Snapshot.room.heightM);
             Assert.AreEqual(cornerCount, workflow.Snapshot.room.corners.Length);
         }
+
+        // -------------------------------------------------------------------
+        // Task S6 — finalization
+        // -------------------------------------------------------------------
+
+        /// <summary>Drives a captured room (one door, one bed) to ReadyToFinalize.</summary>
+        private static ScanWorkflowController RoomAtReadyToFinalize(FakeSpatialProvider provider)
+        {
+            ScanWorkflowController workflow = RoomAtAddOpenings(provider);
+
+            Assert.IsTrue(workflow.SelectOpeningWall(0));
+            AimAtWallHeight(provider, workflow.Frame, 0.5f, 0f);
+            Assert.IsTrue(workflow.TryCaptureOpeningStartPoint(out _));
+            AimAtWallHeight(provider, workflow.Frame, 1.5f, 2.05f);
+            Assert.IsTrue(workflow.TryCaptureOpeningEndPoint(out _));
+            Assert.IsTrue(workflow.FinishAddingOpenings());
+
+            Assert.IsTrue(workflow.SetObjectType("bed"));
+            AimAtGhost(provider, workflow.Frame, 1.5f, 1.25f);
+            Assert.IsTrue(workflow.TryPlaceObject(out _));
+            Assert.IsTrue(workflow.FinishAddingObjects());
+
+            Assert.AreEqual(ScanPhase.ReadyToFinalize, workflow.Phase);
+            return workflow;
+        }
+
+        [Test]
+        public void FinalizeCannotHappenOutsideReadyToFinalize()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtAddObjects(provider);
+
+            Assert.IsFalse(workflow.TryFinalize(out FinalizeRejection rejection));
+            Assert.AreEqual(FinalizeRejection.WrongPhase, rejection);
+            Assert.AreNotEqual(ScanPhase.Finalized, workflow.Phase);
+        }
+
+        [Test]
+        public void FinalizeMovesPhaseToFinalized()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtReadyToFinalize(provider);
+
+            Assert.IsTrue(workflow.TryFinalize(out FinalizeRejection rejection));
+
+            Assert.AreEqual(FinalizeRejection.None, rejection);
+            Assert.AreEqual(ScanPhase.Finalized, workflow.Phase);
+            Assert.AreEqual(ScanPhase.Finalized.ToString(), workflow.Snapshot.scanPhase);
+        }
+
+        [Test]
+        public void FinalizeSetsTheFinalizedFlagOnTheSnapshot()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtReadyToFinalize(provider);
+
+            Assert.IsFalse(workflow.Snapshot.finalized);
+
+            Assert.IsTrue(workflow.TryFinalize(out _));
+
+            Assert.IsTrue(workflow.Snapshot.finalized);
+        }
+
+        [Test]
+        public void FinalizeIncrementsTheRevision()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtReadyToFinalize(provider);
+            int revision = workflow.Revision;
+
+            Assert.IsTrue(workflow.TryFinalize(out _));
+
+            Assert.Greater(workflow.Revision, revision);
+            Assert.AreEqual(workflow.Revision, workflow.Snapshot.revision);
+        }
+
+        [Test]
+        public void FinalizeDoesNotChangeTheFinalRoomContents()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtReadyToFinalize(provider);
+
+            int cornerCount = workflow.Snapshot.room.corners.Length;
+            int openingCount = workflow.Snapshot.room.openings.Length;
+            int objectCount = workflow.Snapshot.room.objects.Length;
+            float heightM = workflow.Snapshot.room.heightM;
+
+            Assert.IsTrue(workflow.TryFinalize(out _));
+
+            Assert.AreEqual(cornerCount, workflow.Snapshot.room.corners.Length);
+            Assert.AreEqual(openingCount, workflow.Snapshot.room.openings.Length);
+            Assert.AreEqual(objectCount, workflow.Snapshot.room.objects.Length);
+            Assert.AreEqual(heightM, workflow.Snapshot.room.heightM);
+        }
+
+        [Test]
+        public void StructuralMutationsAreRejectedAfterFinalization()
+        {
+            FakeSpatialProvider provider = GoodProvider();
+            ScanWorkflowController workflow = RoomAtReadyToFinalize(provider);
+            Assert.IsTrue(workflow.TryFinalize(out _));
+
+            Assert.IsFalse(workflow.TryPlaceObject(out ObjectPlacementRejection objectRejection));
+            Assert.AreEqual(ObjectPlacementRejection.WrongPhase, objectRejection);
+
+            Assert.IsFalse(workflow.TryCaptureOpeningStartPoint(out OpeningCaptureRejection openingRejection));
+            Assert.AreEqual(OpeningCaptureRejection.WrongPhase, openingRejection);
+
+            Assert.IsFalse(workflow.TryCaptureCorner(out CornerCaptureRejection cornerRejection));
+            Assert.AreEqual(CornerCaptureRejection.WrongPhase, cornerRejection);
+
+            Assert.IsFalse(workflow.TrySetManualHeight(2.6f, out HeightCaptureRejection heightRejection));
+            Assert.AreEqual(HeightCaptureRejection.WrongPhase, heightRejection);
+
+            Assert.IsFalse(workflow.TryFinalize(out FinalizeRejection finalizeRejection));
+            Assert.AreEqual(FinalizeRejection.WrongPhase, finalizeRejection);
+        }
     }
 }

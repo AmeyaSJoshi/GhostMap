@@ -7,7 +7,7 @@
 `f087aaa` (S6 on-screen diagnostics, `docs(handoffs): record S6 diagnostics commit sha` = `640d51d`)
 
 ## Head commit
-`<filled in by the follow-up "docs(handoffs): record S6 close commit sha" commit>`
+`884d90b`
 
 ## What changed
 No code changes. This handoff records the physical-device verification that

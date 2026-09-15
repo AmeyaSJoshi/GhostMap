@@ -1,4 +1,5 @@
 using GhostMap.Shared.Protocol;
+using GhostMap.Viewer.Interaction;
 using GhostMap.Viewer.Rendering;
 using UnityEngine;
 
@@ -10,7 +11,8 @@ namespace GhostMap.Viewer.Bootstrap
     /// networking/scene-store logic lives in <see cref="ViewerSession"/>,
     /// which has no Unity dependency and is what tests drive directly.
     ///
-    /// Task V2 adds the one line connecting rendering to that session: the
+    /// Tasks V2 and V4 add the lines connecting rendering and the camera to
+    /// that session: the
     /// optional <see cref="RoomRenderer"/> is attached to the session's
     /// <see cref="ViewerSceneStore"/> here, in the presentation-layer glue,
     /// never inside <see cref="ViewerSession"/> itself (AGENTS.md: the TCP
@@ -20,6 +22,7 @@ namespace GhostMap.Viewer.Bootstrap
     {
         [SerializeField] private int port = ProtocolConstants.Port;
         [SerializeField] private RoomRenderer roomRenderer;
+        [SerializeField] private OrbitCameraController cameraController;
 
         public ViewerSession Session { get; private set; }
 
@@ -31,6 +34,13 @@ namespace GhostMap.Viewer.Bootstrap
             if (roomRenderer != null)
             {
                 roomRenderer.Attach(Session.SceneStore);
+            }
+
+            // Task V4: the camera frames the room from the same accepted scene
+            // state the renderer draws, never from a socket message.
+            if (cameraController != null)
+            {
+                cameraController.Attach(Session.SceneStore);
             }
         }
 

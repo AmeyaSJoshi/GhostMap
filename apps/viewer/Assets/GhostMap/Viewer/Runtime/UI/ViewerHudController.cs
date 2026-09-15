@@ -2,6 +2,7 @@ using System.IO;
 using System.Text;
 using GhostMap.Shared.Domain;
 using GhostMap.Viewer.Bootstrap;
+using GhostMap.Viewer.Interaction;
 using GhostMap.Viewer.Networking;
 using UnityEngine;
 using UnityEngine.UI;
@@ -19,6 +20,12 @@ namespace GhostMap.Viewer.UI
         [SerializeField] private Button loadFixtureButton;
         [SerializeField] private Text statusText;
 
+        /// <summary>Task V4: on-screen equivalents of section 13.1's `F` and
+        /// `D` keys, so the controls are discoverable without the manual.</summary>
+        [SerializeField] private Button resetViewButton;
+        [SerializeField] private Button dollhouseButton;
+        [SerializeField] private OrbitCameraController cameraController;
+
         /// <summary>
         /// The fixture loaded by the button. Resolved relative to the repo
         /// root at edit/dev time; V1 targets desktop development, not a
@@ -31,6 +38,32 @@ namespace GhostMap.Viewer.UI
             if (loadFixtureButton != null)
             {
                 loadFixtureButton.onClick.AddListener(OnLoadFixtureClicked);
+            }
+
+            if (resetViewButton != null)
+            {
+                resetViewButton.onClick.AddListener(OnResetViewClicked);
+            }
+
+            if (dollhouseButton != null)
+            {
+                dollhouseButton.onClick.AddListener(OnDollhouseClicked);
+            }
+        }
+
+        private void OnResetViewClicked()
+        {
+            if (cameraController != null)
+            {
+                cameraController.FrameRoom();
+            }
+        }
+
+        private void OnDollhouseClicked()
+        {
+            if (cameraController != null)
+            {
+                cameraController.ToggleDollhouse();
             }
         }
 
@@ -107,6 +140,15 @@ namespace GhostMap.Viewer.UI
             if (!string.IsNullOrEmpty(session.LastFixtureError))
             {
                 builder.AppendLine().Append("Last fixture error: ").Append(session.LastFixtureError);
+            }
+
+            builder.AppendLine().AppendLine()
+                .Append("Camera: drag = orbit, right/middle drag = pan, scroll = zoom, ")
+                .Append("F = frame room, D = dollhouse");
+
+            if (cameraController != null && cameraController.DollhouseEnabled)
+            {
+                builder.AppendLine().Append("Dollhouse ON (ceiling hidden)");
             }
 
             return builder.ToString();

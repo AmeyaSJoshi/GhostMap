@@ -25,12 +25,51 @@ namespace GhostMap.Viewer.Rendering
 
         private readonly List<string> _diagnostics = new List<string>();
 
+        private readonly FurnitureFactory _furnitureFactory = new FurnitureFactory();
+
         private ViewerSceneStore _sceneStore;
+        private GameObject _ceilingGo;
         private Material _floorMaterial;
         private Material _ceilingMaterial;
         private Material _wallMaterial;
 
         public GameObject Root { get; private set; }
+
+        /// <summary>
+        /// False while the dollhouse preset is on. Implementation plan
+        /// section 12.2: "Dollhouse mode hides ceiling renderer/collider."
+        /// Deliberately sticky across rebuilds — an incoming snapshot must not
+        /// drop a ceiling back on top of the user mid-inspection.
+        /// </summary>
+        public bool CeilingVisible { get; private set; } = true;
+
+        /// <summary>Shows or hides the ceiling so the interior can be
+        /// inspected. Safe before any room exists.</summary>
+        public void SetCeilingVisible(bool visible)
+        {
+            CeilingVisible = visible;
+            ApplyCeilingVisibility();
+        }
+
+        private void ApplyCeilingVisibility()
+        {
+            if (_ceilingGo == null)
+            {
+                return;
+            }
+
+            var meshRenderer = _ceilingGo.GetComponent<MeshRenderer>();
+            if (meshRenderer != null)
+            {
+                meshRenderer.enabled = CeilingVisible;
+            }
+
+            var meshCollider = _ceilingGo.GetComponent<MeshCollider>();
+            if (meshCollider != null)
+            {
+                meshCollider.enabled = CeilingVisible;
+            }
+        }
 
         public void Attach(ViewerSceneStore sceneStore)
         {
@@ -62,6 +101,7 @@ namespace GhostMap.Viewer.Rendering
         private void OnDestroy()
         {
             Detach();
+            _furnitureFactory.Dispose();
             DestroyUnityObject(_floorMaterial);
             DestroyUnityObject(_ceilingMaterial);
             DestroyUnityObject(_wallMaterial);
@@ -79,9 +119,27 @@ namespace GhostMap.Viewer.Rendering
             BuildFloor(room);
             BuildCeiling(room);
             BuildWalls(room);
+            BuildObjects(room);
+        }
 
+        /// <summary>
+        /// Task V4: one logical root per <c>SceneObjectModel</c>. Because the
+        /// whole <c>RenderedRoom</c> is destroyed and rebuilt above, objects
+        /// cannot accumulate, a removed object simply stops being rebuilt, and
+        /// a duplicate or stale revision — already filtered by
+        /// <see cref="ViewerSceneStore"/> before <c>Changed</c> fires — never
+        /// reaches this method at all.
+        /// </summary>
+        private void BuildObjects(RoomModel room)
+        {
             var objectsGo = new GameObject("Objects");
             objectsGo.transform.SetParent(Root.transform, false);
+
+            _diagnostics.Clear();
+
+            FurnitureRenderer.Populate(room, objectsGo.transform, _furnitureFactory, _diagnostics);
+
+            LogDiagnostics();
         }
 
         private void BuildFloor(RoomModel room)
@@ -97,13 +155,15 @@ namespace GhostMap.Viewer.Rendering
 
         private void BuildCeiling(RoomModel room)
         {
-            var ceilingGo = new GameObject("Ceiling");
-            ceilingGo.transform.SetParent(Root.transform, false);
+            _ceilingGo = new GameObject("Ceiling");
+            _ceilingGo.transform.SetParent(Root.transform, false);
 
             if (FloorCeilingRenderer.TryBuildCeilingMesh(room, out Mesh mesh))
             {
-                AttachMesh(ceilingGo, mesh, GetCeilingMaterial());
+                AttachMesh(_ceilingGo, mesh, GetCeilingMaterial());
             }
+
+            ApplyCeilingVisibility();
         }
 
         private void BuildWalls(RoomModel room)
@@ -140,12 +200,19 @@ namespace GhostMap.Viewer.Rendering
                 }
             }
 
+            LogDiagnostics();
+        }
+
+        /// <summary>
+        /// Openings and objects are validated before a snapshot is accepted, so
+        /// anything here means bad data arrived by another route. The room
+        /// still renders — the affected wall stays solid, the affected object
+        /// is skipped — but the reason must not be swallowed.
+        /// </summary>
+        private void LogDiagnostics()
+        {
             for (int i = 0; i < _diagnostics.Count; i++)
             {
-                // Openings are validated before a snapshot is accepted, so
-                // reaching here means bad data arrived by another route. The
-                // room still renders — the affected wall stays solid — but the
-                // reason must not be swallowed.
                 Debug.LogWarning($"[RoomRenderer] {_diagnostics[i]}");
             }
         }

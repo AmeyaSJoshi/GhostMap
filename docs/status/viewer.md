@@ -1,6 +1,63 @@
 # Viewer Status
 
 ## Current state
+- **V4 complete: parametric furniture and the orbit/dollhouse camera.**
+  `Runtime/Rendering/FurnitureFactory.cs` builds each `SceneObjectModel` from
+  primitive boxes per implementation plan section 12.4 ("do not render only
+  anonymous boxes"): bed = headboard/frame/mattress, desk = top/4 legs/back
+  panel, chair = seat/back/4 legs, couch = base/back/2 arms/2 cushions,
+  table = top/4 legs, dresser = body/3 drawer fronts, tv = screen/stand/base,
+  generic = one box. `BuildParts` is a pure function returning parts in the
+  object's own local frame (origin at its centre on the floor, +x width, +y up,
+  +z depth); `Create` is the thin Unity layer, with exactly the signature
+  Task V4 specifies.
+- **Every type's parts sum to exactly the declared W x D x H box, resting on the
+  floor.** That invariant is asserted for all eight types and is what makes
+  "correct dimensions" structural rather than incidental. Yaw and world
+  placement are applied once, on the object root, so a rotated object's
+  footprint is correct by construction.
+- **One logical root per object**, named `Object_<type>_<id>` (Task V4: "named
+  with type + ID"), carrying a `SceneObjectBinding` metadata component and
+  **one** `BoxCollider` covering the full bounding box — section 12.4's "every
+  furniture root has one collider"; the primitives' own colliders are removed
+  so V5 selects objects, never chair legs.
+- **Object types come only from `FurnitureValidator.SupportedTypes`.** An
+  unsupported type renders nothing and is diagnosed; the Viewer never invents a
+  semantic type outside the shared schema.
+- **Furniture live-update is the same single rebuild V2/V3 already rely on.**
+  `RoomRenderer` destroys and rebuilds the whole `RenderedRoom` per accepted
+  snapshot, so removed objects disappear, new ones appear, changed
+  position/yaw/dimensions update, nothing accumulates, and duplicate or stale
+  revisions — already filtered by `ViewerSceneStore` — never reach the renderer.
+  `FurnitureRenderer` is deliberately stateless; there is no diffing logic that
+  could drift.
+- **`Runtime/Interaction/OrbitCameraRig.cs` holds all the camera maths** as a
+  plain C# class — no `MonoBehaviour`, no `UnityEngine.Input` — so every clamp
+  is exhaustively testable in EditMode. Pitch is clamped to `[5, 89]` degrees
+  and the orbit target to the floor plane, which together make section 13.1's
+  "do not let camera go below floor" a structural guarantee rather than a
+  runtime check. Zoom is multiplicative and clamped to `0.5-60 m`, so it can
+  never reach or pass through the target.
+- **Control scheme is exactly section 13.1**: left drag orbits, right or middle
+  drag pans, scroll zooms, `F` frames the whole room, `D` toggles the dollhouse
+  preset. On-screen **Reset View (F)** and **Dollhouse (D)** buttons mirror the
+  keys, and the HUD prints the scheme.
+- **`F` is both "frame whole room" and the reset/home view** — it restores the
+  home yaw/pitch as well as re-centring and re-fitting, which makes reset
+  completely deterministic.
+- **Framing follows the actual room.** `Runtime/Rendering/RoomBounds.cs`
+  computes bounds from the room's own corners and captured height, never a
+  hard-coded 4 x 3 m footprint, and the fit uses the room's bounding *sphere*
+  so the room stays framed at **every** orbit angle rather than only the one it
+  was framed from. Small, large and rotated rooms all frame usably.
+- **Only the first accepted scene auto-frames.** Later snapshots refresh the
+  bounds but leave the camera alone, so a snapshot arriving mid-inspection
+  never yanks the view out of the user's hands.
+- **Dollhouse hides the ceiling renderer and collider** (section 12.2), and the
+  hidden state is sticky across rebuilds — an incoming snapshot must not drop a
+  ceiling back on top of the user mid-inspection.
+- The camera listens to `ViewerSceneStore.Changed`, never to the TCP server —
+  the same separation `RoomRenderer` has held to since V2.
 - **V3 complete: doors and windows are rendered as real openings in the walls.**
   `Runtime/Rendering/WallSliceGenerator.cs` is the whole of V3's geometry
   logic — a pure static function
@@ -136,7 +193,7 @@
   (V5/V6 own them). `Runtime/Rendering/` is now populated (V2).
 
 ## Last verified commit
-- V3 implementation (this branch). Previous: `197d4bd` (V2).
+- V4 implementation (this branch). Previous: `79d49c0` (V3), `197d4bd` (V2).
 
 ## Tests run
 - Command:
@@ -145,12 +202,36 @@
     -batchmode -nographics -projectPath apps/viewer \
     -runTests -testPlatform EditMode -testResults <out>.xml -logFile <out>.log
   ```
-- Result: **279 tests, 279 passed, 0 failed, 0 skipped.** Unity exit code `0`.
-  (156 embedded `GhostMap.Shared.Tests`, unchanged; 64 V1/V2 Viewer tests; 59
-  new V3 tests: 30 `WallSliceGeneratorTests`, 17 `WallRendererOpeningsTests`,
-  12 `RoomRendererOpeningsTests`.) The shared package's own `TestProject` was
-  also run standalone for V3: **156 tests, 156 passed, 0 failed**, exit code
-  `0`.
+- Result: **366 tests, 366 passed, 0 failed, 0 skipped.** Unity exit code `0`.
+  (156 embedded `GhostMap.Shared.Tests`, unchanged; 123 V1/V2/V3 Viewer tests,
+  unchanged; 87 new V4 tests: 14 `FurnitureFactoryTests`,
+  18 `FurnitureRendererTests`, 16 `RoomRendererObjectsTests`,
+  18 `OrbitCameraRigTests`, 13 `OrbitCameraControllerTests`,
+  8 `RoomBoundsTests`.) The shared package's own `TestProject` was also run
+  standalone: **156 tests, 156 passed, 0 failed**, exit code `0`.
+- The **complete** Viewer suite was run for V4, not only the new tests: V1
+  networking, V2 floor/ceiling/walls, V3 openings, reconnect behaviour and
+  revision arbitration all pass unchanged, and two V4 tests assert the V2/V3
+  shell explicitly alongside the new furniture.
+- **Mutation check.** All 87 new V4 tests passed on their first execution
+  against the implementation, so the central dimension invariant was verified
+  to actually bite: shrinking the bed's headboard to half height was caught by
+  four independent tests before being reverted.
+- **V4 visual verification**: the real `RoomRenderer`, `FurnitureFactory`,
+  `OrbitCameraController` and `OrbitCameraRig` were driven through
+  `FixtureLoader` + `ViewerSceneStore` and rendered offscreen at 1600x900.
+  `room-with-door-window-v1` in dollhouse mode shows the bed, desk and chair
+  resting on the floor inside the room with V3's doorway and window intact;
+  orbiting 70 degrees swings cleanly and resolves the desk's legs and the
+  chair's back and legs individually; zooming visibly closes in; an
+  eight-object room renders every MVP type distinctly (the tv correctly a thin
+  slab); two identical desks at yaw 0 and yaw 90 read unambiguously as
+  rotated 90 degrees; and an 11 x 9 m room and a 2.4 x 2.2 m room both frame to
+  roughly the same on-screen size. Full detail in the V4 handoff.
+- `ViewerSceneBuilder.BuildScene` / `.VerifyScene` re-verified end to end;
+  `VerifyScene` now also asserts the `OrbitCameraController`, its
+  `roomRenderer` wiring, `ViewerBootstrap.cameraController` and the HUD's two
+  new buttons.
 - Two V2 tests were deliberately updated for V3's wall-container hierarchy:
   `ValidRoomFixtureProducesExpectedGeometry` now reads segment transforms and
   expects the fixture's door wall to be segmented, and
@@ -257,11 +338,55 @@
   `WallSegmentSpec` (`Slice`, `Position`, `Rotation`, `Scale`);
   `WallThicknessM` constant (`0.10`).
 - `GhostMap.Viewer.Rendering.RoomRenderer` — `MonoBehaviour`;
-  `Attach(ViewerSceneStore)`, `Detach()`, `Root` property.
+  `Attach(ViewerSceneStore)`, `Detach()`, `Root`, `CeilingVisible`,
+  `SetCeilingVisible(bool)`.
+- `GhostMap.Viewer.Rendering.FurnitureFactory` — `IDisposable`; static
+  `BuildParts(SceneObjectModel[, IList<string>])`;
+  `Create(SceneObjectModel, Transform[, IList<string>])`.
+  `FurniturePartSpec` (`Name`, `LocalCenter`, `LocalSize`).
+- `GhostMap.Viewer.Rendering.FurnitureRenderer` — static;
+  `Populate(RoomModel, Transform, FurnitureFactory, IList<string>) -> int`.
+- `GhostMap.Viewer.Rendering.SceneObjectBinding` — `MonoBehaviour`; `Model`,
+  `ObjectId`, `ObjectType`, `Bind(SceneObjectModel)`.
+- `GhostMap.Viewer.Rendering.RoomBounds` — static;
+  `TryCompute(RoomModel, out Bounds)`.
+- `GhostMap.Viewer.Interaction.OrbitCameraRig` — plain C#; `Target`,
+  `Distance`, `YawDeg`, `PitchDeg`, `FloorY`, `Position`, `Rotation`,
+  `IsValid`; `Orbit`, `Zoom`, `Pan`, `Frame`, `Dollhouse`; constants
+  `MinPitchDeg`/`MaxPitchDeg`/`MinDistanceM`/`MaxDistanceM`/`HomeYawDeg`/
+  `HomePitchDeg`/`DollhousePitchDeg`.
+- `GhostMap.Viewer.Interaction.OrbitCameraController` — `MonoBehaviour`;
+  `Rig`, `DollhouseEnabled`, `Attach(ViewerSceneStore)`, `Detach()`,
+  `SetRoomRenderer(RoomRenderer)`, `FrameRoom()`, `SetDollhouse(bool)`,
+  `ToggleDollhouse()`, `ApplyToTransform()`.
 
 ## Known issues
-- None blocking V4. `Runtime/Interaction/` and `Runtime/Persistence/` are
-  still empty — that is V5/V6's scope, not a defect.
+- None blocking V5. `Runtime/Persistence/` is still empty — that is V6's
+  scope, not a defect. `Runtime/Interaction/` now holds V4's camera.
+- **In dollhouse mode the near wall still occludes furniture standing against
+  it.** Only the ceiling is hidden, which is exactly what section 12.2
+  specifies; orbiting or raising the pitch reveals them. Wall fading is not
+  requested by the plan and was not added.
+- **Framing is deliberately conservative**: fitting the room's bounding sphere
+  leaves visible screen margin for a wide, flat room. That is the price of the
+  room staying framed at every orbit angle; a tighter box-projection fit would
+  let corners clip when the user orbits.
+- **Mouse sensitivity is not hardware-calibrated.** The orbit/pan/zoom
+  constants are reasonable `[SerializeField]` defaults, but this sandbox has no
+  Play-mode session to tune them by feel. Expect one tuning pass the first time
+  someone drives the Viewer interactively. The `Update()` input path is the one
+  part of V4 EditMode cannot execute; every command it dispatches to is covered.
+- **`room-with-door-window-v1.json`'s bed overhangs the room by ~1.5 cm**
+  (`bed-1`, centre x = 1.0, yaw 90, depth 2.03, crossing the `x = 0` wall
+  centreline). That is the fixture's own data — Shared/Integration-owned, not a
+  rendering defect — so the corresponding test allows one wall thickness of
+  slack.
+- Furniture materials are one shared `Unlit/Color` per type per
+  `FurnitureFactory`, disposed with the factory. Flat unlit shading means
+  objects read by silhouette and colour rather than by shading.
+- `Resources.GetBuiltinResource` logs an editor assert in batchmode, so a test
+  that calls `ViewerSceneBuilder.BuildScene` must set
+  `LogAssert.ignoreFailingMessages`. Not a build failure and it predates V4.
 - **A window seen from outside is hard to read** with the current flat
   `Unlit/Color` materials: through the hole you see the opposite wall in the
   same colour. The geometry is correct (proved by the interior captures and by
@@ -296,9 +421,6 @@
   (as V1 explicitly targets); a standalone player build would need a
   different fixture-location strategy, which is not this task's concern.
 - No physical-device testing applies to this workstream (desktop app).
-- `RoomCamera` is a single fixed overview position tuned for the ~4m x 3m
-  fixture rooms, not a general-purpose framing for arbitrary room sizes —
-  V4 introduces the real orbit/dollhouse camera, which supersedes it.
 - Wall cuboids are butt-jointed at each corner (no mitered corner geometry).
   For a `0.10 m` thickness this is a cosmetic detail invisible at the MVP's
   minimum wall length (`0.50 m`) and interior-angle range (35-145 degrees);
@@ -310,15 +432,12 @@
   renders many rooms at once, which is not currently planned.
 
 ## Next safe task
-- **V4 — Parametric furniture + orbit/dollhouse camera** (implementation plan
-  section 17, Task V4). `Rendering/FurnitureFactory.cs` builds recognizable
-  primitive-composed objects per section 12.4 (bed, desk, chair, couch, table,
-  dresser, TV; `generic` may be a box), each root named by type + ID with one
-  selection collider covering its bounding box; `Rendering/FurnitureRenderer.cs`
-  populates the `Objects` placeholder `RoomRenderer` already creates;
-  `Interaction/OrbitCameraController.cs` replaces the fixed `RoomCamera` with
-  orbit/pan/zoom plus frame-room and a dollhouse preset that hides the ceiling
-  (section 13.1).
+- **V5 — Selection, editing and measurement** (implementation plan section 17,
+  Task V5; behaviour in sections 13.2-13.5). `Runtime/Interaction/` gains the
+  selection raycast (click the object root's single `BoxCollider`, read its
+  `SceneObjectBinding`), the inspector panel, post-finalization drag on the
+  floor plane with a viewer-side revision bump, validated resize/rotate, and
+  measurement mode. Walls and openings stay non-editable in the MVP.
 
 ## Do not touch
 - `shared/**`, `fixtures/**`, `tools/**`, `docs/contracts/**`,

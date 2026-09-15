@@ -7,7 +7,7 @@
 `9346252` (merge of PR #8, `viewer/v2-room-geometry` -> `main`; Scanner S1-S6 and Viewer V1-V2 complete)
 
 ## Head commit
-_(recorded in the follow-up docs commit)_
+`79d49c0` (V3 implementation)
 
 ## What changed
 Task V3 from `docs/plans/ghostmap-implementation-plan.md` section 17: doors and

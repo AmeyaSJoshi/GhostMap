@@ -8,7 +8,7 @@
 S1-S6 and Viewer V1-V4 complete)
 
 ## Head commit
-V5 implementation (this branch, pending commit at hand-off time)
+`660ad61` (V5 implementation)
 
 ## What changed
 Task V5 from `docs/plans/ghostmap-implementation-plan.md` section 17: object

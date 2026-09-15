@@ -8,7 +8,7 @@
 and Viewer V1-V5 complete)
 
 ## Head commit
-V6 implementation (this branch, pending commit at hand-off time)
+`3017e37` (V6 implementation)
 
 ## What changed
 Task V6 from `docs/plans/ghostmap-implementation-plan.md` section 17:

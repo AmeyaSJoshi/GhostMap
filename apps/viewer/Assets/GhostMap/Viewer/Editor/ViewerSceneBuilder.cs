@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using GhostMap.Viewer.Bootstrap;
+using GhostMap.Viewer.Rendering;
 using GhostMap.Viewer.UI;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -32,13 +33,18 @@ namespace GhostMap.Viewer.Editor
             UnityScene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             CreateEventSystem();
+            CreateRoomCamera();
             GameObject canvasGo = CreateCanvas();
 
             Text statusText = CreateStatusText(canvasGo);
             Button loadFixtureButton = CreateLoadFixtureButton(canvasGo);
 
+            var roomRendererGo = new GameObject("RoomRenderer", typeof(RoomRenderer));
+            var roomRenderer = roomRendererGo.GetComponent<RoomRenderer>();
+
             var bootstrapGo = new GameObject("ViewerBootstrap", typeof(ViewerBootstrap));
             var bootstrap = bootstrapGo.GetComponent<ViewerBootstrap>();
+            AssignSerializedReferences(bootstrap, ("roomRenderer", roomRenderer));
 
             var hudGo = new GameObject("ViewerHudController", typeof(ViewerHudController));
             AssignSerializedReferences(
@@ -71,8 +77,14 @@ namespace GhostMap.Viewer.Editor
                     FindInScene<BaseInputModule>(scene) != null,
                     "no input module on the EventSystem; clicks are dead");
 
+                Require(FindInScene<Camera>(scene) != null, "no Camera; the rendered room cannot be inspected visually");
+
+                var roomRenderer = FindInScene<RoomRenderer>(scene);
+                Require(roomRenderer != null, "no RoomRenderer");
+
                 var bootstrap = FindInScene<ViewerBootstrap>(scene);
                 Require(bootstrap != null, "no ViewerBootstrap");
+                RequireAssigned(bootstrap, "roomRenderer");
 
                 var hud = FindInScene<ViewerHudController>(scene);
                 Require(hud != null, "no ViewerHudController");
@@ -147,6 +159,23 @@ namespace GhostMap.Viewer.Editor
         private static void CreateEventSystem()
         {
             new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+        }
+
+        /// <summary>
+        /// Task V2: a fixed overview position, not the orbit/dollhouse camera
+        /// V4 introduces — just enough to visually inspect the rendered room
+        /// shell in the Editor, framed for the fixture rooms' roughly 4m x 3m
+        /// footprint.
+        /// </summary>
+        private static void CreateRoomCamera()
+        {
+            var cameraGo = new GameObject("RoomCamera", typeof(Camera));
+            cameraGo.transform.position = new Vector3(2f, 10f, -3f);
+            cameraGo.transform.LookAt(new Vector3(2f, 0f, 1.5f));
+
+            var camera = cameraGo.GetComponent<Camera>();
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(0.10f, 0.10f, 0.12f);
         }
 
         private static GameObject CreateCanvas()

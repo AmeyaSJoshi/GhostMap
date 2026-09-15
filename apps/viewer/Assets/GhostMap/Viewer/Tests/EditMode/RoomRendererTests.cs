@@ -284,21 +284,30 @@ namespace GhostMap.Viewer.Tests.EditMode
             Transform walls = FindChild(_renderer.Root.transform, "Walls");
             Assert.AreEqual(4, walls.childCount);
 
-            var lengths = walls.Cast<Transform>()
-                .Select(w => w.localScale.x)
+            // V3: a wall is a container of solid segments. This fixture carries
+            // one door on wall c0->c1, so that wall is segmented and the other
+            // three are a single full-length cuboid each.
+            var solidLengths = walls.Cast<Transform>()
+                .Where(w => w.childCount == 1)
+                .Select(w => w.GetChild(0).localScale.x)
                 .OrderBy(l => l)
                 .ToArray();
-            Assert.AreEqual(3f, lengths[0], 1e-4f);
-            Assert.AreEqual(3f, lengths[1], 1e-4f);
-            Assert.AreEqual(4f, lengths[2], 1e-4f);
-            Assert.AreEqual(4f, lengths[3], 1e-4f);
+
+            Assert.AreEqual(3, solidLengths.Length, "Only the door's wall may be segmented.");
+            Assert.AreEqual(3f, solidLengths[0], 1e-4f);
+            Assert.AreEqual(3f, solidLengths[1], 1e-4f);
+            Assert.AreEqual(4f, solidLengths[2], 1e-4f);
+
+            Transform doorWall = walls.Cast<Transform>().First(w => w.name.EndsWith("_c0_c1"));
+            Assert.Greater(doorWall.childCount, 1, "The door's wall must be cut into segments.");
         }
 
         [Test]
-        public void DoorWindowFixtureStillRendersFourSolidWalls()
+        public void DoorWindowFixtureRendersFourWallsMadeOfSolidSegments()
         {
-            // V2 does not cut openings yet (V3's scope) — even a room with a
-            // door and a window must render four solid wall cuboids.
+            // V3 cuts openings, so a wall is a container of segments rather
+            // than one cuboid. Whatever the segmentation, every wall must still
+            // exist and every segment must be real geometry.
             bool loaded = FixtureLoader.TryLoadFromFile(
                 FixturePath("room-with-door-window-v1.json"), out SceneSnapshot snapshot, out string loadError);
             Assert.IsTrue(loaded, loadError);
@@ -311,9 +320,15 @@ namespace GhostMap.Viewer.Tests.EditMode
 
             Transform walls = FindChild(_renderer.Root.transform, "Walls");
             Assert.AreEqual(4, walls.childCount);
+
             foreach (Transform wall in walls)
             {
-                Assert.IsNotNull(wall.GetComponent<MeshFilter>().sharedMesh, "Every wall must be a solid cuboid.");
+                Assert.Greater(wall.childCount, 0, $"{wall.name} rendered nothing.");
+
+                foreach (Transform segment in wall)
+                {
+                    Assert.IsTrue(HasMesh(segment), $"{wall.name}/{segment.name} must be a solid cuboid.");
+                }
             }
         }
     }

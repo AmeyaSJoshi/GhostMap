@@ -90,3 +90,4 @@ or
 | 2026-09-13 | scanner | [S6 — close, physical-device verified](2026-09-13-scanner-s6-close-device-verified.md) |
 | 2026-09-14 | viewer | [V1 — desktop network foundation](2026-09-14-viewer-v1-desktop-network-foundation.md) |
 | 2026-09-15 | viewer | [V2 — floor, ceiling, walls](2026-09-15-viewer-v2-room-geometry.md) |
+| 2026-09-16 | viewer | [V3 — wall openings](2026-09-16-viewer-v3-wall-openings.md) |

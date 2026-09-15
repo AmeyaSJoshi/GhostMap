@@ -23,6 +23,8 @@ namespace GhostMap.Viewer.Rendering
         private static readonly Color CeilingColor = new Color(0.85f, 0.85f, 0.85f);
         private static readonly Color WallColor = new Color(0.75f, 0.72f, 0.65f);
 
+        private readonly List<string> _diagnostics = new List<string>();
+
         private ViewerSceneStore _sceneStore;
         private Material _floorMaterial;
         private Material _ceilingMaterial;
@@ -109,19 +111,42 @@ namespace GhostMap.Viewer.Rendering
             var wallsGo = new GameObject("Walls");
             wallsGo.transform.SetParent(Root.transform, false);
 
-            IReadOnlyList<WallRenderSpec> walls = WallRenderer.BuildWalls(room);
+            _diagnostics.Clear();
+
+            IReadOnlyList<WallRenderSpec> walls = WallRenderer.BuildWalls(room, _diagnostics);
 
             for (int i = 0; i < walls.Count; i++)
             {
                 WallRenderSpec wall = walls[i];
 
-                var wallGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                wallGo.name = $"Wall_{i}_{wall.StartCornerId}_{wall.EndCornerId}";
+                // The wall itself is a container, not geometry: V3 renders one
+                // cuboid per solid segment left after its doors and windows are
+                // cut out. A wall with no openings has exactly one segment,
+                // placed exactly where V2's single cuboid was.
+                var wallGo = new GameObject($"Wall_{i}_{wall.StartCornerId}_{wall.EndCornerId}");
                 wallGo.transform.SetParent(wallsGo.transform, false);
-                wallGo.transform.position = wall.Position;
-                wallGo.transform.rotation = wall.Rotation;
-                wallGo.transform.localScale = wall.Scale;
-                wallGo.GetComponent<MeshRenderer>().sharedMaterial = GetWallMaterial();
+
+                for (int s = 0; s < wall.Segments.Count; s++)
+                {
+                    WallSegmentSpec segment = wall.Segments[s];
+
+                    var segmentGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    segmentGo.name = $"Segment_{s}";
+                    segmentGo.transform.SetParent(wallGo.transform, false);
+                    segmentGo.transform.position = segment.Position;
+                    segmentGo.transform.rotation = segment.Rotation;
+                    segmentGo.transform.localScale = segment.Scale;
+                    segmentGo.GetComponent<MeshRenderer>().sharedMaterial = GetWallMaterial();
+                }
+            }
+
+            for (int i = 0; i < _diagnostics.Count; i++)
+            {
+                // Openings are validated before a snapshot is accepted, so
+                // reaching here means bad data arrived by another route. The
+                // room still renders — the affected wall stays solid — but the
+                // reason must not be swallowed.
+                Debug.LogWarning($"[RoomRenderer] {_diagnostics[i]}");
             }
         }
 

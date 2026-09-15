@@ -31,7 +31,7 @@ namespace GhostMap.Viewer.Interaction
         [SerializeField] private float panMetersPerPixel = 0.01f;
         [SerializeField] private float zoomStepsPerScrollUnit = 3f;
 
-        private ViewerSceneStore _sceneStore;
+        private IViewerSceneSource _sceneSource;
         private Camera _camera;
         private Bounds _roomBounds;
         private bool _hasBounds;
@@ -40,6 +40,15 @@ namespace GhostMap.Viewer.Interaction
         public OrbitCameraRig Rig { get; } = new OrbitCameraRig();
 
         public bool DollhouseEnabled { get; private set; }
+
+        /// <summary>
+        /// Task V5: suspended while <c>ViewerInteractionRouter</c> is dragging
+        /// a selected furniture object on the floor plane, so a left-drag
+        /// that starts on the selection never also orbits the camera
+        /// underneath it (section "Camera + interaction conflicts").
+        /// Keyboard shortcuts and framing are unaffected.
+        /// </summary>
+        public bool InputEnabled { get; set; } = true;
 
         private void Awake()
         {
@@ -53,30 +62,30 @@ namespace GhostMap.Viewer.Interaction
             roomRenderer = renderer;
         }
 
-        public void Attach(ViewerSceneStore sceneStore)
+        public void Attach(IViewerSceneSource sceneSource)
         {
             Detach();
 
-            _sceneStore = sceneStore;
-            if (_sceneStore == null)
+            _sceneSource = sceneSource;
+            if (_sceneSource == null)
             {
                 return;
             }
 
-            _sceneStore.Changed += OnSceneChanged;
+            _sceneSource.Changed += OnSceneChanged;
 
-            if (_sceneStore.Current != null)
+            if (_sceneSource.Current != null)
             {
-                OnSceneChanged(_sceneStore.Current);
+                OnSceneChanged(_sceneSource.Current);
             }
         }
 
         public void Detach()
         {
-            if (_sceneStore != null)
+            if (_sceneSource != null)
             {
-                _sceneStore.Changed -= OnSceneChanged;
-                _sceneStore = null;
+                _sceneSource.Changed -= OnSceneChanged;
+                _sceneSource = null;
             }
 
             _hasFramed = false;
@@ -164,8 +173,12 @@ namespace GhostMap.Viewer.Interaction
 
         private void Update()
         {
-            ReadMouse();
-            ReadKeys();
+            if (InputEnabled)
+            {
+                ReadMouse();
+                ReadKeys();
+            }
+
             ApplyToTransform();
         }
 

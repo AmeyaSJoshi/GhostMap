@@ -1,6 +1,132 @@
 # Viewer Status
 
 ## Current state
+- **V5 complete: object selection, editing, and measurement**
+  (implementation plan section 17 Task V5; interaction rules in sections
+  13.2-13.5).
+- **`Runtime/Scene/ViewerEditableScene.cs` is the new ownership layer** the
+  task brief asked for, sitting between the scanner-authoritative
+  `ViewerSceneStore` (unchanged since V1) and every renderer/camera/
+  interaction consumer:
+  ```text
+  ViewerSceneStore            (scanner authority; frozen)
+      -> accepted scanner snapshots
+  ViewerEditableScene          (V5)
+      -> the effective scene: live pre-finalization, locally edited after
+  RoomRenderer / OrbitCameraController / selection & edit controllers
+  ```
+  Both producers implement a new `Runtime/Scene/IViewerSceneSource`
+  interface (`Current` + `Changed`), so `RoomRenderer.Attach` and
+  `OrbitCameraController.Attach` now take that interface instead of the
+  concrete `ViewerSceneStore` — a source-compatible, non-breaking change:
+  every V1-V4 test that calls `renderer.Attach(store)` with a raw
+  `ViewerSceneStore` still compiles and passes unchanged, because
+  `ViewerSceneStore` implements the interface too.
+- **Ownership rule, exactly `ADR-0003`:** while `finalized == false`,
+  `ViewerEditableScene` is a pure pass-through of the scanner's live
+  snapshots and `EditingEnabled` is `false`. The instant a snapshot with
+  `finalized == true` arrives for the tracked session, `EditingEnabled`
+  becomes `true` and `ViewerEditableScene` stops accepting further
+  scanner-originated updates *for that same session* — protecting local
+  edits from a duplicate/reconnect resend of the same finalized revision
+  (defense in depth: `ViewerSceneStore`'s own revision arbitration already
+  filters those out before they would even reach `ViewerEditableScene`). A
+  **different** `sessionId` always wins immediately and unconditionally,
+  discarding any local edits from the room it replaces — a Scanner Reset
+  can never silently merge with the prior room's edits. All of this is
+  proved against the *real* `ViewerSceneStore` pipeline (not a fake) in
+  `ViewerEditableSceneTests`, covering the full A-K regression sequence the
+  task brief specifies.
+- **Local edits are validated by the same shared `FurnitureValidator`** the
+  scanner's own snapshots are checked against
+  (`ViewerEditableScene.TryApplyLocalEdit`) — never a Viewer
+  reimplementation of the dimension/finite-value rules. Every accepted edit
+  clones the current snapshot via `JsonUtility` round-trip (the same
+  serializer the wire protocol uses), replaces exactly the edited object,
+  and bumps the viewer-owned `revision` by one.
+- **Selection (`Runtime/Interaction/ObjectSelectionController.cs`)** is a
+  real `Physics.Raycast` against the room's real colliders. Only a hit
+  whose collider carries a `SceneObjectBinding` — the furniture root's
+  single bounding-box collider from V4 — counts; floor/ceiling/wall
+  colliders have none, so they can never become an accidental furniture
+  selection. Identity comes from `SceneObjectBinding.ObjectId`, never
+  `GameObject` name parsing. Selection works at any time, before or after
+  finalization (section 13.2 has no finalized gate); only editing does.
+  Re-resolves after every `RoomRenderer.Rebuilt` (a new event, fired at the
+  end of every rebuild) rather than racing `IViewerSceneSource.Changed`
+  directly, and clears safely if the selected id no longer exists in the
+  newly rendered room — whether because the authoritative scene dropped it
+  pre-finalization or a new session replaced the room entirely.
+- **Selection highlight** is a deterministic 12-edge wireframe box
+  (`Runtime/Interaction/SelectionOutlineBuilder.cs`, pure and unit-tested)
+  built from thin procedural cuboids — the same "primitive cubes" technique
+  `FurnitureFactory`/`WallRenderer` already use, not a `LineRenderer` path
+  or a third-party outline package. Parented under the selected object's
+  root, so it inherits yaw/position for free and needs no per-frame upkeep;
+  its own colliders are stripped so the highlight itself is never
+  raycast-hittable.
+- **Editing (`Runtime/Interaction/ObjectEditController.cs`)** exposes
+  `TryDragToFloorPoint`, `TrySetPositionXZ`, `TrySetYaw`, `TrySetWidth`,
+  `TrySetDepth`, `TrySetHeight` — every one takes explicit values (a `Ray`
+  or a number), never reads `Input` itself, so the whole surface is
+  EditMode-testable without a Play-mode loop (the same split V4's
+  `OrbitCameraRig`/`OrbitCameraController` established). Drag intersects the
+  cursor ray with the y = 0 floor plane using the shared `RayPlaneMath`
+  (Ghost space is Viewer world space; no ARKit/XR transform), updates X/Z
+  only, and always preserves the object's existing `center.y`. Every method
+  is gated on `ViewerEditableScene.EditingEnabled` and fails cleanly
+  (leaving the model untouched) with no selection, no finalized scan, or an
+  invalid value.
+- **Measurement (`Runtime/Interaction/MeasurementController.cs`)** places
+  two points from real `Physics.Raycast` hits — floor, walls, furniture.
+  Openings behave naturally as holes because `WallSliceGenerator` (V3)
+  never builds a solid segment across one; no Viewer collider changes were
+  needed. Distance always comes from the shared `MeasurementMath.Distance`/
+  `.DistanceXZ` over the two real world-space hit points, never from
+  screen-space pixels. A third click after a completed measurement starts a
+  fresh one (`TryPlacePoint`'s documented lifecycle). A genuinely new
+  Scanner session clears an in-progress/completed measurement (it would
+  otherwise reference a room that no longer exists); edits and rebuilds
+  *within* the same session never touch it.
+- **`Runtime/Interaction/ViewerInteractionRouter.cs`** is the single place
+  that reads the mouse each frame and resolves the "camera + interaction
+  conflicts" the task brief calls out: a click that starts over UI
+  (`EventSystem.IsPointerOverGameObject`) is ignored entirely; while
+  measurement mode is active every click places a measurement point and
+  never selects furniture ("measurement mode intercepts click placement");
+  a mouse-down on the already-selected object's own collider (editing
+  enabled, not measuring) begins a floor-plane drag and suspends
+  `OrbitCameraController.InputEnabled` — a new V5 flag — for the duration,
+  so a drag that starts on the selection never also orbits the camera
+  underneath it; otherwise a genuine click (movement under a small pixel
+  threshold — `ViewerInteractionRouter.IsClick`, the one pure/tested piece)
+  selects whatever is under the cursor or clears the selection. `M` toggles
+  measurement mode, mirroring V4's key-plus-button pattern for `F`/`D`.
+  Deliberately thin and untestable in EditMode for the same reason
+  `OrbitCameraController.Update()` is (V4 known issue): every command it
+  dispatches to is covered directly by its own controller's tests with
+  explicit rays.
+- **`Runtime/UI/InspectorPanelController.cs`** shows the selected object's
+  type/id, editing-enabled state, and editable position X/Z, yaw, width,
+  depth, height as legacy UGUI `InputField`s, plus the measurement toggle/
+  clear buttons and the live distance readout. Repaints from the live
+  selected model every frame — never overwriting a field the user is
+  actively typing into (`InputField.isFocused`) — so a value entered
+  elsewhere (a drag, or the field itself) is always reflected without an
+  extra event-wiring layer. A rejected submission leaves the model
+  untouched and the next repaint snaps the field back to the real value.
+- **`ViewerHudController`** now reads `bootstrap.EditableScene.Current` —
+  the effective scene — rather than the raw `ViewerSceneStore.Current`, and
+  prints an explicit `Editing: ENABLED` / `Editing: disabled (finalize scan
+  to edit)` line plus the new click/drag/measure control summary.
+- **`ViewerBootstrap`** now owns the one `ViewerEditableScene` and wires
+  every new controller to it in `Awake()`; `OnDestroy()` detaches all of
+  them. `ViewerSceneBuilder.BuildScene`/`.VerifyScene` build and assert the
+  full new wiring: `ObjectSelectionController`, `ObjectEditController`,
+  `MeasurementController`, `ViewerInteractionRouter`,
+  `InspectorPanelController` and its Position X/Z, Yaw, Width, Depth,
+  Height fields, the Measure/Clear Measurement buttons, and the
+  measurement/selected-object/editing-status text.
 - **V4 complete: parametric furniture and the orbit/dollhouse camera.**
   `Runtime/Rendering/FurnitureFactory.cs` builds each `SceneObjectModel` from
   primitive boxes per implementation plan section 12.4 ("do not render only
@@ -193,7 +319,8 @@
   (V5/V6 own them). `Runtime/Rendering/` is now populated (V2).
 
 ## Last verified commit
-- V4 implementation (this branch). Previous: `79d49c0` (V3), `197d4bd` (V2).
+- V5 implementation (this branch). Previous: `4ed9c67` (V4), `79d49c0` (V3),
+  `197d4bd` (V2).
 
 ## Tests run
 - Command:
@@ -202,13 +329,19 @@
     -batchmode -nographics -projectPath apps/viewer \
     -runTests -testPlatform EditMode -testResults <out>.xml -logFile <out>.log
   ```
-- Result: **366 tests, 366 passed, 0 failed, 0 skipped.** Unity exit code `0`.
-  (156 embedded `GhostMap.Shared.Tests`, unchanged; 123 V1/V2/V3 Viewer tests,
-  unchanged; 87 new V4 tests: 14 `FurnitureFactoryTests`,
-  18 `FurnitureRendererTests`, 16 `RoomRendererObjectsTests`,
-  18 `OrbitCameraRigTests`, 13 `OrbitCameraControllerTests`,
-  8 `RoomBoundsTests`.) The shared package's own `TestProject` was also run
-  standalone: **156 tests, 156 passed, 0 failed**, exit code `0`.
+- Result: **430 tests, 430 passed, 0 failed, 0 skipped.** Unity exit code `0`.
+  (156 embedded `GhostMap.Shared.Tests`, unchanged; 210 V1-V4 Viewer tests,
+  unchanged; **64 new V5 tests**: 17 `ViewerEditableSceneTests` (the full
+  A-K ownership/regression sequence, plus per-field edits and validation
+  rejection), 5 `SelectionOutlineBuilderTests`, 11
+  `ObjectSelectionControllerTests`, 11 `ObjectEditControllerTests`, 16
+  `MeasurementControllerTests`, 4 `ViewerInteractionRouterTests`.) The
+  shared package's own `TestProject` was re-run standalone and is
+  unaffected: **156 tests, 156 passed, 0 failed**, exit code `0` — no file
+  under `shared/**` was touched.
+- **Regression**: the complete Viewer suite was run, not only the new
+  tests. V1 networking, V2 floor/ceiling/walls, V3 openings, V4 furniture
+  and the orbit camera all pass unchanged.
 - The **complete** Viewer suite was run for V4, not only the new tests: V1
   networking, V2 floor/ceiling/walls, V3 openings, reconnect behaviour and
   revision arbitration all pass unchanged, and two V4 tests assert the V2/V3
@@ -338,8 +471,9 @@
   `WallSegmentSpec` (`Slice`, `Position`, `Rotation`, `Scale`);
   `WallThicknessM` constant (`0.10`).
 - `GhostMap.Viewer.Rendering.RoomRenderer` — `MonoBehaviour`;
-  `Attach(ViewerSceneStore)`, `Detach()`, `Root`, `CeilingVisible`,
-  `SetCeilingVisible(bool)`.
+  `Attach(IViewerSceneSource)`, `Detach()`, `Root`, `CeilingVisible`,
+  `SetCeilingVisible(bool)`, `event Rebuilt` (V5: fires after every rebuild,
+  once the new hierarchy exists).
 - `GhostMap.Viewer.Rendering.FurnitureFactory` — `IDisposable`; static
   `BuildParts(SceneObjectModel[, IList<string>])`;
   `Create(SceneObjectModel, Transform[, IList<string>])`.
@@ -356,13 +490,45 @@
   `MinPitchDeg`/`MaxPitchDeg`/`MinDistanceM`/`MaxDistanceM`/`HomeYawDeg`/
   `HomePitchDeg`/`DollhousePitchDeg`.
 - `GhostMap.Viewer.Interaction.OrbitCameraController` — `MonoBehaviour`;
-  `Rig`, `DollhouseEnabled`, `Attach(ViewerSceneStore)`, `Detach()`,
-  `SetRoomRenderer(RoomRenderer)`, `FrameRoom()`, `SetDollhouse(bool)`,
-  `ToggleDollhouse()`, `ApplyToTransform()`.
+  `Rig`, `DollhouseEnabled`, `InputEnabled` (V5: suspends orbit/pan/zoom/
+  keys while a furniture drag is in progress), `Attach(IViewerSceneSource)`,
+  `Detach()`, `SetRoomRenderer(RoomRenderer)`, `FrameRoom()`,
+  `SetDollhouse(bool)`, `ToggleDollhouse()`, `ApplyToTransform()`.
+- `GhostMap.Viewer.Scene.IViewerSceneSource` — **new**, V5. `Current`,
+  `event Changed`. Implemented by both `ViewerSceneStore` and
+  `ViewerEditableScene`.
+- `GhostMap.Viewer.Scene.ViewerEditableScene` — **new**, V5. `Current`,
+  `EditingEnabled`, `event Changed`, `Attach(IViewerSceneSource)`,
+  `Detach()`, `TryApplyLocalEdit(SceneObjectModel, out string)`.
+- `GhostMap.Viewer.Interaction.SelectionOutlineBuilder` — **new**, V5;
+  static, pure. `BuildEdges(widthM, depthM, heightM[, thicknessM,
+  marginM]) -> SelectionEdgeBar[12]`; `DefaultThicknessM`, `DefaultMarginM`.
+- `GhostMap.Viewer.Interaction.ObjectSelectionController` — **new**, V5;
+  `MonoBehaviour`. `SelectedObjectId`, `HasSelection`, `event
+  SelectionChanged`, `SetRoomRenderer`, `SetCamera`, `Attach()`, `Detach()`,
+  `TrySelectAt(Ray|Vector2)`, `IsPointerOverSelected(Ray)`,
+  `ClearSelection()`, `GetSelectedModel()`.
+- `GhostMap.Viewer.Interaction.ObjectEditController` — **new**, V5;
+  `MonoBehaviour`. `EditingEnabled`, `SetSelectionController`,
+  `Attach(ViewerEditableScene)`, `Detach()`, `TryDragToFloorPoint(Ray, out
+  string)`, `TrySetPositionXZ`, `TrySetYaw`, `TrySetWidth`, `TrySetDepth`,
+  `TrySetHeight` (all `(float, out string) -> bool`).
+- `GhostMap.Viewer.Interaction.MeasurementController` — **new**, V5;
+  `MonoBehaviour`. `IsActive`, `PointA`, `PointB`, `HasMeasurement`,
+  `DistanceM`, `DistanceXZM`, `VerticalDistanceM`, `event Changed`,
+  `Attach(IViewerSceneSource)`, `Detach()`, `SetActive(bool)`,
+  `ToggleActive()`, `TryPlacePoint(Ray)`, `Clear()`.
+- `GhostMap.Viewer.Interaction.ViewerInteractionRouter` — **new**, V5;
+  `MonoBehaviour`. Wires camera/selection/edit/measurement/orbit together
+  and reads the mouse each frame; `IsClick(Vector2, Vector2, float)` is the
+  one pure/tested piece.
+- `GhostMap.Viewer.UI.InspectorPanelController` — **new**, V5;
+  `MonoBehaviour`. Wires the selected-object/editing-status text, the six
+  numeric `InputField`s, and the measurement toggle/clear buttons.
 
 ## Known issues
-- None blocking V5. `Runtime/Persistence/` is still empty — that is V6's
-  scope, not a defect. `Runtime/Interaction/` now holds V4's camera.
+- None blocking V6. `Runtime/Persistence/` is still empty — that is V6's
+  scope, not a defect.
 - **In dollhouse mode the near wall still occludes furniture standing against
   it.** Only the ceiling is hidden, which is exactly what section 12.2
   specifies; orbiting or raising the pitch reveals them. Wall fading is not
@@ -430,14 +596,45 @@
   surface type, created lazily per `RoomRenderer` instance and disposed in
   `OnDestroy`. Fine for one on-screen room; would need pooling if V4+ ever
   renders many rooms at once, which is not currently planned.
+- **Every accepted edit rebuilds the whole `RenderedRoom`.** Task V5's brief
+  explicitly allows "rerender only object if easy, otherwise rebuild scene";
+  V5 takes the latter, exactly as V2-V4 already do for every other scene
+  change. Fine at MVP room sizes; a dedicated single-object rerender path is
+  not implemented and is not currently planned.
+- **No undo/redo, no delete/add object.** The V5 task brief does not require
+  either, and the implementation plan's section 17 Task V5 description does
+  not ask for them either — scope was not expanded to add them.
+- **The selection highlight can be visually subtle from directly above in
+  dollhouse mode**, since only 2 of its 12 edges face the camera at a steep
+  overhead angle; orbiting reveals the full wireframe box clearly. See the
+  V5 handoff's visual captures.
+- **`EditingIsDisabledBeforeFinalization`-style tests aside, `ObjectEditController`
+  does not itself re-check `SceneObjectModel.id` ownership beyond what
+  `ViewerEditableScene.TryApplyLocalEdit` already verifies** (the id must
+  exist in the current room). This is intentional — id existence is the only
+  ownership check the schema defines — not a gap.
+- Only `MinDimensionM`/`MaxDimensionM` from the shared `FurnitureValidator`
+  gate width/depth/height; there is no separate Viewer-side clamp or
+  rounding, so an out-of-range typed value is rejected outright (the field
+  snaps back to the last valid value) rather than silently clamped.
+- Carried over from V2-V4, unchanged: `-executeMethod` hangs in this sandbox
+  (use `-runTests`); `-nographics` segfaults on `Camera.Render()` — V5's own
+  visual verification needed a run without `-nographics`, same as V2-V4; a
+  `BoxCollider`'s effective size/position after a `Transform.localScale`/
+  `.position` change made *outside* Play mode is not guaranteed visible to
+  `Physics.Raycast` until `Physics.SyncTransforms()` is called — encountered
+  and fixed in `MeasurementControllerTests`' own ad hoc test colliders, not
+  in any production code path (production colliders are always moved via a
+  `SceneObjectBinding` root's `Transform.position`/`BoxCollider.size`
+  together, which was already proven raycast-safe by every
+  `ObjectSelectionControllerTests` case).
+- No physical-device testing applies to this workstream (desktop app).
 
 ## Next safe task
-- **V5 — Selection, editing and measurement** (implementation plan section 17,
-  Task V5; behaviour in sections 13.2-13.5). `Runtime/Interaction/` gains the
-  selection raycast (click the object root's single `BoxCollider`, read its
-  `SceneObjectBinding`), the inspector panel, post-finalization drag on the
-  floor plane with a viewer-side revision bump, validated resize/rotate, and
-  measurement mode. Walls and openings stay non-editable in the MVP.
+- **V6 — Persistence and a polished Viewer HUD** (implementation plan
+  section 17, Task V6). Save/load the locally-edited scene, and clean up the
+  HUD now that selection/editing/measurement are live. Do not begin
+  Integration from here.
 
 ## Do not touch
 - `shared/**`, `fixtures/**`, `tools/**`, `docs/contracts/**`,

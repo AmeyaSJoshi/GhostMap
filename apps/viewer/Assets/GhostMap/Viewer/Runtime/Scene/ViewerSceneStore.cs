@@ -26,7 +26,7 @@ namespace GhostMap.Viewer.Scene
     /// that erases <see cref="Current"/> other than accepting a newer, valid
     /// snapshot. A network drop is entirely the network layer's concern.</para>
     /// </summary>
-    public sealed class ViewerSceneStore
+    public sealed class ViewerSceneStore : IViewerSceneSource
     {
         public SceneSnapshot Current { get; private set; }
 

@@ -95,8 +95,7 @@
   (V5/V6 own them). `Runtime/Rendering/` is now populated (V2).
 
 ## Last verified commit
-- Not yet committed — see the V2 handoff for the working-tree state this
-  status reflects.
+- `197d4bd` (V2 implementation).
 
 ## Tests run
 - Command:

@@ -7,7 +7,7 @@
 `b8e4a7f` (merge of PR #7, `viewer/v1-desktop-network-foundation` -> `main`; Scanner S1-S6 and Viewer V1 complete)
 
 ## Head commit
-`<recorded after commit — see docs/status/viewer.md "Last verified commit">`
+`197d4bd`
 
 ## What changed
 Task V2 from `docs/plans/ghostmap-implementation-plan.md` section 17: floor,

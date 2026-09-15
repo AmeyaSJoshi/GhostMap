@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using GhostMap.Viewer.Bootstrap;
+using GhostMap.Viewer.Interaction;
 using GhostMap.Viewer.Rendering;
 using GhostMap.Viewer.UI;
 using UnityEditor;
@@ -33,25 +34,35 @@ namespace GhostMap.Viewer.Editor
             UnityScene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             CreateEventSystem();
-            CreateRoomCamera();
+            OrbitCameraController cameraController = CreateRoomCamera();
             GameObject canvasGo = CreateCanvas();
 
             Text statusText = CreateStatusText(canvasGo);
-            Button loadFixtureButton = CreateLoadFixtureButton(canvasGo);
+            Button loadFixtureButton = CreateActionButton(canvasGo, "LoadFixtureButton", "Load Fixture", -360f);
+            Button resetViewButton = CreateActionButton(canvasGo, "ResetViewButton", "Reset View (F)", -440f);
+            Button dollhouseButton = CreateActionButton(canvasGo, "DollhouseButton", "Dollhouse (D)", -520f);
 
             var roomRendererGo = new GameObject("RoomRenderer", typeof(RoomRenderer));
             var roomRenderer = roomRendererGo.GetComponent<RoomRenderer>();
 
+            AssignSerializedReferences(cameraController, ("roomRenderer", roomRenderer));
+
             var bootstrapGo = new GameObject("ViewerBootstrap", typeof(ViewerBootstrap));
             var bootstrap = bootstrapGo.GetComponent<ViewerBootstrap>();
-            AssignSerializedReferences(bootstrap, ("roomRenderer", roomRenderer));
+            AssignSerializedReferences(
+                bootstrap,
+                ("roomRenderer", roomRenderer),
+                ("cameraController", cameraController));
 
             var hudGo = new GameObject("ViewerHudController", typeof(ViewerHudController));
             AssignSerializedReferences(
                 hudGo.GetComponent<ViewerHudController>(),
                 ("bootstrap", bootstrap),
                 ("loadFixtureButton", loadFixtureButton),
-                ("statusText", statusText));
+                ("statusText", statusText),
+                ("resetViewButton", resetViewButton),
+                ("dollhouseButton", dollhouseButton),
+                ("cameraController", cameraController));
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath) !);
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -82,13 +93,20 @@ namespace GhostMap.Viewer.Editor
                 var roomRenderer = FindInScene<RoomRenderer>(scene);
                 Require(roomRenderer != null, "no RoomRenderer");
 
+                var cameraController = FindInScene<OrbitCameraController>(scene);
+                Require(cameraController != null, "no OrbitCameraController; the room cannot be navigated");
+                RequireAssigned(cameraController, "roomRenderer");
+
                 var bootstrap = FindInScene<ViewerBootstrap>(scene);
                 Require(bootstrap != null, "no ViewerBootstrap");
-                RequireAssigned(bootstrap, "roomRenderer");
+                RequireAssigned(bootstrap, "roomRenderer", "cameraController");
 
                 var hud = FindInScene<ViewerHudController>(scene);
                 Require(hud != null, "no ViewerHudController");
-                RequireAssigned(hud, "bootstrap", "loadFixtureButton", "statusText");
+                RequireAssigned(
+                    hud,
+                    "bootstrap", "loadFixtureButton", "statusText",
+                    "resetViewButton", "dollhouseButton", "cameraController");
             }
             finally
             {
@@ -162,12 +180,13 @@ namespace GhostMap.Viewer.Editor
         }
 
         /// <summary>
-        /// Task V2: a fixed overview position, not the orbit/dollhouse camera
-        /// V4 introduces — just enough to visually inspect the rendered room
-        /// shell in the Editor, framed for the fixture rooms' roughly 4m x 3m
-        /// footprint.
+        /// Task V4: the orbit/dollhouse camera, which supersedes V2's fixed
+        /// overview position. The starting transform no longer matters much —
+        /// the first accepted scene frames itself from its own bounds — but a
+        /// sane default keeps the Editor's scene view legible before any room
+        /// arrives.
         /// </summary>
-        private static void CreateRoomCamera()
+        private static OrbitCameraController CreateRoomCamera()
         {
             var cameraGo = new GameObject("RoomCamera", typeof(Camera));
             cameraGo.transform.position = new Vector3(2f, 10f, -3f);
@@ -176,6 +195,8 @@ namespace GhostMap.Viewer.Editor
             var camera = cameraGo.GetComponent<Camera>();
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(0.10f, 0.10f, 0.12f);
+
+            return cameraGo.AddComponent<OrbitCameraController>();
         }
 
         private static GameObject CreateCanvas()
@@ -206,9 +227,13 @@ namespace GhostMap.Viewer.Editor
             return text;
         }
 
-        private static Button CreateLoadFixtureButton(GameObject canvasGo)
+        private static Button CreateActionButton(
+            GameObject canvasGo,
+            string name,
+            string caption,
+            float anchoredY)
         {
-            var buttonGo = new GameObject("LoadFixtureButton", typeof(Image), typeof(Button));
+            var buttonGo = new GameObject(name, typeof(Image), typeof(Button));
             buttonGo.transform.SetParent(canvasGo.transform, false);
 
             var background = buttonGo.GetComponent<Image>();
@@ -220,14 +245,14 @@ namespace GhostMap.Viewer.Editor
             rect.anchorMin = new Vector2(0f, 1f);
             rect.anchorMax = new Vector2(0f, 1f);
             rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(24f, -360f);
+            rect.anchoredPosition = new Vector2(24f, anchoredY);
             rect.sizeDelta = new Vector2(260f, 70f);
 
             var button = buttonGo.GetComponent<Button>();
             button.targetGraphic = background;
 
             Text label = CreateText(buttonGo, "Label", 28);
-            label.text = "Load Fixture";
+            label.text = caption;
             label.alignment = TextAnchor.MiddleCenter;
             label.raycastTarget = false;
 

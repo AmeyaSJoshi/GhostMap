@@ -1,7 +1,6 @@
 using System;
 using GhostMap.Shared.Domain;
 using GhostMap.Shared.Protocol;
-using GhostMap.Shared.Validation;
 
 namespace GhostMap.Viewer.Scene
 {
@@ -56,7 +55,7 @@ namespace GhostMap.Viewer.Scene
                 return false;
             }
 
-            if (!TryValidate(snapshot, out string validationError))
+            if (!SceneSnapshotValidator.TryValidate(snapshot, out string validationError))
             {
                 error = validationError;
                 return false;
@@ -65,49 +64,6 @@ namespace GhostMap.Viewer.Scene
             Current = snapshot;
             error = string.Empty;
             Changed?.Invoke(Current);
-            return true;
-        }
-
-        private static bool TryValidate(SceneSnapshot snapshot, out string error)
-        {
-            RoomModel room = snapshot.room;
-
-            if (room == null)
-            {
-                error = "Snapshot has no room.";
-                return false;
-            }
-
-            ValidationResult roomResult = RoomValidator.ValidateRoom(room);
-            if (!roomResult.IsValid)
-            {
-                error = roomResult.Error;
-                return false;
-            }
-
-            OpeningModel[] openings = room.openings ?? Array.Empty<OpeningModel>();
-            foreach (OpeningModel opening in openings)
-            {
-                ValidationResult openingResult = OpeningValidator.Validate(opening, room);
-                if (!openingResult.IsValid)
-                {
-                    error = openingResult.Error;
-                    return false;
-                }
-            }
-
-            SceneObjectModel[] objects = room.objects ?? Array.Empty<SceneObjectModel>();
-            foreach (SceneObjectModel sceneObject in objects)
-            {
-                ValidationResult objectResult = FurnitureValidator.Validate(sceneObject);
-                if (!objectResult.IsValid)
-                {
-                    error = objectResult.Error;
-                    return false;
-                }
-            }
-
-            error = string.Empty;
             return true;
         }
     }

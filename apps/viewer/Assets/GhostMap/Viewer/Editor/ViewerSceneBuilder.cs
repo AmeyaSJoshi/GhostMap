@@ -47,6 +47,8 @@ namespace GhostMap.Viewer.Editor
             Text measureButtonLabel = measureButton.GetComponentInChildren<Text>();
             Button clearMeasurementButton = CreateActionButton(canvasGo, "ClearMeasurementButton", "Clear Measurement", -680f);
             Text measurementText = CreateInspectorLine(canvasGo, "MeasurementText", -760f, 320f);
+            Button saveButton = CreateActionButton(canvasGo, "SaveButton", "Save Scene", -760f);
+            Button loadButton = CreateActionButton(canvasGo, "LoadButton", "Load Scene", -840f);
 
             var roomRendererGo = new GameObject("RoomRenderer", typeof(RoomRenderer));
             var roomRenderer = roomRendererGo.GetComponent<RoomRenderer>();
@@ -124,7 +126,9 @@ namespace GhostMap.Viewer.Editor
                 ("statusText", statusText),
                 ("resetViewButton", resetViewButton),
                 ("dollhouseButton", dollhouseButton),
-                ("cameraController", cameraController));
+                ("cameraController", cameraController),
+                ("saveButton", saveButton),
+                ("loadButton", loadButton));
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath) !);
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -195,7 +199,8 @@ namespace GhostMap.Viewer.Editor
                 RequireAssigned(
                     hud,
                     "bootstrap", "loadFixtureButton", "statusText",
-                    "resetViewButton", "dollhouseButton", "cameraController");
+                    "resetViewButton", "dollhouseButton", "cameraController",
+                    "saveButton", "loadButton");
             }
             finally
             {

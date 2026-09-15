@@ -177,6 +177,50 @@ namespace GhostMap.Viewer.Scene
         }
 
         /// <summary>
+        /// Task V6: installs a previously-saved, previously-validated
+        /// <see cref="SceneSnapshot"/> (<c>Persistence.ScenePersistence.TryLoad</c>
+        /// already ran it through <see cref="SceneSnapshotValidator"/>) as the
+        /// new effective scene, exactly like a scanner finalized snapshot
+        /// would — same clone-and-<see cref="Changed"/> path, so
+        /// <c>RoomRenderer</c>/<c>OrbitCameraController</c>/every interaction
+        /// controller pick it up through the one existing
+        /// <see cref="IViewerSceneSource"/> channel rather than a second,
+        /// load-specific rendering path.
+        ///
+        /// <para><b>Authority decision (this task):</b> a successfully loaded
+        /// scene always becomes <see cref="EditingEnabled"/> <c>true</c> —
+        /// the only reason a scene is ever saved is that it was already
+        /// post-finalization (editing was enabled when Save ran), so a loaded
+        /// file is put back exactly where it left off, ready to keep
+        /// editing. This reuses <see cref="OnSourceChanged"/>'s own
+        /// same-session/EditingEnabled guard: if the tracked scanner session
+        /// later resends the *same* <c>sessionId</c> the loaded file carries
+        /// (a stale reconnect resend), it is ignored exactly as a duplicate
+        /// finalized resend already is; a genuinely different
+        /// <c>sessionId</c> still replaces the room, unconditionally, per
+        /// <c>ADR-0003</c> — a new scan session always wins.</para>
+        ///
+        /// <para>Fails without side effects — <see cref="Current"/> is left
+        /// exactly as it was — for a null snapshot or one with no room, so a
+        /// caller that skips <c>ScenePersistence.TryLoad</c>'s own validation
+        /// still cannot corrupt the currently displayed room.</para>
+        /// </summary>
+        public bool LoadExternalSnapshot(SceneSnapshot loaded, out string error)
+        {
+            if (loaded == null || loaded.room == null)
+            {
+                error = "Loaded scene has no room.";
+                return false;
+            }
+
+            Current = Clone(loaded);
+            EditingEnabled = true;
+            error = string.Empty;
+            Changed?.Invoke(Current);
+            return true;
+        }
+
+        /// <summary>
         /// Deep-clones through <c>JsonUtility</c> — the same serializer the
         /// wire protocol uses (protocol v1 section 4) — so every field the
         /// frozen schema defines is copied without this type hard-coding its

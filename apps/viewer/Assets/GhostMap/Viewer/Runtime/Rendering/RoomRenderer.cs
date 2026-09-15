@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using GhostMap.Shared.Domain;
 using GhostMap.Viewer.Scene;
@@ -27,13 +28,23 @@ namespace GhostMap.Viewer.Rendering
 
         private readonly FurnitureFactory _furnitureFactory = new FurnitureFactory();
 
-        private ViewerSceneStore _sceneStore;
+        private IViewerSceneSource _sceneSource;
         private GameObject _ceilingGo;
         private Material _floorMaterial;
         private Material _ceilingMaterial;
         private Material _wallMaterial;
 
         public GameObject Root { get; private set; }
+
+        /// <summary>
+        /// Fired at the end of every <see cref="Rebuild"/>, after the new
+        /// hierarchy (including <c>Objects/Object_&lt;type&gt;_&lt;id&gt;</c>
+        /// roots) exists. Task V5's selection controller subscribes to this —
+        /// never to <see cref="ViewerSceneStore.Changed"/> directly — so it
+        /// never races the rebuild it needs to re-resolve the selected
+        /// object's (possibly new) GameObject against.
+        /// </summary>
+        public event Action Rebuilt;
 
         /// <summary>
         /// False while the dollhouse preset is on. Implementation plan
@@ -71,30 +82,30 @@ namespace GhostMap.Viewer.Rendering
             }
         }
 
-        public void Attach(ViewerSceneStore sceneStore)
+        public void Attach(IViewerSceneSource sceneSource)
         {
             Detach();
 
-            _sceneStore = sceneStore;
-            if (_sceneStore == null)
+            _sceneSource = sceneSource;
+            if (_sceneSource == null)
             {
                 return;
             }
 
-            _sceneStore.Changed += Rebuild;
+            _sceneSource.Changed += Rebuild;
 
-            if (_sceneStore.Current != null)
+            if (_sceneSource.Current != null)
             {
-                Rebuild(_sceneStore.Current);
+                Rebuild(_sceneSource.Current);
             }
         }
 
         public void Detach()
         {
-            if (_sceneStore != null)
+            if (_sceneSource != null)
             {
-                _sceneStore.Changed -= Rebuild;
-                _sceneStore = null;
+                _sceneSource.Changed -= Rebuild;
+                _sceneSource = null;
             }
         }
 
@@ -120,6 +131,8 @@ namespace GhostMap.Viewer.Rendering
             BuildCeiling(room);
             BuildWalls(room);
             BuildObjects(room);
+
+            Rebuilt?.Invoke();
         }
 
         /// <summary>
@@ -261,7 +274,7 @@ namespace GhostMap.Viewer.Rendering
             return material;
         }
 
-        private static void DestroyUnityObject(Object obj)
+        private static void DestroyUnityObject(UnityEngine.Object obj)
         {
             if (obj == null)
             {

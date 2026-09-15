@@ -14,11 +14,12 @@ using UnityScene = UnityEngine.SceneManagement.Scene;
 namespace GhostMap.Viewer.Editor
 {
     /// <summary>
-    /// Builds the Task V1 viewer scene from scratch and saves it: an
-    /// <see cref="EventSystem"/>, a diagnostics <see cref="Canvas"/>, and the
-    /// <see cref="ViewerBootstrap"/> / <see cref="ViewerHudController"/> pair
-    /// that between them own the TCP server, the scene store and the
-    /// "Load fixture" developer button.
+    /// Builds the Viewer scene from scratch and saves it: an
+    /// <see cref="EventSystem"/>, a diagnostics/interaction
+    /// <see cref="Canvas"/>, and the <see cref="ViewerBootstrap"/> /
+    /// <see cref="ViewerHudController"/> / <see cref="InspectorPanelController"/>
+    /// trio that between them own the TCP server, the scene store/ownership
+    /// layer, camera, selection/editing/measurement, and every button.
     ///
     /// Mirrors <c>GhostMap.Scanner.Editor.ScannerSceneBuilder</c>'s approach:
     /// build programmatically and save, rather than hand-author a scene asset,
@@ -35,24 +36,85 @@ namespace GhostMap.Viewer.Editor
 
             CreateEventSystem();
             OrbitCameraController cameraController = CreateRoomCamera();
+            Camera roomCamera = cameraController.GetComponent<Camera>();
             GameObject canvasGo = CreateCanvas();
 
             Text statusText = CreateStatusText(canvasGo);
             Button loadFixtureButton = CreateActionButton(canvasGo, "LoadFixtureButton", "Load Fixture", -360f);
             Button resetViewButton = CreateActionButton(canvasGo, "ResetViewButton", "Reset View (F)", -440f);
             Button dollhouseButton = CreateActionButton(canvasGo, "DollhouseButton", "Dollhouse (D)", -520f);
+            Button measureButton = CreateActionButton(canvasGo, "MeasureButton", "Measure (M)", -600f);
+            Text measureButtonLabel = measureButton.GetComponentInChildren<Text>();
+            Button clearMeasurementButton = CreateActionButton(canvasGo, "ClearMeasurementButton", "Clear Measurement", -680f);
+            Text measurementText = CreateInspectorLine(canvasGo, "MeasurementText", -760f, 320f);
 
             var roomRendererGo = new GameObject("RoomRenderer", typeof(RoomRenderer));
             var roomRenderer = roomRendererGo.GetComponent<RoomRenderer>();
 
             AssignSerializedReferences(cameraController, ("roomRenderer", roomRenderer));
 
+            var selectionGo = new GameObject("ObjectSelectionController", typeof(ObjectSelectionController));
+            var selectionController = selectionGo.GetComponent<ObjectSelectionController>();
+            AssignSerializedReferences(
+                selectionController,
+                ("roomRenderer", roomRenderer),
+                ("targetCamera", roomCamera));
+
+            var editGo = new GameObject("ObjectEditController", typeof(ObjectEditController));
+            var editController = editGo.GetComponent<ObjectEditController>();
+            AssignSerializedReferences(editController, ("selection", selectionController));
+
+            var measurementGo = new GameObject("MeasurementController", typeof(MeasurementController));
+            var measurementController = measurementGo.GetComponent<MeasurementController>();
+
+            var routerGo = new GameObject("ViewerInteractionRouter", typeof(ViewerInteractionRouter));
+            var interactionRouter = routerGo.GetComponent<ViewerInteractionRouter>();
+            AssignSerializedReferences(
+                interactionRouter,
+                ("targetCamera", roomCamera),
+                ("selection", selectionController),
+                ("edit", editController),
+                ("measurement", measurementController),
+                ("orbitCamera", cameraController));
+
+            Text selectedInfoText = CreateInspectorLine(canvasGo, "SelectedInfoText", -24f, 340f, TextAnchor.UpperRight);
+            Text editStatusText = CreateInspectorLine(canvasGo, "EditStatusText", -56f, 340f, TextAnchor.UpperRight);
+            InputField positionXField = CreateLabeledField(canvasGo, "PositionX", "Position X", -130f);
+            InputField positionZField = CreateLabeledField(canvasGo, "PositionZ", "Position Z", -180f);
+            InputField yawField = CreateLabeledField(canvasGo, "Yaw", "Yaw (deg)", -230f);
+            InputField widthField = CreateLabeledField(canvasGo, "Width", "Width (m)", -280f);
+            InputField depthField = CreateLabeledField(canvasGo, "Depth", "Depth (m)", -330f);
+            InputField heightField = CreateLabeledField(canvasGo, "Height", "Height (m)", -380f);
+
+            var inspectorGo = new GameObject("InspectorPanelController", typeof(InspectorPanelController));
+            var inspectorPanel = inspectorGo.GetComponent<InspectorPanelController>();
+            AssignSerializedReferences(
+                inspectorPanel,
+                ("selection", selectionController),
+                ("edit", editController),
+                ("measurement", measurementController),
+                ("selectedInfoText", selectedInfoText),
+                ("editStatusText", editStatusText),
+                ("positionXField", positionXField),
+                ("positionZField", positionZField),
+                ("yawField", yawField),
+                ("widthField", widthField),
+                ("depthField", depthField),
+                ("heightField", heightField),
+                ("measureToggleButton", measureButton),
+                ("measureToggleLabel", measureButtonLabel),
+                ("clearMeasurementButton", clearMeasurementButton),
+                ("measurementText", measurementText));
+
             var bootstrapGo = new GameObject("ViewerBootstrap", typeof(ViewerBootstrap));
             var bootstrap = bootstrapGo.GetComponent<ViewerBootstrap>();
             AssignSerializedReferences(
                 bootstrap,
                 ("roomRenderer", roomRenderer),
-                ("cameraController", cameraController));
+                ("cameraController", cameraController),
+                ("selectionController", selectionController),
+                ("editController", editController),
+                ("measurementController", measurementController));
 
             var hudGo = new GameObject("ViewerHudController", typeof(ViewerHudController));
             AssignSerializedReferences(
@@ -73,9 +135,9 @@ namespace GhostMap.Viewer.Editor
         }
 
         /// <summary>
-        /// Opens the saved scene and asserts every Task V1 component is
-        /// present and wired, so a null reference fails on a laptop rather
-        /// than silently at runtime.
+        /// Opens the saved scene and asserts every component is present and
+        /// wired, so a null reference fails on a laptop rather than silently
+        /// at runtime.
         /// </summary>
         public static void VerifyScene()
         {
@@ -97,9 +159,36 @@ namespace GhostMap.Viewer.Editor
                 Require(cameraController != null, "no OrbitCameraController; the room cannot be navigated");
                 RequireAssigned(cameraController, "roomRenderer");
 
+                var selectionController = FindInScene<ObjectSelectionController>(scene);
+                Require(selectionController != null, "no ObjectSelectionController; V5 selection is dead");
+                RequireAssigned(selectionController, "roomRenderer", "targetCamera");
+
+                var editController = FindInScene<ObjectEditController>(scene);
+                Require(editController != null, "no ObjectEditController; V5 editing is dead");
+                RequireAssigned(editController, "selection");
+
+                var measurementController = FindInScene<MeasurementController>(scene);
+                Require(measurementController != null, "no MeasurementController; V5 measurement is dead");
+
+                var interactionRouter = FindInScene<ViewerInteractionRouter>(scene);
+                Require(interactionRouter != null, "no ViewerInteractionRouter; clicks never reach selection/measurement");
+                RequireAssigned(interactionRouter, "targetCamera", "selection", "edit", "measurement", "orbitCamera");
+
+                var inspectorPanel = FindInScene<InspectorPanelController>(scene);
+                Require(inspectorPanel != null, "no InspectorPanelController; the edit/measure UI is dead");
+                RequireAssigned(
+                    inspectorPanel,
+                    "selection", "edit", "measurement",
+                    "selectedInfoText", "editStatusText",
+                    "positionXField", "positionZField", "yawField", "widthField", "depthField", "heightField",
+                    "measureToggleButton", "measureToggleLabel", "clearMeasurementButton", "measurementText");
+
                 var bootstrap = FindInScene<ViewerBootstrap>(scene);
                 Require(bootstrap != null, "no ViewerBootstrap");
-                RequireAssigned(bootstrap, "roomRenderer", "cameraController");
+                RequireAssigned(
+                    bootstrap,
+                    "roomRenderer", "cameraController",
+                    "selectionController", "editController", "measurementController");
 
                 var hud = FindInScene<ViewerHudController>(scene);
                 Require(hud != null, "no ViewerHudController");
@@ -264,6 +353,93 @@ namespace GhostMap.Viewer.Editor
             labelRect.sizeDelta = Vector2.zero;
 
             return button;
+        }
+
+        /// <summary>Task V5: a top-right, right-anchored single line of text —
+        /// used for the selected-object summary, the editing-enabled state,
+        /// and the measurement readout.</summary>
+        private static Text CreateInspectorLine(
+            GameObject canvasGo,
+            string name,
+            float anchoredY,
+            float width,
+            TextAnchor alignment = TextAnchor.UpperRight)
+        {
+            Text text = CreateText(canvasGo, name, 20);
+            text.alignment = alignment;
+
+            RectTransform rect = text.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(1f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(1f, 1f);
+            rect.anchoredPosition = new Vector2(-24f, anchoredY);
+            rect.sizeDelta = new Vector2(width, 44f);
+
+            return text;
+        }
+
+        /// <summary>Task V5: one inspector row — a right-aligned label plus a
+        /// numeric-entry field flush with the right edge, both at
+        /// <paramref name="anchoredY"/>.</summary>
+        private static InputField CreateLabeledField(GameObject canvasGo, string baseName, string label, float anchoredY)
+        {
+            Text labelText = CreateText(canvasGo, baseName + "Label", 18);
+            labelText.text = label;
+            labelText.alignment = TextAnchor.MiddleRight;
+
+            RectTransform labelRect = labelText.GetComponent<RectTransform>();
+            labelRect.anchorMin = new Vector2(1f, 1f);
+            labelRect.anchorMax = new Vector2(1f, 1f);
+            labelRect.pivot = new Vector2(1f, 1f);
+            labelRect.anchoredPosition = new Vector2(-300f, anchoredY);
+            labelRect.sizeDelta = new Vector2(150f, 36f);
+
+            return CreateInputField(canvasGo, baseName + "Field", -24f, anchoredY, 260f, 36f);
+        }
+
+        private static InputField CreateInputField(
+            GameObject canvasGo,
+            string name,
+            float anchoredX,
+            float anchoredY,
+            float width,
+            float height)
+        {
+            var fieldGo = new GameObject(name, typeof(Image), typeof(InputField));
+            fieldGo.transform.SetParent(canvasGo.transform, false);
+
+            var background = fieldGo.GetComponent<Image>();
+            background.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+            background.type = Image.Type.Sliced;
+            background.color = new Color(0.92f, 0.92f, 0.92f, 1f);
+
+            RectTransform rect = fieldGo.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(1f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(1f, 1f);
+            rect.anchoredPosition = new Vector2(anchoredX, anchoredY);
+            rect.sizeDelta = new Vector2(width, height);
+
+            Text text = CreateText(fieldGo, "Text", 20);
+            text.color = Color.black;
+            text.alignment = TextAnchor.MiddleLeft;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Truncate;
+
+            RectTransform textRect = text.GetComponent<RectTransform>();
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.pivot = new Vector2(0.5f, 0.5f);
+            textRect.offsetMin = new Vector2(8f, 2f);
+            textRect.offsetMax = new Vector2(-8f, -2f);
+
+            var field = fieldGo.GetComponent<InputField>();
+            field.textComponent = text;
+            field.targetGraphic = background;
+            field.contentType = InputField.ContentType.DecimalNumber;
+            field.lineType = InputField.LineType.SingleLine;
+
+            return field;
         }
 
         private static Text CreateText(GameObject canvasGo, string name, int fontSize)

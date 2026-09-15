@@ -92,3 +92,4 @@ or
 | 2026-09-15 | viewer | [V2 — floor, ceiling, walls](2026-09-15-viewer-v2-room-geometry.md) |
 | 2026-09-16 | viewer | [V3 — wall openings](2026-09-16-viewer-v3-wall-openings.md) |
 | 2026-09-17 | viewer | [V4 — furniture and orbit/dollhouse camera](2026-09-17-viewer-v4-objects-camera.md) |
+| 2026-09-18 | viewer | [V5 — object editing and measurement](2026-09-18-viewer-v5-edit-measure.md) |

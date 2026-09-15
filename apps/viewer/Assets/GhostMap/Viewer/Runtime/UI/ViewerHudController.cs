@@ -111,7 +111,10 @@ namespace GhostMap.Viewer.UI
             }
             builder.AppendLine();
 
-            SceneSnapshot current = session.SceneStore.Current;
+            // Task V5: the HUD reflects the *effective* scene — live scanner
+            // data before finalization, the locally-edited copy after — never
+            // the raw scanner-only ViewerSceneStore.Current.
+            SceneSnapshot current = bootstrap.EditableScene?.Current;
             if (current == null)
             {
                 builder.Append("Scene: none yet");
@@ -124,7 +127,11 @@ namespace GhostMap.Viewer.UI
                 builder.Append("Room: ")
                     .Append(current.room?.corners?.Length ?? 0).Append(" corners, ")
                     .Append(current.room?.openings?.Length ?? 0).Append(" openings, ")
-                    .Append(current.room?.objects?.Length ?? 0).Append(" objects");
+                    .Append(current.room?.objects?.Length ?? 0).Append(" objects").AppendLine();
+                builder.Append(
+                    bootstrap.EditableScene != null && bootstrap.EditableScene.EditingEnabled
+                        ? "Editing: ENABLED"
+                        : "Editing: disabled (finalize scan to edit)");
             }
 
             if (!string.IsNullOrEmpty(server.LastError))
@@ -144,7 +151,9 @@ namespace GhostMap.Viewer.UI
 
             builder.AppendLine().AppendLine()
                 .Append("Camera: drag = orbit, right/middle drag = pan, scroll = zoom, ")
-                .Append("F = frame room, D = dollhouse");
+                .Append("F = frame room, D = dollhouse")
+                .AppendLine()
+                .Append("Click = select object, drag selected = move, M = measure");
 
             if (cameraController != null && cameraController.DollhouseEnabled)
             {

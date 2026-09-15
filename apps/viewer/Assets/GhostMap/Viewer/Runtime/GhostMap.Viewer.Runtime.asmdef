@@ -2,7 +2,8 @@
     "name": "GhostMap.Viewer.Runtime",
     "rootNamespace": "GhostMap.Viewer",
     "references": [
-        "GhostMap.Shared"
+        "GhostMap.Shared",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

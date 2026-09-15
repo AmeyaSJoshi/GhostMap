@@ -7,7 +7,7 @@
 `95fdd4a` (merge of PR #9, `viewer/v3-wall-openings` -> `main`; Scanner S1-S6 and Viewer V1-V3 complete)
 
 ## Head commit
-_(recorded in the follow-up docs commit)_
+`4ed9c67` (V4 implementation)
 
 ## What changed
 Task V4 from `docs/plans/ghostmap-implementation-plan.md` section 17: parametric

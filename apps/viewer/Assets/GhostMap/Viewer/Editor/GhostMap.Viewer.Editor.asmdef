@@ -1,0 +1,20 @@
+{
+    "name": "GhostMap.Viewer.Editor",
+    "rootNamespace": "GhostMap.Viewer.Editor",
+    "references": [
+        "GhostMap.Viewer.Runtime",
+        "GhostMap.Shared",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

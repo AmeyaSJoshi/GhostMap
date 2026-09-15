@@ -88,3 +88,4 @@ or
 | 2026-09-13 | scanner | [S6 — networking and finalization](2026-09-13-scanner-s6-networking-finalization.md) |
 | 2026-09-13 | scanner | [S6 — Finalize button UI investigation](2026-09-13-scanner-s6-finalize-ui-investigation.md) |
 | 2026-09-13 | scanner | [S6 — close, physical-device verified](2026-09-13-scanner-s6-close-device-verified.md) |
+| 2026-09-14 | viewer | [V1 — desktop network foundation](2026-09-14-viewer-v1-desktop-network-foundation.md) |

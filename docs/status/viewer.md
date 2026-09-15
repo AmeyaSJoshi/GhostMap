@@ -1,6 +1,47 @@
 # Viewer Status
 
 ## Current state
+- **V3 complete: doors and windows are rendered as real openings in the walls.**
+  `Runtime/Rendering/WallSliceGenerator.cs` is the whole of V3's geometry
+  logic — a pure static function
+  (`BuildSlices(wallLengthM, wallHeightM, openings)`, exactly the signature
+  implementation plan section 17 Task V3 specifies) implementing the grid-cut
+  segmentation from section 12.3: horizontal cuts at `0`, wall length and each
+  opening's near/far edge; vertical cuts at `0`, room height and each
+  opening's sill/head; every cell between adjacent cuts kept unless its centre
+  lies inside an opening. **No runtime CSG** — mesh booleans are fragile,
+  platform-dependent and expensive to re-run per snapshot, and the plan calls
+  for the deterministic decomposition instead. The slices tile the solid part
+  of the wall exactly once: no overlaps, no gaps, no duplicate pieces, proved
+  by a 61x61 interior-sample coverage assertion rather than by an area total
+  alone.
+- **An opening is bound to its wall by the ordered corner pair.** `offsetM` is
+  measured from `wallStartCornerId`, so `WallRenderer` matches
+  `(wallStartCornerId, wallEndCornerId)` against
+  `(WallDefinition.StartCornerId, .EndCornerId)` in order. The reversed pair
+  deliberately does **not** match — accepting it would silently mirror the
+  opening to the far end of the wall — and is reported as a diagnostic instead.
+- **A wall is now a container, not a cuboid.** The hierarchy is
+  `Walls/Wall_<i>_<startId>_<endId>/Segment_<j>`; each segment is a
+  `GameObject.CreatePrimitive(Cube)` and therefore keeps its `BoxCollider` for
+  V5's measurement raycasts. A wall with no openings has exactly one segment
+  whose world transform is byte-for-byte V2's full-wall transform, so V2
+  rendering is preserved exactly where there is nothing to cut.
+- **Rendering fails safe on bad opening data.** `ViewerSceneStore` already
+  rejects a snapshot whose openings fail `OpeningValidator`, so the previously
+  rendered room simply stays on screen. If malformed data reaches the renderer
+  by some other route, the offending opening is dropped (null, non-finite,
+  unsupported type, degenerate, off the end of the wall, negative sill, taller
+  than the wall, or overlapping one already accepted), that wall renders solid,
+  and the reason is surfaced through `Debug.LogWarning` rather than swallowed.
+- **Partial-scan behaviour is unchanged from V2.** Before openings exist walls
+  are solid; a snapshot with room geometry and zero openings renders exactly as
+  V2 rendered it; each newly accepted opening during the Scanner's
+  `AddOpenings` phase appears on the next `ViewerSceneStore.Changed`.
+- **Note on `valid-room-v1.json`**: that fixture contains one door
+  (`door-1`, wall `c0->c1`), so under V3 it correctly renders a doorway plus
+  three solid walls. V2 rendered it fully solid only because V2 ignored
+  openings entirely.
 - **V2 complete: floor, ceiling, and solid walls rendered from the accepted scene.**
   `Runtime/Rendering/FloorCeilingRenderer.cs` and `Runtime/Rendering/WallRenderer.cs`
   are pure functions (`RoomModel` in, `Mesh`/`WallRenderSpec` out — no
@@ -95,7 +136,7 @@
   (V5/V6 own them). `Runtime/Rendering/` is now populated (V2).
 
 ## Last verified commit
-- `197d4bd` (V2 implementation).
+- V3 implementation (this branch). Previous: `197d4bd` (V2).
 
 ## Tests run
 - Command:
@@ -104,11 +145,38 @@
     -batchmode -nographics -projectPath apps/viewer \
     -runTests -testPlatform EditMode -testResults <out>.xml -logFile <out>.log
   ```
-- Result: **220 tests, 220 passed, 0 failed, 0 skipped.** Unity exit code `0`.
-  (156 are the embedded `GhostMap.Shared.Tests` suite, unchanged; 25 are the
-  V1 Viewer tests, unchanged; 39 are new V2 rendering tests:
-  16 `FloorCeilingRendererTests`, 14 `WallRendererTests`,
-  13 `RoomRendererTests`.)
+- Result: **279 tests, 279 passed, 0 failed, 0 skipped.** Unity exit code `0`.
+  (156 embedded `GhostMap.Shared.Tests`, unchanged; 64 V1/V2 Viewer tests; 59
+  new V3 tests: 30 `WallSliceGeneratorTests`, 17 `WallRendererOpeningsTests`,
+  12 `RoomRendererOpeningsTests`.) The shared package's own `TestProject` was
+  also run standalone for V3: **156 tests, 156 passed, 0 failed**, exit code
+  `0`.
+- Two V2 tests were deliberately updated for V3's wall-container hierarchy:
+  `ValidRoomFixtureProducesExpectedGeometry` now reads segment transforms and
+  expects the fixture's door wall to be segmented, and
+  `DoorWindowFixtureStillRendersFourSolidWalls` — which asserted precisely the
+  behaviour V3 exists to replace — became
+  `DoorWindowFixtureRendersFourWallsMadeOfSolidSegments`.
+- **V3 visual verification**: same throwaway-EditMode-test technique as V2
+  (real production renderers, real fixture through `FixtureLoader` and
+  `ViewerSceneStore`, offscreen `RenderTexture`, `-batchmode` without
+  `-nographics`). From the scene's own saved `RoomCamera` transform,
+  `room-with-door-window-v1.json` shows **both** openings — the door as a
+  notch in wall `c0->c1` revealing the floor, the window as a slot in wall
+  `c1->c2`. Interior captures confirm a clean full-height doorway with an
+  intact header, a window with a **sill segment beneath it** (hole starts at
+  0.9 m, ends at 2.0 m, wall continues to 2.5 m) and a header above, the two
+  opening-free walls fully solid meeting at a clean corner, and no cracks or
+  overlap seams anywhere. `valid-room-v1.json` shows its one doorway with the
+  other three walls solid. Full detail in the V3 handoff.
+- Real defect found by the V3 tests — **in the tests, not the
+  implementation**: the first `AssertExactCoverage` sampled on a grid whose
+  points landed exactly on cut lines, where adjacent slices legitimately share
+  an edge, producing six spurious "covered 2 times" failures. The independent
+  overlap and area assertions passing throughout is what identified it as a
+  test artifact. Fixed by skipping samples within `1e-3` of any cut line and
+  asserting a minimum interior sample count so the check cannot silently
+  degrade.
 - Scene build: `GhostMap.Viewer.Editor.ViewerSceneBuilder.BuildScene` and
   `.VerifyScene` were both re-verified end-to-end — via a throwaway EditMode
   test (`Assert.DoesNotThrow(() => ViewerSceneBuilder.BuildScene())` /
@@ -175,16 +243,43 @@
 - `GhostMap.Viewer.UI.ViewerHudController` — diagnostics/Load-fixture HUD.
 - `GhostMap.Viewer.Rendering.FloorCeilingRenderer` — static;
   `TryBuildFloorMesh(RoomModel, out Mesh)`, `TryBuildCeilingMesh(RoomModel, out Mesh)`.
+- `GhostMap.Viewer.Rendering.WallSliceGenerator` — static;
+  `BuildSlices(float wallLengthM, float wallHeightM, IReadOnlyList<OpeningModel>)`
+  and an overload taking `IList<string> diagnostics`;
+  `MinSliceExtentM` constant (`1e-4`). `WallSlice` (`MinU`, `MaxU`, `MinV`,
+  `MaxV`, `WidthM`, `HeightM`, `CenterU`, `CenterV`) is the wall-local solid
+  rectangle it returns.
 - `GhostMap.Viewer.Rendering.WallRenderer` — static;
-  `BuildWalls(RoomModel) -> IReadOnlyList<WallRenderSpec>`;
+  `BuildWalls(RoomModel)` and `BuildWalls(RoomModel, IList<string> diagnostics)`
+  `-> IReadOnlyList<WallRenderSpec>`;
   `WallRenderSpec` (`StartCornerId`, `EndCornerId`, `Position`, `Rotation`,
-  `Scale`, `LengthM`); `WallThicknessM` constant (`0.10`).
+  `Scale`, `LengthM`, `Segments`);
+  `WallSegmentSpec` (`Slice`, `Position`, `Rotation`, `Scale`);
+  `WallThicknessM` constant (`0.10`).
 - `GhostMap.Viewer.Rendering.RoomRenderer` — `MonoBehaviour`;
   `Attach(ViewerSceneStore)`, `Detach()`, `Root` property.
 
 ## Known issues
-- None blocking V3. `Runtime/Interaction/` and `Runtime/Persistence/` are
+- None blocking V4. `Runtime/Interaction/` and `Runtime/Persistence/` are
   still empty — that is V5/V6's scope, not a defect.
+- **A window seen from outside is hard to read** with the current flat
+  `Unlit/Color` materials: through the hole you see the opposite wall in the
+  same colour. The geometry is correct (proved by the interior captures and by
+  the coverage/area tests); this is purely a shading limitation, and lit or
+  two-tone materials are not in V3's scope.
+- **Openings have no reveals/jambs.** The cut goes straight through the
+  `0.10 m` wall thickness with square edges. Section 12.3 does not ask for
+  returns.
+- The grid decomposition is **not minimal** — one door yields five segments
+  where three rectangles would do. That is exactly what the plan specifies, it
+  is deterministic, and the extra draw calls are irrelevant at MVP room sizes.
+  Do not collapse it into a merge pass without a reason.
+- `WallSliceGenerator`'s own overlap rule is true rectangle overlap, so two
+  openings sharing a horizontal span but with disjoint vertical spans are both
+  cut. `OpeningValidator` is **stricter** (any horizontal overlap on the same
+  wall is rejected) and runs first, so that case cannot arrive over the
+  network. The generator is a rendering failsafe, never a second source of
+  truth for validation.
 - **Sandbox environment finding, not a code defect**: `-executeMethod` batch
   runs hang indefinitely in this sandbox's headless Unity at the
   `Start Indexing on Editor startup` step (confirmed twice; killed after
@@ -215,13 +310,15 @@
   renders many rooms at once, which is not currently planned.
 
 ## Next safe task
-- **V3 — Wall openings.** `Rendering/WallSliceGenerator.cs` implements the
-  grid-cut segmentation from implementation plan section 12.3 as a pure
-  function (`BuildSlices(wallLength, wallHeight, openings) -> IReadOnlyList<WallSlice>`)
-  and `WallRenderer`/`RoomRenderer` render each slice instead of one solid
-  cuboid per wall, skipping slices whose center falls inside a door/window.
-  The `room-with-door-window-v1` fixture is the one to render a visible
-  doorway and window hole in.
+- **V4 — Parametric furniture + orbit/dollhouse camera** (implementation plan
+  section 17, Task V4). `Rendering/FurnitureFactory.cs` builds recognizable
+  primitive-composed objects per section 12.4 (bed, desk, chair, couch, table,
+  dresser, TV; `generic` may be a box), each root named by type + ID with one
+  selection collider covering its bounding box; `Rendering/FurnitureRenderer.cs`
+  populates the `Objects` placeholder `RoomRenderer` already creates;
+  `Interaction/OrbitCameraController.cs` replaces the fixed `RoomCamera` with
+  orbit/pan/zoom plus frame-room and a dollhouse preset that hides the ceiling
+  (section 13.1).
 
 ## Do not touch
 - `shared/**`, `fixtures/**`, `tools/**`, `docs/contracts/**`,

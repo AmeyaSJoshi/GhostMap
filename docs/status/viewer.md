@@ -2,7 +2,7 @@
 
 ## Current state
 - **ADR-0006 glTF asset export is IMPLEMENTED BUT UNVERIFIED.** On branch
-  `integration/furniture-detect-and-export` (head `f9b254e`), the Viewer writes
+  `integration/sweep-and-furniture`, the Viewer writes
   one binary glTF (`.glb`) per furniture object into
   `Application.persistentDataPath/ghostmap-assets/`, generated from the object's
   measured dimensions. New `Runtime/Export/GlbExporter.cs` (pure C#, returns

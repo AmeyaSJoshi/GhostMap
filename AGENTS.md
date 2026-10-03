@@ -21,6 +21,11 @@
    - update the workstream status,
    - create a handoff file,
    - commit.
+14. GhostMap's primary transfer UX is one-button **Send to Computer** after
+    finalization. Normal users must not be required to type IP addresses or
+    ports; manual addressing is a developer/debug fallback. Preserve the existing
+    TCP/full-snapshot transport beneath automatic discovery/pairing unless an ADR
+    explicitly replaces it. See `docs/decisions/ADR-0005-one-button-computer-transfer.md`.
 
 ---
 

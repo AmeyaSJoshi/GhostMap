@@ -27,7 +27,7 @@ Walls are **derived** from consecutive corners. They are never serialized.
 
 ```text
 ┌────────────────────────┐          ┌────────────────────────┐
-│  STANDARD IPHONE       │          │  LAPTOP                │
+│  STANDARD IPHONE       │          │  COMPUTER              │
 │  apps/scanner          │          │  apps/viewer           │
 │                        │          │                        │
 │  AR Foundation / ARKit │          │  TCP server :47831     │
@@ -170,6 +170,41 @@ See `docs/decisions/ADR-0002-snapshot-protocol.md`.
 Required MVP message types: `hello`, `heartbeat`, `phone.pose`, `scene.snapshot`,
 `scan.finalized`. `phone.pose` is debug/display only and capped at 5 Hz — the
 room is never reconstructed from pose messages.
+
+---
+
+### 6.1 Connection setup sits above the transport
+
+How the phone finds and connects to the computer is a separate concern from what
+it sends. Per `docs/decisions/ADR-0005-one-button-computer-transfer.md`, the
+primary user flow is one-button **Send to Computer** after finalization, and a
+normal user never types an IP address or port.
+
+```text
+Discovery / Pairing / Send UX      (connection setup; user-facing)
+              |
+        TCP connection
+              |
+protocol-v1 full SceneSnapshot messages
+              |
+Viewer scene store / editable scene
+              |
+        rendered room
+```
+
+Discovery and pairing are **connection setup, not a replacement scene
+protocol.** Everything below the first line (port 47831, framing, message types,
+revision arbitration, validation) is unchanged. Manual IP entry remains a
+developer/debug fallback only. The mechanism for discovery/pairing is not yet
+selected; it is decided in Integration `I1B`.
+
+The receiver is a **computer**, not specifically a Mac: macOS is the current
+development environment, and Windows is an intended future target that is not
+verified until it has a real build and integration test.
+
+Live snapshot streaming during a scan remains supported, but a user does not
+need it: the required workflow is scan locally, finalize, then send the complete
+current scene. Live preview may later become an optional feature.
 
 ---
 

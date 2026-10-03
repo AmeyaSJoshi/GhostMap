@@ -30,8 +30,8 @@ The MVP must do this:
 6. Let the user capture room height.
 7. Let the user add rectangular doors/windows to known walls.
 8. Let the user place a limited set of furniture objects with clean parametric geometry.
-9. Stream the current structured room snapshot to the laptop.
-10. Reconstruct the room live on the laptop.
+9. After finalization, transfer the complete room to the user's computer with one action (**Send to Computer**; no IP address or port entry for a normal user — see `docs/decisions/ADR-0005-one-button-computer-transfer.md`). Live preview while scanning is optional, not required.
+10. Reconstruct the room on the computer.
 11. Finalize the scan.
 12. Let the laptop user orbit the room, remove the roof, select furniture, drag it, resize it, rotate it, measure distances, save the scene, and reload it.
 
@@ -603,6 +603,7 @@ Create `AGENTS.md` with the following instructions:
    - update the workstream status,
    - create a handoff file,
    - commit.
+14. GhostMap's primary transfer UX is one-button **Send to Computer** after finalization. Normal users must not be required to type IP addresses or ports; manual addressing is a developer/debug fallback. Preserve the existing TCP/full-snapshot transport beneath automatic discovery/pairing unless an ADR explicitly replaces it. See `docs/decisions/ADR-0005-one-button-computer-transfer.md`.
 ```
 
 ---
@@ -2063,7 +2064,9 @@ git commit -m "feat(scanner): capture openings and parametric furniture"
 - iOS plist post-build script;
 - tests.
 
-Connection screen:
+Connection screen (**developer/debug surface only** — per ADR-0005 the normal
+user flow is one-button Send to Computer with automatic discovery, never manual
+IP/port entry):
 
 ```text
 Laptop IP: [             ]
@@ -2406,7 +2409,24 @@ V6 complete
 
 ---
 
-## Task I1: Real iPhone -> viewer live room
+## Task I1: Real iPhone -> computer transfer
+
+Per `docs/decisions/ADR-0005-one-button-computer-transfer.md`, I1 is **not**
+merely "type the laptop IP and prove Scanner <-> Viewer TCP". It has two parts
+that must stay separate:
+
+- **I1A** proves the existing transport works end to end on a real network and
+  gives a diagnostic baseline.
+- **I1B** proves the actual product flow: Finalize -> Send to Computer, with no
+  manual IP entry for a normal user.
+
+I1A may be done first. I1 is not complete until I1B passes. No discovery or
+pairing technology is selected by this plan; I1B begins with a design step that
+evaluates and tests candidates (see the open questions in ADR-0005).
+
+### I1A: Baseline end-to-end transport verification
+
+Developer/diagnostic task. Manual IP entry is allowed here and only here.
 
 Use the actual local network.
 
@@ -2430,7 +2450,40 @@ Procedure:
 16. disconnect/reconnect once;
 17. confirm viewer keeps last scene and scanner resends snapshot.
 
-Do not move to polish until this works three consecutive times.
+Do not start I1B acceptance until this works three consecutive times. If I1B
+later fails, re-running I1A separates a software/protocol fault from a
+discovery/pairing fault.
+
+### I1B: One-button transfer UX
+
+Goal: "Press one button and the GhostMap appears on your computer."
+
+Required outcome (acceptance, to be tightened by the I1B design step):
+
+1. The user scans and finalizes locally; a live connection is **not** required
+   while scanning.
+2. The user taps **Send to Computer**.
+3. The phone finds the user's computer without the user entering an IP address
+   or port. First use may need one small pairing step (choose a discovered
+   computer and/or scan a pairing QR); the computer is then remembered, and later
+   sessions need only Finalize -> Send to Computer.
+4. The complete current scene is delivered over the existing TCP / full-
+   `SceneSnapshot` transport (protocol v1 unchanged unless a shared-contract
+   change is made through the normal procedure).
+5. The Viewer reconstructs the room, and the user sees a clear success state.
+   "Success" must reflect actual receipt, not just a socket write; how the phone
+   learns this is an open design question (ADR-0005).
+6. If the remembered computer cannot be found, the user gets a simple retry /
+   choose-another-computer flow in plain language.
+7. Manual IP entry is hidden behind a developer/debug option.
+8. Works with no cloud service, account, or internet connection.
+9. Nothing in the transfer architecture intentionally depends on the receiver
+   being a Mac. Windows is not claimed until built and tested on Windows.
+
+Live streaming during a scan is retained as an optional capability but is not
+exercised or required by I1B.
+
+Do not move to polish until I1B works three consecutive times.
 
 Record failures in:
 
@@ -3129,7 +3182,7 @@ Before judges arrive:
 2. laptop connected to power;
 3. same stable Wi-Fi;
 4. Viewer already launched;
-5. laptop LAN IP confirmed;
+5. laptop LAN IP confirmed (developer fallback only; once I1B exists the demo uses Send to Computer and no IP is entered);
 6. scanner already granted camera/local-network permissions;
 7. one practice scan completed;
 8. demo area well lit;

@@ -7,7 +7,7 @@
 
 - **Project Name:** GhostMap
 - **Project Type:** Mobile spatial-mapping application + desktop 3D visualization system
-- **Primary Platform:** Standard non-Pro iPhone + laptop running Unity
+- **Primary Platform:** Standard non-Pro iPhone + a desktop computer running Unity (macOS is the current development environment; Windows is an intended, unverified future target)
 - **Primary Goal:** Turn a real physical room into a structured, editable 3D digital environment using only an ordinary iPhone.
 - **Core Idea:** Instead of producing a photorealistic scan or giant mesh, GhostMap represents the physical environment as meaningful objects such as:
   - Walls
@@ -66,7 +66,7 @@
   - Windows
   - Furniture
 - Represent every detected item as its own editable object.
-- Send scanning data to a laptop in real time.
+- Send the completed scan to the user's computer with one button (no IP address or port entry), per `docs/decisions/ADR-0005-one-button-computer-transfer.md`.
 - Reconstruct the room inside Unity.
 - Allow the user to:
   - Move objects
@@ -94,13 +94,31 @@
 - Procedural ceiling generation
 - Door placement
 - Basic furniture placement
-- Real-time communication between iPhone and laptop
+- One-button transfer of the completed scan from iPhone to computer (live preview while scanning is optional)
 - Unity 3D reconstruction
 - Dollhouse view
 - Object selection
 - Object movement
 - Object resizing
 - Distance measurement
+
+## Primary User Workflow
+
+The normal way a finished scan reaches the computer is deliberately simple:
+
+```text
+Scan
+  -> Finalize
+  -> Send to Computer
+  -> the room appears in the GhostMap Viewer
+```
+
+GhostMap automatically finds the user's computer on the local network and
+transfers the complete scene. A normal user never types an IP address or port
+and never needs to understand TCP or network settings. After a first-use pairing
+step, the computer is remembered. Manual IP entry exists only as a
+developer/debug fallback. No cloud service, account, or internet connection is
+required. See `docs/decisions/ADR-0005-one-button-computer-transfer.md`.
 
 ## MVP Example
 
@@ -245,10 +263,22 @@
 - User marks object boundaries.
 - GhostMap calculates an approximate bounding box.
 
-## FR-12: Real-Time Synchronization
+## FR-12: Live Preview (optional)
 
-- iPhone sends scene changes to the laptop.
-- Unity updates the scene without requiring a full reload.
+- While scanning, the iPhone may send the current scene snapshot to the computer
+  so the room can be watched live.
+- This is optional. A user must not need live streaming to transfer and use a
+  GhostMap (see FR-19).
+
+## FR-19: Send to Computer
+
+- After finalization, the user taps one **Send to Computer** button.
+- GhostMap automatically finds the user's computer and transfers the complete
+  scene; the user does not enter an IP address or port.
+- The computer is remembered after first-use pairing.
+- The user sees a clear success or plain-language failure/retry state.
+- Manual IP entry is a developer/debug fallback only.
+- See `docs/decisions/ADR-0005-one-button-computer-transfer.md`.
 
 ## FR-13: Object Editing
 
@@ -295,7 +325,7 @@
 
 ## Performance
 
-- Unity should update scene changes within roughly one second over a local network.
+- When live preview is in use, Unity should update scene changes within roughly one second over a local network.
 
 ## Usability
 
@@ -304,6 +334,7 @@
 ## Compatibility
 
 - Scanner should work on ARKit-compatible non-Pro iPhones.
+- The receiving desktop Viewer is a "computer", not specifically a Mac. macOS is the current development environment; Windows is an intended future target and is not claimed until verified on a real Windows build.
 
 ## Reliability
 
@@ -327,7 +358,7 @@
 - Floors are mostly horizontal.
 - User moves slowly while scanning.
 - Room has enough visual texture for ARKit tracking.
-- Phone and laptop are on the same local network.
+- Phone and computer are on the same local network (no internet connection is required).
 - Users can manually correct mistakes.
 
 ---
@@ -344,8 +375,9 @@
   - Network client
 
 - **Network Layer**
-  - WebSocket connection
-  - Sends structured scene events
+  - TCP connection (newline-delimited JSON, protocol v1)
+  - Sends full scene snapshots (no event replay; see ADR-0002)
+  - Automatic discovery / pairing above the transport (see ADR-0005)
 
 - **GhostMap Desktop Engine**
   - Receives spatial data
@@ -442,35 +474,34 @@ Room
 
 # 14. Network Messages
 
-Possible messages between the iPhone and laptop:
+The wire contract is frozen as **protocol v1** (`docs/contracts/protocol-v1.md`,
+`docs/decisions/ADR-0002-snapshot-protocol.md`). It sends the **entire current
+`SceneSnapshot`**; there are no per-mutation event messages and no event replay.
+(An earlier draft of this spec listed event messages such as `CORNER_ADDED` and
+`OBJECT_UPDATED`; those were superseded and are not part of the protocol.)
 
-- START_SCAN
-- STOP_SCAN
-- PHONE_POSE
-- FLOOR_DETECTED
-- CORNER_ADDED
-- CORNER_REMOVED
-- ROOM_HEIGHT
-- WALL_CREATED
-- DOOR_CREATED
-- WINDOW_CREATED
-- OBJECT_CREATED
-- OBJECT_UPDATED
-- OBJECT_DELETED
-- SAVE_SCENE
+Exactly five message types exist, over TCP, one JSON object per line:
 
-Example:
+- `hello`
+- `heartbeat`
+- `phone.pose` (debug/display only)
+- `scene.snapshot`
+- `scan.finalized`
+
+Example (shape only; see the contract for the real fields):
 
 ```json
 {
-  "type": "CORNER_ADDED",
-  "position": {
-    "x": 2.43,
-    "y": 0.00,
-    "z": 4.81
-  }
+  "protocolVersion": 1,
+  "type": "scene.snapshot",
+  "sessionId": "session-abc",
+  "snapshot": { "...": "full SceneSnapshot" }
 }
 ```
+
+How the phone finds and connects to the computer (automatic discovery and
+pairing, the user-facing **Send to Computer** flow) sits above this transport and
+is described in `docs/decisions/ADR-0005-one-button-computer-transfer.md`.
 
 ---
 
@@ -568,7 +599,7 @@ package "iPhone" {
 }
 
 package "Laptop" {
-    [WebSocket Server]
+    [TCP Server]
     [Scene Model]
     [Geometry Processor]
     [Unity Scene Builder]
@@ -584,9 +615,9 @@ package "Laptop" {
 [Scan Controller] --> [Spatial Raycasting]
 [Scan Controller] --> [Network Client]
 
-[Network Client] --> [WebSocket Server]
+[Network Client] --> [TCP Server]
 
-[WebSocket Server] --> [Scene Model]
+[TCP Server] --> [Scene Model]
 [Scene Model] --> [Geometry Processor]
 [Geometry Processor] --> [Unity Scene Builder]
 
@@ -767,15 +798,15 @@ Ray -> AR : Request world position
 AR --> Ray : XYZ coordinate
 Ray --> App : Corner position
 
-App -> Network : Send CORNER_ADDED
-Network -> Server : WebSocket message
-Server -> Room : Add corner
+App -> Network : Send scene.snapshot (full snapshot)
+Network -> Server : TCP message (protocol v1)
+Server -> Room : Apply snapshot
 
 User -> App : Mark remaining corners
 
-App -> Network : Send ROOM_HEIGHT
-Network -> Server : WebSocket message
-Server -> Room : Set room height
+App -> Network : Send scene.snapshot (full snapshot)
+Network -> Server : TCP message (protocol v1)
+Server -> Room : Apply snapshot
 
 Room -> Unity : Generate geometry
 Unity -> Unity : Create floor
@@ -886,7 +917,7 @@ node "Laptop" {
 "GhostMap Scanner" --> "ARKit"
 "ARKit" --> "Camera + IMU"
 
-"GhostMap Scanner" --> "Local Wi-Fi Network" : WebSocket
+"GhostMap Scanner" --> "Local Wi-Fi Network" : TCP (protocol v1)
 
 "Local Wi-Fi Network" --> "GhostMap Server"
 
@@ -1282,7 +1313,7 @@ node "Laptop" {
   - Generate walls, floor, and ceiling locally.
 
 - **Step 9**
-  - Build iPhone-to-laptop WebSocket connection.
+  - Build iPhone-to-computer TCP connection (protocol v1), then one-button Send to Computer.
 
 - **Step 10**
   - Reconstruct room inside Unity.

@@ -3,7 +3,7 @@
 > A camera normally gives software pixels. GhostMap gives software a room it can reason about.
 
 GhostMap turns one physical room into a structured, editable, machine-readable 3D
-scene using a **standard non-LiDAR iPhone** and a laptop.
+scene using a **standard non-LiDAR iPhone** and a desktop computer (macOS is the current dev environment; Windows is an intended, unverified future target).
 
 It does not produce a photorealistic mesh. It produces **semantic geometry**:
 ordered floor corners, derived walls, rectangular openings, and parametric
@@ -34,6 +34,11 @@ walls. After each structural change it sends the **entire current scene
 snapshot** over TCP as one line of JSON. The viewer stores the newest snapshot,
 validates it, and rebuilds the room. The scanner is authoritative until the scan
 is finalized; after that the viewer owns the editable copy.
+
+The intended user flow is **Scan → Finalize → Send to Computer**: a normal user
+never types an IP address or port. Automatic discovery/pairing is connection
+setup layered above this transport, not a replacement for it — see
+[`ADR-0005`](docs/decisions/ADR-0005-one-button-computer-transfer.md).
 
 Full detail: [`docs/architecture/overview.md`](docs/architecture/overview.md).
 
@@ -85,7 +90,7 @@ shared package from their own `Packages/manifest.json`:
 | Foundation `F0`–`F4` | Complete |
 | Scanner `S1`–`S6` | Complete, verified on a physical iPhone |
 | Viewer `V1`–`V6` | Complete (V6 merged in PR #12) |
-| Integration `I1`–`I4` | Not started. **Next: `I1` — real iPhone → Viewer live room** |
+| Integration `I1`–`I4` | Not started. **Next: `I1` — real iPhone → computer transfer** (`I1A` baseline transport, then `I1B` one-button Send to Computer) |
 
 Foundation, Scanner and Viewer workstreams are all done; only Integration
 remains before the MVP acceptance test.

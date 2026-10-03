@@ -94,3 +94,4 @@ or
 | 2026-09-17 | viewer | [V4 — furniture and orbit/dollhouse camera](2026-09-17-viewer-v4-objects-camera.md) |
 | 2026-09-18 | viewer | [V5 — object editing and measurement](2026-09-18-viewer-v5-edit-measure.md) |
 | 2026-09-19 | viewer | [V6 — persistence and polished HUD](2026-09-19-viewer-v6-persistence-hud.md) |
+| 2026-10-03 | shared | [Status docs refresh after V6](2026-10-03-shared-status-docs-refresh.md) |

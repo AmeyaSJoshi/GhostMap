@@ -97,4 +97,6 @@ or
 | 2026-10-03 | shared | [Status docs refresh after V6](2026-10-03-shared-status-docs-refresh.md) |
 | 2026-10-03 | scanner | [Sweep wall capture (ADR-0005), not compiled, not device-tested](2026-10-03-scanner-sweep-wall-capture.md) |
 | 2026-10-03 | integration | [Furniture detection + glTF asset export (ADR-0006), not compiled, not device-tested](2026-10-03-integration-furniture-detect-and-export.md) |
+| 2026-10-03 | integration | [UI overhaul + PR #16 integrated; compiled, all suites green, iOS build succeeds](2026-10-03-integration-ui-pr16-device-test.md) |
+| 2026-10-03 | scanner | [Furniture type pre-selected from ARKit plane label (ADR-0007), not device-tested](2026-10-03-scanner-furniture-type-suggestion.md) |
 | 2026-10-03 | integration | [Sweep + furniture merged into one branch, integration seam tested](2026-10-03-integration-sweep-and-furniture-merge.md) |

@@ -1,6 +1,12 @@
 # Scanner Status
 
 ## Current state
+- **2026-10-03 — ADR-0007: detected furniture now gets its type
+  pre-selected** from ARKit's plane label (Table / Seat) plus measured size, so
+  the usual flow is look, then tap Add. Owner-approved, narrowly scoped
+  exception to `AGENTS.md` rule 6 (see the ADR). Scanner **544/544** with the
+  iOS target. **Not device-verified.** See
+  `docs/handoffs/2026-10-03-scanner-furniture-type-suggestion.md`.
 - **2026-10-03 — PR #16 integrated into the UI overhaul; compiled, all suites
   green, iOS build succeeds. Awaiting the physical iPhone test.** Branch
   `integration/ui-pr16-device-test` (merge `c57718a`, scenes `9733e4c`).

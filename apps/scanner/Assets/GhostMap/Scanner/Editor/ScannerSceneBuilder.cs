@@ -137,7 +137,42 @@ namespace GhostMap.Scanner.Editor
                 ("crosshair", crosshair),
                 ("readoutText", floorLockReadout));
 
-            // Task S3 corner capture.
+            // ADR-0005 wall sweeping — the default capture path.
+            //
+            // Deliberately shares the S3 button row and readout area. SweepWalls
+            // and CaptureCorners are mutually exclusive phases and both HUDs
+            // blank themselves outside their own, so reusing the row adds no
+            // clutter to a screen the S5/S6 handoffs already flagged as
+            // crowded. Cancel and "Walk Corners Instead" share one slot for the
+            // same reason: one shows only while a sweep is running, the other
+            // only while none is.
+            Text sweepReadout = CreateWallSweepReadout(canvasGo);
+            Button sweepPrimaryButton = CreateActionButton(
+                canvasGo, "SweepWallButton", "Start Walls",
+                new Vector2(0f, S3ButtonRowY), new Vector2(380f, 110f), 32, out Text sweepPrimaryLabel);
+            Button sweepUndoButton = CreateActionButton(
+                canvasGo, "UndoWallButton", "Undo Wall",
+                new Vector2(-350f, S3ButtonRowY), new Vector2(300f, 110f), 30, out _);
+            Button sweepCancelButton = CreateActionButton(
+                canvasGo, "CancelSweepButton", "Cancel Sweep",
+                new Vector2(350f, S3ButtonRowY), new Vector2(300f, 110f), 28, out _);
+            Button walkCornersButton = CreateActionButton(
+                canvasGo, "WalkCornersButton", "Walk Corners Instead",
+                new Vector2(350f, S3ButtonRowY), new Vector2(300f, 110f), 22, out _);
+
+            var sweepHudGo = new GameObject("WallSweepHud", typeof(WallSweepHud));
+            AssignSerializedReferences(
+                sweepHudGo.GetComponent<WallSweepHud>(),
+                ("floorLockHud", floorLockHud),
+                ("spatialProvider", spatialProvider),
+                ("primaryButton", sweepPrimaryButton),
+                ("primaryButtonLabel", sweepPrimaryLabel),
+                ("cancelButton", sweepCancelButton),
+                ("undoButton", sweepUndoButton),
+                ("walkCornersButton", walkCornersButton),
+                ("readoutText", sweepReadout));
+
+            // Task S3 corner capture — retained as the ADR-0005 fallback.
             Text cornerReadout = CreateCornerReadout(canvasGo);
             Button primaryButton = CreateActionButton(
                 canvasGo, "CaptureCornerButton", "Start Corners",
@@ -358,6 +393,19 @@ namespace GhostMap.Scanner.Editor
                 Require(hud != null, "no FloorLockHud");
                 RequireAssigned(hud, "spatialProvider", "lockFloorButton", "crosshair", "readoutText");
 
+                var sweepHud = FindInScene<WallSweepHud>(scene);
+                Require(sweepHud != null, "no WallSweepHud");
+                RequireAssigned(
+                    sweepHud,
+                    "floorLockHud",
+                    "spatialProvider",
+                    "primaryButton",
+                    "primaryButtonLabel",
+                    "cancelButton",
+                    "undoButton",
+                    "walkCornersButton",
+                    "readoutText");
+
                 var cornerHud = FindInScene<CornerCaptureHud>(scene);
                 Require(cornerHud != null, "no CornerCaptureHud");
                 RequireAssigned(
@@ -558,6 +606,25 @@ namespace GhostMap.Scanner.Editor
         /// live crosshair projection, every captured corner in Ghost
         /// coordinates, and the closure result.
         /// </summary>
+        /// <summary>
+        /// The ADR-0005 sweep readout. Shares the S3 corner readout's area
+        /// (690-990) because the two phases are mutually exclusive and each HUD
+        /// blanks its own text outside its phase, so only one is ever populated.
+        /// </summary>
+        private static Text CreateWallSweepReadout(GameObject canvasGo)
+        {
+            Text text = CreateText(canvasGo, "WallSweepReadout", 26);
+
+            RectTransform rect = text.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(1f, 0f);
+            rect.pivot = new Vector2(0f, 0f);
+            rect.anchoredPosition = new Vector2(24f, 690f);
+            rect.sizeDelta = new Vector2(-48f, 300f);
+
+            return text;
+        }
+
         private static Text CreateCornerReadout(GameObject canvasGo)
         {
             Text text = CreateText(canvasGo, "CornerCaptureReadout", 26);

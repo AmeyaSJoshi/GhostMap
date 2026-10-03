@@ -128,17 +128,22 @@ namespace GhostMap.Scanner.UI
         {
             CornerCaptureController capture = workflow.Corners;
 
-            bool canStart = workflow.Phase == ScanPhase.FloorLocked;
             bool canCapture = workflow.Phase == ScanPhase.CaptureCorners && capture.CanCapture;
             bool canVerify = workflow.Phase == ScanPhase.VerifyClosure && capture.CanVerifyClosure;
 
+            // FloorLocked no longer belongs to this HUD. ADR-0005 makes
+            // sweeping the default route out of it, and WallSweepHud owns the
+            // same on-screen slot there; the walked path is entered from the
+            // sweep phase via "Walk Corners Instead". The
+            // FloorLocked -> CaptureCorners transition itself is retained in
+            // the workflow, so the controller-level path is unchanged.
             if (primaryButton != null)
             {
                 primaryButton.gameObject.SetActive(
-                    canStart || workflow.Phase == ScanPhase.CaptureCorners
+                    workflow.Phase == ScanPhase.CaptureCorners
                     || workflow.Phase == ScanPhase.VerifyClosure);
 
-                primaryButton.interactable = canStart || canCapture || canVerify;
+                primaryButton.interactable = canCapture || canVerify;
             }
 
             if (primaryButtonLabel != null)
@@ -172,9 +177,6 @@ namespace GhostMap.Scanner.UI
 
             switch (workflow.Phase)
             {
-                case ScanPhase.FloorLocked:
-                    return "Start Corners";
-
                 case ScanPhase.CaptureCorners:
                     return $"Capture Corner {capture.CornerCount + 1}/{CornerCaptureController.RequiredCornerCount}";
 
@@ -197,10 +199,6 @@ namespace GhostMap.Scanner.UI
 
             switch (workflow.Phase)
             {
-                case ScanPhase.FloorLocked:
-                    workflow.BeginCornerCapture();
-                    break;
-
                 case ScanPhase.CaptureCorners:
                     workflow.TryCaptureCorner(out _);
                     break;

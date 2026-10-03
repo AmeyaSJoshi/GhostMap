@@ -1,6 +1,36 @@
 # Scanner Status
 
 ## Current state
+- **ADR-0006 furniture detection is IMPLEMENTED BUT UNVERIFIED.** On branch
+  `integration/furniture-detect-and-export` (head `f9b254e`), the scanner reads
+  detected horizontal planes during the existing `AddObjects` phase and measures
+  each one as a furniture candidate: a horizontal plane at Ghost height `y` is
+  the top surface of something `y` tall, so footprint, yaw and — crucially —
+  height all fall out of one detection. The user picks the type; nothing is
+  recognized and nothing mutates the scene unconfirmed. New:
+  `FurnitureDetectionController`, `FurnitureDetectionHud`,
+  `ISpatialProvider.TryGetDetectedSurfaces`,
+  `ObjectPlacementController.TryAdoptDetectedObject`, shared
+  `RoomGeometry.ContainsPointXZ`. **No new `ScanPhase`, no schema change, no
+  protocol change.** Task S5 manual placement is retained and tested alongside.
+  - **`AGENTS.md` rule 6 is not overridden**: no recognition, no inference, no
+    cloud. `ADR-0004` is not weakened either — it rejected depending on *vertical*
+    plane detection, and this is the same horizontal detection the floor lock
+    already relies on. Plan section 25's "wait for the MVP acceptance test" gate
+    **is** deviated from, deliberately; `ADR-0006` records it.
+  - **Nothing was compiled and no test was run** — authored on a Linux machine
+    with no Unity, no `xcodebuild` and no iPhone. 77 tests across the branch were
+    written and have never executed.
+  - **`ScannerSceneTests` fails until `Scanner.unity` is regenerated**
+    (`GhostMap/Build Scanner Scene`): the committed scene has no
+    `FurnitureDetectionHud` and no `planeManager` on `ArSpatialProvider`.
+  - **No physical-device test.** Unlike most of this project, *nothing* about
+    detection quality can be established off-device.
+  - **Known to be wrong for chairs and couches**: the detected plane is the seat,
+    so the measured height is the seat height, not the object's. The user
+    corrects it with S5's existing controls, which is why detected objects go
+    into the same object store.
+  - See `docs/handoffs/2026-10-03-integration-furniture-detect-and-export.md`.
 - **S6 complete and verified on a physical iPhone against a real TCP
   listener.** The scanner now has a real TCP client
   (`ScannerNetworkClient`) implementing protocol v1 exactly: connect, `hello`

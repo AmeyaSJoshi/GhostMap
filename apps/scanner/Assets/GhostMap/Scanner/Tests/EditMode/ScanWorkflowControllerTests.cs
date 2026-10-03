@@ -38,9 +38,11 @@ namespace GhostMap.Scanner.Tests.EditMode
             var height = new HeightCaptureController(provider, floorLock, corners);
             var openingCapture = new OpeningCaptureController(provider, floorLock, corners, height);
             var objectPlacement = new ObjectPlacementController(provider, floorLock);
+            var furnitureDetection = new FurnitureDetectionController(provider, floorLock, corners);
 
             return new ScanWorkflowController(
-                floorLock, wallSweep, corners, height, openingCapture, objectPlacement);
+                floorLock, wallSweep, corners, height, openingCapture, objectPlacement,
+                furnitureDetection);
         }
 
         /// <summary>Ticks to FindFloor and locks, leaving the phase at FloorLocked.</summary>

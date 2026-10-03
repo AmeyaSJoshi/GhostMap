@@ -256,6 +256,74 @@ namespace GhostMap.Scanner.Capture
             return true;
         }
 
+        /// <summary>
+        /// Appends an object that was measured rather than aimed at — the output
+        /// of <see cref="FurnitureDetectionController.TryBuildSelected"/> under
+        /// ADR-0006.
+        ///
+        /// <para><b>Why this lives here.</b> The snapshot's <c>objects</c> array
+        /// comes from this controller, and so do S5's adjustment controls.
+        /// Giving detection its own object list would create a second source of
+        /// furniture and mean every consumer had to ask which one produced an
+        /// object. A detected object is an ordinary parametric object once
+        /// measured, so it belongs in the same store, and S5's `+`/`-`
+        /// adjustment then works on it unchanged — which matters, because
+        /// `ADR-0006` records that a detected chair's height is the seat rather
+        /// than the back, and the user has to be able to fix that.</para>
+        ///
+        /// <para>Validation is the same shared <see cref="FurnitureValidator"/>
+        /// a hand-placed object faces. Measuring a surface is not a licence to
+        /// skip the dimension rules.</para>
+        ///
+        /// <para><b>Tracking is deliberately not checked.</b> Unlike
+        /// <see cref="TryPlaceObject"/> this reads no camera ray — the surface
+        /// was already gated on tracking when it was detected and measured.</para>
+        /// </summary>
+        public bool TryAdoptDetectedObject(
+            SceneObjectModel model,
+            out ObjectPlacementRejection rejection)
+        {
+            LastError = string.Empty;
+
+            if (Frame == null)
+            {
+                rejection = ObjectPlacementRejection.FloorNotLocked;
+                LastRejection = rejection;
+                return false;
+            }
+
+            if (model == null)
+            {
+                rejection = ObjectPlacementRejection.ValidationFailed;
+                LastError = "No detected object to add.";
+                LastRejection = rejection;
+                return false;
+            }
+
+            if (!FurnitureValidator.IsSupportedType(model.type))
+            {
+                rejection = ObjectPlacementRejection.UnsupportedType;
+                LastRejection = rejection;
+                return false;
+            }
+
+            ValidationResult result = FurnitureValidator.Validate(model);
+
+            if (!result.IsValid)
+            {
+                LastError = result.Error;
+                rejection = ObjectPlacementRejection.ValidationFailed;
+                LastRejection = rejection;
+                return false;
+            }
+
+            objects.Add(model);
+
+            rejection = ObjectPlacementRejection.None;
+            LastRejection = rejection;
+            return true;
+        }
+
         // -------------------------------------------------------------------
         // Adjustment
         // -------------------------------------------------------------------

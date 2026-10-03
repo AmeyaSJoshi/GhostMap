@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.XR.ARSubsystems;
 
@@ -35,6 +36,60 @@ namespace GhostMap.Scanner.AR
     }
 
     /// <summary>
+    /// One detected AR plane, reduced to an oriented rectangle.
+    ///
+    /// <para>Introduced by <c>ADR-0006</c> for furniture detection. It exists
+    /// for the same reason <see cref="FloorHit"/> does: <c>ARPlane</c> is a
+    /// <c>MonoBehaviour</c> on a trackable owned by a live plane subsystem and
+    /// cannot be constructed in an EditMode test, which would push every
+    /// detection rule onto a phone to verify.</para>
+    ///
+    /// <para><see cref="WorldCenter"/> is the plane's centre in Unity world
+    /// space — <c>plane.transform.TransformPoint(plane.center)</c>, not
+    /// <c>transform.position</c>, because ARKit's observed centre drifts within
+    /// the plane's own space as it sees more of the surface.</para>
+    /// </summary>
+    public readonly struct DetectedSurface
+    {
+        public DetectedSurface(
+            TrackableId id,
+            Vector3 worldCenter,
+            Quaternion worldRotation,
+            Vector2 extentsM,
+            PlaneAlignment alignment)
+        {
+            Id = id;
+            WorldCenter = worldCenter;
+            WorldRotation = worldRotation;
+            ExtentsM = extentsM;
+            Alignment = alignment;
+        }
+
+        /// <summary>
+        /// Stable for the lifetime of the plane, which is what lets an accepted
+        /// surface be remembered so a growing plane is not added twice.
+        /// </summary>
+        public TrackableId Id { get; }
+
+        public Vector3 WorldCenter { get; }
+
+        /// <summary>
+        /// The plane's world rotation. Its local X and Z span the surface;
+        /// local Y is the normal.
+        /// </summary>
+        public Quaternion WorldRotation { get; }
+
+        /// <summary>
+        /// Observed extent in meters: <c>x</c> along the plane's local X,
+        /// <c>y</c> along its local Z. This is the part of the surface ARKit has
+        /// actually seen, which is a lower bound on the real object.
+        /// </summary>
+        public Vector2 ExtentsM { get; }
+
+        public PlaneAlignment Alignment { get; }
+    }
+
+    /// <summary>
     /// The scanner's seam onto AR Foundation. Everything that touches
     /// <c>ARSession</c>, <c>ARRaycastManager</c> or the AR camera goes through
     /// here, so capture logic can be tested without a device.
@@ -64,5 +119,16 @@ namespace GhostMap.Scanner.AR
 
         /// <summary>The AR camera's world pose. False when there is no camera.</summary>
         bool TryGetCameraPose(out Pose pose);
+
+        /// <summary>
+        /// Every currently detected plane, as oriented rectangles.
+        /// <c>ADR-0006</c> furniture detection reads horizontal ones; the
+        /// caller filters by <see cref="DetectedSurface.Alignment"/>.
+        ///
+        /// <para>Fills <paramref name="into"/> rather than allocating, because
+        /// the HUD refreshes this while the user is looking around.</para>
+        /// </summary>
+        /// <returns>False when plane detection is unavailable.</returns>
+        bool TryGetDetectedSurfaces(List<DetectedSurface> into);
     }
 }

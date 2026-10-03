@@ -1,6 +1,33 @@
 # Viewer Status
 
 ## Current state
+- **ADR-0006 glTF asset export is IMPLEMENTED BUT UNVERIFIED.** On branch
+  `integration/furniture-detect-and-export` (head `f9b254e`), the Viewer writes
+  one binary glTF (`.glb`) per furniture object into
+  `Application.persistentDataPath/ghostmap-assets/`, generated from the object's
+  measured dimensions. New `Runtime/Export/GlbExporter.cs` (pure C#, returns
+  bytes) and `Runtime/Export/FurnitureAssetExporter.cs` (atomic file writes,
+  per-object results so one bad object does not abort the rest), plus an
+  **Export Assets** button gated by `ViewerHudController.CanExportAssets` —
+  everything `CanSave` requires per `ADR-0003`, plus at least one object.
+  - **Geometry comes from `FurnitureFactory.BuildParts`**, the same pure
+    function the renderer uses, so an exported asset matches the screen by
+    construction. `FurnitureFactory.ColorFor` was added for the same reason:
+    one colour table, not a copy.
+  - **No rendering change and no change to what the Viewer displays.** No schema
+    or protocol change.
+  - **Furniture only.** There is no whole-room `.glb`; the walls are a segmented
+    grid with openings cut out and the floor/ceiling are triangulated
+    separately, so a room export is a larger job and `ADR-0006` declines to
+    claim it.
+  - **Nothing was compiled and no test was run** (Linux, no Unity). 26 new
+    viewer tests exist and have never executed.
+  - **The Viewer scene test fails until `Viewer.unity` is regenerated**: the
+    committed scene has no `ExportAssetsButton`.
+  - **No exported file has been opened in an external tool.** The container is
+    asserted byte by byte in tests that have not run; that is not the same as a
+    `.glb` Blender will accept.
+  - See `docs/handoffs/2026-10-03-integration-furniture-detect-and-export.md`.
 - **V6 complete: scene persistence and a polished HUD** (implementation
   plan section 17 Task V6). This completes the Viewer MVP (V1-V6).
   - `Runtime/Persistence/ScenePersistence.cs` — **new**, plain C#. `TrySave`/

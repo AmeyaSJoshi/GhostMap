@@ -66,7 +66,10 @@ Geometry (`GhostMap.Shared.Geometry`):
   `GhostDirectionToWorld`, `WorldRayToGhost`, `GhostRayToWorld`, `FloorWorldY`
 - `RayPlaneMath` — `TryIntersectHorizontalPlane`, `TryIntersectPlane`
 - `RoomGeometry` — `PolygonAreaXZ`, `SignedPolygonAreaXZ`, `HasSelfIntersectionXZ`,
-  `BuildWalls`, `TryFindWall`, `InteriorAngleDeg`
+  `BuildWalls`, `TryFindWall`, `InteriorAngleDeg`, `ContainsPointXZ`
+  (`ContainsPointXZ` added by `ADR-0006` on branch
+  `integration/furniture-detect-and-export` — **written but never compiled or
+  run**; 9 tests exist and have not executed)
 - `WallGeometry` — `Normal`, `PlaneFor`, `ToWallLocal`, `FromWallLocal`, `ContainsSpan`
 - `WallFitting` — `TryFitWallLine`, `TryIntersectWallLinesXZ`, `TryDeriveCorners`;
   `WallLine` and `WallFitRejection`; limit constants `RequiredWallCount`,

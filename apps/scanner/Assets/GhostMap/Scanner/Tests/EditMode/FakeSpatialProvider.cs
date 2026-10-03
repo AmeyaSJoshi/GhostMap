@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using GhostMap.Scanner.AR;
 using UnityEngine;
 using UnityEngine.XR.ARSubsystems;
@@ -69,6 +70,37 @@ namespace GhostMap.Scanner.Tests.EditMode
         {
             pose = CameraPose;
             return HasCameraPose;
+        }
+
+        /// <summary>
+        /// Planes the scripted session has "detected". ADR-0006 furniture
+        /// detection reads these; set them per test.
+        /// </summary>
+        public List<DetectedSurface> DetectedSurfaces { get; } = new List<DetectedSurface>();
+
+        /// <summary>False makes plane detection itself unavailable.</summary>
+        public bool HasPlaneDetection { get; set; } = true;
+
+        public int DetectedSurfaceRequestCount { get; private set; }
+
+        public bool TryGetDetectedSurfaces(List<DetectedSurface> into)
+        {
+            DetectedSurfaceRequestCount++;
+
+            if (into == null)
+            {
+                return false;
+            }
+
+            into.Clear();
+
+            if (!HasPlaneDetection)
+            {
+                return false;
+            }
+
+            into.AddRange(DetectedSurfaces);
+            return true;
         }
     }
 }

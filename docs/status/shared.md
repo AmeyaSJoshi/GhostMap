@@ -11,8 +11,8 @@
 - `shared/TestProject/` is a minimal Unity host project that exists solely to run
   the shared package's EditMode tests. It contains no application code.
 - **Capture geometry and validation are implemented.** `Runtime/Geometry/`
-  holds `GhostCoordinateFrame`, `RayPlaneMath`, `RoomGeometry`, `WallGeometry`
-  and `MeasurementMath`. `Runtime/Validation/` holds `RoomValidator`,
+  holds `GhostCoordinateFrame`, `RayPlaneMath`, `RoomGeometry`, `WallGeometry`,
+  `WallFitting` and `MeasurementMath`. `Runtime/Validation/` holds `RoomValidator`,
   `OpeningValidator` and `FurnitureValidator`. The support types
   `ValidationResult` and `WallDefinition` live in `Runtime/Domain/`.
 - **Protocol v1 is frozen.** `Runtime/Protocol/` holds `ProtocolConstants`,
@@ -68,6 +68,11 @@ Geometry (`GhostMap.Shared.Geometry`):
 - `RoomGeometry` — `PolygonAreaXZ`, `SignedPolygonAreaXZ`, `HasSelfIntersectionXZ`,
   `BuildWalls`, `TryFindWall`, `InteriorAngleDeg`
 - `WallGeometry` — `Normal`, `PlaneFor`, `ToWallLocal`, `FromWallLocal`, `ContainsSpan`
+- `WallFitting` — `TryFitWallLine`, `TryIntersectWallLinesXZ`, `TryDeriveCorners`;
+  `WallLine` and `WallFitRejection`; limit constants `RequiredWallCount`,
+  `MinSampleCount`, `MinSpanM`, `MinIntersectionAngleDeg` (added by `ADR-0005`
+  on branch `scanner/sweep-wall-capture` — **written but never compiled or
+  run**; 32 tests exist and have not executed)
 - `MeasurementMath` — `Distance`, `DistanceXZ`, `RoomAreaM2`, `RoomVolumeM3`, `RoomPerimeterM`
 
 Protocol (`GhostMap.Shared.Protocol`):
@@ -85,7 +90,17 @@ Validation (`GhostMap.Shared.Validation`):
 - `ClosureQuality` — `Excellent`, `Acceptable`, `Rejected`
 
 ## Known issues
-- None blocking.
+- **`WallFitting` has never been compiled or run.** It was added by `ADR-0005`
+  on branch `scanner/sweep-wall-capture`, authored on a machine with no Unity.
+  Its 32 tests exist and have not executed. Until the shared suite runs on a
+  machine with Unity, treat the whole class as unproven — the eigen
+  decomposition in `TryFitWallLine` is the part most likely to be wrong.
+- `WallFitting`'s gates (`MinSampleCount`, `MinSpanM`,
+  `MinIntersectionAngleDeg`) are capture-time conditioning guards, **not**
+  serialized validation rules, so they deliberately have no counterpart in
+  `tools/inspect_snapshot.py`. `RoomValidator` remains the only authority on
+  whether a footprint is legal, and the swept path runs it unchanged. If any of
+  these ever becomes a wire-visible rule, the parity rule below applies to it.
 - `tools/inspect_snapshot.py` deliberately re-implements the shared validation
   rules in Python and is therefore a standing parity risk. The F4 review found
   four divergences. **Any change to a shared validation limit or rule must be

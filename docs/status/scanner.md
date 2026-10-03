@@ -1,6 +1,31 @@
 # Scanner Status
 
 ## Current state
+- **ADR-0005 sweep wall capture is IMPLEMENTED BUT UNVERIFIED.** On branch
+  `scanner/sweep-wall-capture` (head `423bd29`), the user stands, turns, and
+  sweeps the center-screen ray along each wall's floor junction; each sweep is
+  fitted to a line by total least squares and the four corners are derived by
+  intersecting consecutive wall lines. No walking, and a corner hidden behind
+  furniture no longer blocks a scan. New: shared `WallFitting`,
+  `WallSweepController`, `CornerCaptureController.TryAdoptDerivedCorners`,
+  `ScanPhase.SweepWalls`, `WallSweepHud`. The swept path hands its derived
+  corners to the single corner store, so closure verification, height capture,
+  openings and `BuildSnapshot` are unchanged. No schema, protocol or viewer
+  change. The Task S3 walked path is retained as a fallback, entered from the
+  sweep phase.
+  - **Nothing was compiled and no test was run** — authored on a Linux machine
+    with no Unity, no `xcodebuild` and no iPhone. 89 tests were written and have
+    never executed.
+  - **`ScannerSceneTests` fails until `Scanner.unity` is regenerated**
+    (`GhostMap/Build Scanner Scene`). The committed scene has no `WallSweepHud`.
+  - **No physical-device test.** Per `AGENTS.md` rule 12 this is not working
+    until it runs on a real iPhone.
+  - **The accuracy ceiling is real**: aim error at the floor grows with roughly
+    the square of aim distance, and a systematic aim bias produces a uniformly
+    oversized room with a clean-looking residual that no automated check can
+    detect. Only Task `I2`'s tape measure can. Full analysis in `ADR-0005` and
+    the handoff.
+  - See `docs/handoffs/2026-10-03-scanner-sweep-wall-capture.md`.
 - **S6 complete and verified on a physical iPhone against a real TCP
   listener.** The scanner now has a real TCP client
   (`ScannerNetworkClient`) implementing protocol v1 exactly: connect, `hello`
@@ -1314,6 +1339,35 @@ physical-device test from passing.
 - The manual height fallback commits immediately on button press; there is no
   confirmation step. A mistyped value is only caught by the 2.0-4.0 m range
   check, not by asking the user to re-enter it.
+
+### Scene / runtime — new in ADR-0005 sweep capture
+- **Nothing in the sweep path has been compiled, run or device-tested.** See the
+  Current state entry above and the handoff.
+- Sweep order sets the room's winding. Sweeping the four walls out of order
+  produces a self-intersecting footprint, which `RoomValidator` correctly
+  refuses — but the message talks about self-intersection rather than order, so
+  a user who swept them in the wrong sequence gets a confusing explanation.
+- `MinSampleSpacingM` is a fixed 0.01 m in Ghost space, so a far sweep banks
+  samples faster per degree of pan than a close one. Sample count is therefore
+  not comparable between near and far sweeps, and the on-screen `pts` figure
+  should not be read as a quality measure on its own.
+- The swept-extent markers show where the fit was computed from, not the derived
+  corners. A wall whose markers sit well short of the real corners is a long
+  extrapolation — which is the intended reading, but it means the markers do not
+  look like the room until **Build Room** is pressed.
+- `WallSweepHud` samples in `Update()` while a sweep is active. That is one
+  ray-plane intersection per frame and publishes nothing, but it is the one
+  per-frame code path the sweep adds, and it has never run on hardware.
+- Sweeping is a tap-to-start/tap-to-finish toggle rather than a held button, so
+  a sweep left running keeps sampling until the user taps Finish or Cancel.
+  `MaxSamplesPerWall` (2048) bounds the memory, not the duration.
+- The walked-corner fallback is no longer reachable from `FloorLocked` in the
+  UI — `CornerCaptureHud` released that slot to `WallSweepHud`. It is entered
+  from the sweep phase via **Walk Corners Instead**. The
+  `FloorLocked -> CaptureCorners` workflow transition itself is unchanged.
+- Two capture paths now exist for the same four corners. Deliberate until
+  device numbers justify removing one; `ADR-0005` requires a new ADR to remove
+  the fallback.
 
 ### Scene / runtime — new in S6
 - The S2-S5 bottom button/readout stack is untouched and still runs past the

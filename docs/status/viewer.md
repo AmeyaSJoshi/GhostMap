@@ -1,6 +1,65 @@
 # Viewer Status
 
 ## Current state
+- **V6 complete: scene persistence and a polished HUD** (implementation
+  plan section 17 Task V6). This completes the Viewer MVP (V1-V6).
+  - `Runtime/Persistence/ScenePersistence.cs` — **new**, plain C#. `TrySave`/
+    `TryLoad` persist/restore the exact frozen `SceneSnapshot` type via
+    `JsonUtility` — the same serializer/DTO the wire protocol and
+    `FixtureLoader` already use, never a duplicate schema. Writes are atomic
+    (temp file + `File.Replace`/`Move`); loads run the same
+    well-formedness + domain validation every scanner snapshot goes
+    through before ever touching the displayed scene.
+  - `Runtime/Scene/SceneSnapshotValidator.cs` — **new**, extracted verbatim
+    from `ViewerSceneStore`'s former private validation method, so
+    `ScenePersistence` and `ViewerSceneStore` share exactly one
+    "is this a legal room" check rather than two copies.
+  - `ViewerEditableScene.LoadExternalSnapshot(SceneSnapshot, out error)` —
+    **new**. Installs a loaded scene through the same clone-and-`Changed`
+    path a scanner finalized snapshot uses (no second rendering path).
+    **Authority rule (`ADR-0003`), corrected by a post-review fix on this
+    branch**: only a snapshot whose own `finalized` flag is already `true`
+    may be installed — anything else is rejected outright, `Current` is
+    left completely untouched, and `EditingEnabled` is then derived from
+    `Current.finalized` (never hard-coded true). Also re-runs
+    `SceneSnapshotValidator` itself as defense in depth for this public
+    scene-replacement boundary. Once installed, this reuses V5's existing
+    same-session guard unmodified: a stale/duplicate reconnect resend of
+    the loaded session is ignored (the loaded/edited scene is protected); a
+    genuinely new scanner session still replaces it, per `ADR-0003`.
+  - **Save always persists `ViewerEditableScene.Current`**, never the raw
+    `ViewerSceneStore.Current` — the effective, post-finalization,
+    locally-edited state, proved by a dedicated test that the two diverge
+    and the saved file matches the edited one.
+  - **Save/Load are gated at the HUD boundary (`ADR-0003`), added by the
+    same post-review fix**: `ViewerHudController.CanSave` requires a
+    finalized, Viewer-owned scene (refuses an unfinalized, Scanner-owned
+    one — "Save unavailable until the scan is finalized."), and
+    `ViewerHudController.CanLoad` refuses to replace a Scanner-owned,
+    in-progress scan ("Finish or reset the active scan before loading a
+    saved room."). A successful Load also calls
+    `ViewerHudController.ResetTransientStateAfterLoad()`, clearing the
+    previous selection and measurement and re-framing the camera on the
+    newly loaded room — never on a failed load.
+  - `ViewerHudController` gains **Save**/**Load** buttons (single fixed
+    slot at `Application.persistentDataPath/ghostmap-scene.json`, so — unlike
+    the V1 "Load fixture" dev button's repo-relative path — it resolves
+    correctly in a standalone player build too), a **shortened session id**
+    in the status line, an explicit **"Waiting for a scanner
+    connection..."** message before any scene exists, and protocol v1
+    section 6's exact required **"Disconnected — displaying last
+    snapshot."** message (a gap that existed since V1). Reset View,
+    Dollhouse, and "Load fixture" are unchanged.
+  - **Decision**: the inspector's own Measure/Clear-measurement buttons
+    stay owned by `InspectorPanelController`, unchanged from V5 — both
+    drive the single real `MeasurementController` from the same Canvas
+    button column `ViewerSceneBuilder` builds, so there is no second
+    source of truth to consolidate. Full rationale in the V6 handoff.
+  - See the V6 handoff for the full end-to-end persistence smoke test
+    (save -> discard all in-memory state -> load into brand-new
+    components -> confirm the edit, room, Dollhouse, Measure, and
+    selection/editing all still work) and the standalone macOS build
+    verification.
 - **V5 complete: object selection, editing, and measurement**
   (implementation plan section 17 Task V5; interaction rules in sections
   13.2-13.5).
@@ -319,10 +378,20 @@
   (V5/V6 own them). `Runtime/Rendering/` is now populated (V2).
 
 ## Last verified commit
-- V5 implementation (this branch). Previous: `4ed9c67` (V4), `79d49c0` (V3),
-  `197d4bd` (V2).
+- V6 implementation (this branch). Previous: `660ad61` (V5), `4ed9c67` (V4),
+  `79d49c0` (V3), `197d4bd` (V2).
 
 ## Tests run
+- **V6 result (after the post-review persistence-authority fix): 475 tests,
+  475 passed, 0 failed, 0 skipped.** Unity exit code `0`. That is the prior
+  430 (V1-V5, unchanged) + 28 first-pass V6 tests (23 `ScenePersistenceTests`,
+  10 `ViewerEditableSceneLoadTests` after the fix added more to each) +
+  **12 new `ViewerHudControllerPersistenceGatingTests`** covering
+  `CanSave`/`CanLoad`/`ResetTransientStateAfterLoad`. Shared `TestProject`
+  re-run standalone: **156 tests, 156 passed, 0 failed** — no file under
+  `shared/**` was touched. Full breakdown, the end-to-end
+  persistence smoke test, and the standalone macOS build verification are
+  in the V6 handoff.
 - Command:
   ```bash
   /Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app/Contents/MacOS/Unity \
@@ -454,7 +523,16 @@
   two above; `Pump()`, `LoadFixture(string)`.
 - `GhostMap.Viewer.Bootstrap.ViewerBootstrap` — the `MonoBehaviour` wrapper;
   `Session` property.
-- `GhostMap.Viewer.UI.ViewerHudController` — diagnostics/Load-fixture HUD.
+- `GhostMap.Viewer.UI.ViewerHudController` — diagnostics/Load-fixture/
+  Save/Load HUD. `CanSave(ViewerEditableScene)` and
+  `CanLoad(ViewerEditableScene)` (both `public static`, V6 post-review fix)
+  are the pure/testable Save/Load authority gates (`ADR-0003`), the same
+  split `ViewerInteractionRouter.IsClick` already established.
+  `ResetTransientStateAfterLoad()` (public instance method, same fix) clears
+  selection/measurement and re-frames the camera after a successful Load.
+  `SetSelectionController`/`SetMeasurementController`/`SetCameraController`
+  are test-wiring setters mirroring every other interaction controller's
+  `SetX` pattern.
 - `GhostMap.Viewer.Rendering.FloorCeilingRenderer` — static;
   `TryBuildFloorMesh(RoomModel, out Mesh)`, `TryBuildCeilingMesh(RoomModel, out Mesh)`.
 - `GhostMap.Viewer.Rendering.WallSliceGenerator` — static;
@@ -497,9 +575,18 @@
 - `GhostMap.Viewer.Scene.IViewerSceneSource` — **new**, V5. `Current`,
   `event Changed`. Implemented by both `ViewerSceneStore` and
   `ViewerEditableScene`.
-- `GhostMap.Viewer.Scene.ViewerEditableScene` — **new**, V5. `Current`,
+- `GhostMap.Viewer.Scene.ViewerEditableScene` — V5, extended V6. `Current`,
   `EditingEnabled`, `event Changed`, `Attach(IViewerSceneSource)`,
-  `Detach()`, `TryApplyLocalEdit(SceneObjectModel, out string)`.
+  `Detach()`, `TryApplyLocalEdit(SceneObjectModel, out string)`,
+  `LoadExternalSnapshot(SceneSnapshot, out string)` (**new**, V6).
+- `GhostMap.Viewer.Scene.SceneSnapshotValidator` — **new**, V6; `internal`
+  static. `TryValidate(SceneSnapshot, out string)`. Shared by
+  `ViewerSceneStore` and `Persistence.ScenePersistence` — the one place a
+  full snapshot's room/openings/objects are checked against the shared
+  validators.
+- `GhostMap.Viewer.Persistence.ScenePersistence` — **new**, V6; static,
+  plain C#. `TrySave(SceneSnapshot, string path, out string)`,
+  `TryLoad(string path, out SceneSnapshot, out string)`.
 - `GhostMap.Viewer.Interaction.SelectionOutlineBuilder` — **new**, V5;
   static, pure. `BuildEdges(widthM, depthM, heightM[, thicknessM,
   marginM]) -> SelectionEdgeBar[12]`; `DefaultThicknessM`, `DefaultMarginM`.
@@ -527,8 +614,14 @@
   numeric `InputField`s, and the measurement toggle/clear buttons.
 
 ## Known issues
-- None blocking V6. `Runtime/Persistence/` is still empty — that is V6's
-  scope, not a defect.
+- **None blocking Integration.** V1-V6 are complete; the next safe task is
+  I1. A post-review pass fixed four persistence-authority bugs on
+  `viewer/v6-persistence-hud` (Save/Load were not properly gated by
+  `ADR-0003`, and a successful Load did not reset selection/measurement/
+  camera state) — see the V6 handoff's "Post-review fix" section for full
+  detail. Remaining V6-specific limitations (single save slot, no
+  confirmation-before-overwrite) are documented in full in the V6 handoff
+  and are deliberate MVP-scope decisions, not defects.
 - **In dollhouse mode the near wall still occludes furniture standing against
   it.** Only the ceiling is hidden, which is exactly what section 12.2
   specifies; orbiting or raising the pitch reveals them. Wall fading is not
@@ -631,10 +724,10 @@
 - No physical-device testing applies to this workstream (desktop app).
 
 ## Next safe task
-- **V6 — Persistence and a polished Viewer HUD** (implementation plan
-  section 17, Task V6). Save/load the locally-edited scene, and clean up the
-  HUD now that selection/editing/measurement are live. Do not begin
-  Integration from here.
+- **The Viewer MVP (V1-V6) is complete.** The next safe task is
+  **I1 — real iPhone -> Viewer live room** (implementation plan section 18),
+  which requires S6 (done) and V6 (this task, done). Do not begin I1 from
+  this branch.
 
 ## Do not touch
 - `shared/**`, `fixtures/**`, `tools/**`, `docs/contracts/**`,

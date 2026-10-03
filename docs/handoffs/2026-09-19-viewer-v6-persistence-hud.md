@@ -8,9 +8,8 @@
 and Viewer V1-V5 complete)
 
 ## Head commit
-`3017e37` (V6 implementation), fixed by a follow-up commit on this same
-branch — persistence-authority fix (this branch, pending commit at
-hand-off time); see "Post-review fix" immediately below.
+`3017e37` (V6 implementation), fixed by `b9fa1f5` (persistence-authority
+fix, same branch); see "Post-review fix" immediately below.
 
 ## Post-review fix: ADR-0003 persistence authority (supersedes parts of
 "What changed" below)

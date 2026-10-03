@@ -1548,3 +1548,13 @@ passing test is not the same evidence as a passing phone.
 - `shared/**`, `fixtures/**`, `tools/**`, `docs/contracts/**`, `docs/decisions/**`
   — owned by the Shared/Integration workstream.
 - `apps/viewer/**` — owned by the Viewer workstream.
+
+
+---
+
+## Hackathon: automatic room scan (2026-10-03)
+
+Branch `hackathon/auto-room-scan`. *Scan Room* derives the four walls from ARKit
+vertical planes during one standing turn and feeds the existing corner store; see
+`docs/handoffs/2026-10-03-scanner-auto-room-scan.md`. Scanner EditMode **571/571**
+(27 new), iOS build succeeded. **Physical-device behavior unverified** (AGENTS.md rule 12).

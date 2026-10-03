@@ -21,6 +21,19 @@ namespace GhostMap.Scanner.Workflow
         WrongPhase
     }
 
+    /// <summary>Why the automatic room scan could not be finished. <see cref="None"/> means it succeeded.</summary>
+    public enum AutoScanRejection
+    {
+        None = 0,
+        WrongPhase,
+
+        /// <summary>The walls seen so far do not close into a room.</summary>
+        NoRoomYet,
+
+        /// <summary>The shared room validator refused the derived footprint.</summary>
+        RoomRejected
+    }
+
     /// <summary>
     /// Owns the scan phase, the session identity, the revision counter and the
     /// current <see cref="SceneSnapshot"/>. It is the only thing permitted to
@@ -48,7 +61,14 @@ namespace GhostMap.Scanner.Workflow
                 { ScanPhase.Boot, new[] { ScanPhase.WaitingForTracking } },
                 { ScanPhase.WaitingForTracking, new[] { ScanPhase.FindFloor } },
                 { ScanPhase.FindFloor, new[] { ScanPhase.FloorLocked } },
-                { ScanPhase.FloorLocked, new[] { ScanPhase.SweepWalls, ScanPhase.CaptureCorners } },
+                {
+                    ScanPhase.FloorLocked,
+                    new[] { ScanPhase.AutoScanRoom, ScanPhase.SweepWalls, ScanPhase.CaptureCorners }
+                },
+                {
+                    ScanPhase.AutoScanRoom,
+                    new[] { ScanPhase.CaptureHeight, ScanPhase.SweepWalls, ScanPhase.CaptureCorners, ScanPhase.FloorLocked }
+                },
                 { ScanPhase.SweepWalls, new[] { ScanPhase.VerifyClosure, ScanPhase.CaptureCorners } },
                 { ScanPhase.CaptureCorners, new[] { ScanPhase.VerifyClosure } },
                 {
@@ -57,9 +77,9 @@ namespace GhostMap.Scanner.Workflow
                 },
                 {
                     ScanPhase.CaptureHeight,
-                    new[] { ScanPhase.AddOpenings, ScanPhase.CaptureCorners, ScanPhase.SweepWalls }
+                    new[] { ScanPhase.AddOpenings, ScanPhase.CaptureCorners, ScanPhase.SweepWalls, ScanPhase.AutoScanRoom }
                 },
-                { ScanPhase.AddOpenings, new[] { ScanPhase.AddObjects, ScanPhase.CaptureHeight } },
+                { ScanPhase.AddOpenings, new[] { ScanPhase.AddObjects, ScanPhase.CaptureHeight, ScanPhase.AutoScanRoom } },
                 { ScanPhase.AddObjects, new[] { ScanPhase.ReadyToFinalize, ScanPhase.AddOpenings } },
                 { ScanPhase.ReadyToFinalize, new[] { ScanPhase.Finalized } },
                 { ScanPhase.Finalized, Array.Empty<ScanPhase>() }
@@ -72,6 +92,7 @@ namespace GhostMap.Scanner.Workflow
         private readonly OpeningCaptureController openingCapture;
         private readonly ObjectPlacementController objectPlacement;
         private readonly FurnitureDetectionController furnitureDetection;
+        private readonly AutoRoomScanController autoScan;
 
         private bool isFinalized;
 
@@ -82,7 +103,8 @@ namespace GhostMap.Scanner.Workflow
             HeightCaptureController height,
             OpeningCaptureController openingCapture,
             ObjectPlacementController objectPlacement,
-            FurnitureDetectionController furnitureDetection)
+            FurnitureDetectionController furnitureDetection,
+            AutoRoomScanController autoScan = null)
         {
             this.floorLock = floorLock;
             this.wallSweep = wallSweep;
@@ -91,6 +113,7 @@ namespace GhostMap.Scanner.Workflow
             this.openingCapture = openingCapture;
             this.objectPlacement = objectPlacement;
             this.furnitureDetection = furnitureDetection;
+            this.autoScan = autoScan;
             SessionId = Guid.NewGuid().ToString();
             RoomId = Guid.NewGuid().ToString();
             Phase = ScanPhase.Boot;
@@ -130,6 +153,12 @@ namespace GhostMap.Scanner.Workflow
 
         /// <summary>ADR-0006 furniture detection. Read-only from outside the workflow.</summary>
         public FurnitureDetectionController FurnitureDetection => furnitureDetection;
+
+        /// <summary>The automatic room scan. Null in a workflow built without one.</summary>
+        public AutoRoomScanController Auto => autoScan;
+
+        /// <summary>True when the current footprint came from the automatic scan.</summary>
+        public bool RoomWasAutoScanned { get; private set; }
 
         /// <summary>
         /// Advances the pre-floor-lock phases from tracking quality. Boot
@@ -176,6 +205,135 @@ namespace GhostMap.Scanner.Workflow
             }
 
             TransitionTo(ScanPhase.FloorLocked);
+            Publish();
+            return true;
+        }
+
+        // -------------------------------------------------------------------
+        // Automatic room scan — the default path (hackathon)
+        // -------------------------------------------------------------------
+
+        /// <summary>
+        /// Leaves <see cref="ScanPhase.FloorLocked"/> for
+        /// <see cref="ScanPhase.AutoScanRoom"/> and starts watching ARKit's
+        /// planes. Publishes nothing: no structural change yet.
+        /// </summary>
+        public bool BeginAutoScan(float now)
+        {
+            if (Phase != ScanPhase.FloorLocked || autoScan == null)
+            {
+                return false;
+            }
+
+            TransitionTo(ScanPhase.AutoScanRoom);
+            autoScan.Begin(now);
+            return true;
+        }
+
+        /// <summary>Per-frame feed for the automatic scan. A no-op in any other phase.</summary>
+        public void TickAutoScan(float now)
+        {
+            if (Phase == ScanPhase.AutoScanRoom && autoScan != null)
+            {
+                autoScan.Tick(now);
+            }
+        }
+
+        /// <summary>
+        /// Turns the walls the scan found into the room: four corners through
+        /// the single corner store, then a ceiling height if ARKit saw one, then
+        /// any door or window planes. Refuses, rather than inventing a wall,
+        /// when the evidence does not close into a legal room.
+        /// </summary>
+        public bool TryFinishAutoScan(out AutoScanRejection rejection)
+        {
+            rejection = AutoScanRejection.None;
+
+            if (Phase != ScanPhase.AutoScanRoom || autoScan == null)
+            {
+                rejection = AutoScanRejection.WrongPhase;
+                return false;
+            }
+
+            RoomFromWallsResult found = autoScan.Reselect();
+
+            if (!found.Success)
+            {
+                rejection = AutoScanRejection.NoRoomYet;
+                return false;
+            }
+
+            if (!corners.TryAdoptDerivedCorners(found.Corners, out _))
+            {
+                rejection = AutoScanRejection.RoomRejected;
+                return false;
+            }
+
+            wallSweep.ClearWalls();
+            RoomWasAutoScanned = true;
+            openingCapture.ClearOpenings();
+            height.ResetWallSelection();
+            autoScan.End();
+            TransitionTo(ScanPhase.CaptureHeight);
+
+            // The ceiling is the one thing ARKit may hand over for free. If it
+            // did not, the existing height capture is the fallback.
+            if (autoScan.TryGetCeilingHeight(out float ceilingM) &&
+                height.TrySetManualHeight(ceilingM, out _))
+            {
+                TransitionTo(ScanPhase.AddOpenings);
+                AdoptDetectedOpenings();
+            }
+
+            Publish();
+            return true;
+        }
+
+        private void AdoptDetectedOpenings()
+        {
+            List<OpeningModel> proposals = autoScan.ProposeOpenings(openingCapture.Walls, height.HeightM);
+
+            foreach (OpeningModel proposal in proposals)
+            {
+                openingCapture.TryAdoptDetectedOpening(proposal, out _);
+            }
+        }
+
+        /// <summary>
+        /// "Help GhostMap": leaves the automatic scan for the existing wall
+        /// sweep without losing the floor lock.
+        /// </summary>
+        public bool FallBackFromAutoScan()
+        {
+            if (Phase != ScanPhase.AutoScanRoom)
+            {
+                return false;
+            }
+
+            autoScan?.End();
+            TransitionTo(ScanPhase.SweepWalls);
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Throws the auto-scanned room away and scans again. The locked frame
+        /// is untouched: a rescan re-measures the room, it does not re-anchor it.
+        /// </summary>
+        public bool RedoAutoScan(float now)
+        {
+            if (autoScan == null || !RoomWasAutoScanned ||
+                (Phase != ScanPhase.CaptureHeight && Phase != ScanPhase.AddOpenings))
+            {
+                return false;
+            }
+
+            corners.ClearCorners();
+            openingCapture.ClearOpenings();
+            height.ResetWallSelection();
+            RoomWasAutoScanned = false;
+            TransitionTo(ScanPhase.AutoScanRoom);
+            autoScan.Begin(now);
             Publish();
             return true;
         }
@@ -359,6 +517,7 @@ namespace GhostMap.Scanner.Workflow
 
             wallSweep.ClearWalls();
             corners.ClearCorners();
+            RoomWasAutoScanned = false;
             height.ResetWallSelection();
 
             if (Phase != ScanPhase.SweepWalls)
@@ -387,6 +546,7 @@ namespace GhostMap.Scanner.Workflow
 
             wallSweep.ClearWalls();
             corners.ClearCorners();
+            RoomWasAutoScanned = false;
             height.ResetWallSelection();
             TransitionTo(ScanPhase.CaptureCorners);
             Publish();
@@ -543,6 +703,11 @@ namespace GhostMap.Scanner.Workflow
         /// </summary>
         public bool RedoRoom()
         {
+            if (RoomWasAutoScanned)
+            {
+                return RedoAutoScan(Time.realtimeSinceStartup);
+            }
+
             return RoomWasSwept ? RedoWallSweeps() : RedoCorners();
         }
 
@@ -930,6 +1095,47 @@ namespace GhostMap.Scanner.Workflow
 
             Publish();
             return true;
+        }
+
+        /// <summary>
+        /// Adds every detected surface using its suggested type, so a first
+        /// pass over the room needs one tap. Anything that does not validate
+        /// is skipped, never forced. Each object goes through the same store
+        /// as one added by hand.
+        /// </summary>
+        public int TryAcceptAllDetectedFurniture()
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                return 0;
+            }
+
+            furnitureDetection.Refresh(out _);
+
+            int added = 0;
+
+            // Bounded: each pass either adds a candidate or dismisses it.
+            for (int guard = 0; guard < 32 && furnitureDetection.CandidateCount > 0; guard++)
+            {
+                if (!furnitureDetection.HasSelection)
+                {
+                    furnitureDetection.SelectCandidate(0);
+                }
+
+                furnitureDetection.SetType(
+                    furnitureDetection.Candidates[furnitureDetection.SelectedIndex].SuggestedType);
+
+                if (TryAcceptDetectedFurniture(out _, out _))
+                {
+                    added++;
+                }
+                else if (!furnitureDetection.DismissSelected())
+                {
+                    break;
+                }
+            }
+
+            return added;
         }
 
         /// <summary>

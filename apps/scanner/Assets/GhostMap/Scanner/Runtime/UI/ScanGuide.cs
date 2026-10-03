@@ -100,6 +100,11 @@ namespace GhostMap.Scanner.UI
                     return DescribeFindFloor(workflow, context);
 
                 case ScanPhase.FloorLocked:
+                    return workflow.Auto != null ? DescribeAutoReady() : DescribeSweep(workflow);
+
+                case ScanPhase.AutoScanRoom:
+                    return DescribeAutoScan(workflow);
+
                 case ScanPhase.SweepWalls:
                     return DescribeSweep(workflow);
 
@@ -198,6 +203,48 @@ namespace GhostMap.Scanner.UI
                 "Aim at the floor",
                 message,
                 kind);
+        }
+
+        // -------------------------------------------------------------------
+        // Step 2 — the automatic room scan
+        // -------------------------------------------------------------------
+
+        private static ScanGuideStep DescribeAutoReady()
+        {
+            return new ScanGuideStep(
+                2,
+                "Scan the room",
+                "Stand near the middle of the room, tap Scan Room, then turn slowly all the way around.",
+                null,
+                "Floor locked.",
+                GuideMessageKind.Success);
+        }
+
+        private static ScanGuideStep DescribeAutoScan(ScanWorkflowController workflow)
+        {
+            AutoRoomScanController auto = workflow.Auto;
+
+            if (auto == null)
+            {
+                return new ScanGuideStep(2, "Scan the room", string.Empty, null, string.Empty, GuideMessageKind.None);
+            }
+
+            string error = workflow.Corners.LastError;
+
+            GuideMessageKind kind = auto.MessageIsWarning ? GuideMessageKind.Warning : GuideMessageKind.Tip;
+
+            if (auto.State == AutoScanState.Ready)
+            {
+                kind = GuideMessageKind.Success;
+            }
+
+            return new ScanGuideStep(
+                2,
+                "Scan the room",
+                $"Keep the phone steady and slowly turn all the way around. {auto.CoveragePercent}% seen.",
+                null,
+                string.IsNullOrEmpty(error) ? auto.Message : error,
+                string.IsNullOrEmpty(error) ? kind : GuideMessageKind.Error);
         }
 
         // -------------------------------------------------------------------
@@ -339,7 +386,12 @@ namespace GhostMap.Scanner.UI
             string message = height.LastError;
             GuideMessageKind kind = GuideMessageKind.Error;
 
-            if (string.IsNullOrEmpty(message) && corners.HasClosureMeasurement)
+            if (string.IsNullOrEmpty(message) && workflow.RoomWasAutoScanned)
+            {
+                message = "Room found from your turn. GhostMap did not see the ceiling: aim at it and tap Measure, or type the height.";
+                kind = GuideMessageKind.Tip;
+            }
+            else if (string.IsNullOrEmpty(message) && corners.HasClosureMeasurement)
             {
                 message = $"Corner check passed, off by {Centimeters(corners.ClosureErrorM)}.";
                 kind = GuideMessageKind.Success;

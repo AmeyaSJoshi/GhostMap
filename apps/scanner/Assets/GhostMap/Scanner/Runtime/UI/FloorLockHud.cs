@@ -41,6 +41,7 @@ namespace GhostMap.Scanner.UI
         private OpeningCaptureController openingCapture;
         private ObjectPlacementController objectPlacement;
         private FurnitureDetectionController furnitureDetection;
+        private AutoRoomScanController autoScan;
         private ScanWorkflowController workflow;
 
         private FloorLockRejection lastAttemptRejection = FloorLockRejection.None;
@@ -104,9 +105,10 @@ namespace GhostMap.Scanner.UI
             objectPlacement = new ObjectPlacementController(spatialProvider, floorLock);
             furnitureDetection = new FurnitureDetectionController(
                 spatialProvider, floorLock, cornerCapture);
+            autoScan = new AutoRoomScanController(spatialProvider, floorLock);
             workflow = new ScanWorkflowController(
                 floorLock, wallSweep, cornerCapture, heightCapture, openingCapture,
-                objectPlacement, furnitureDetection);
+                objectPlacement, furnitureDetection, autoScan);
 
             hasAttempted = false;
             lastAttemptRejection = FloorLockRejection.None;

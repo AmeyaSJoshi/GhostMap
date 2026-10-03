@@ -150,7 +150,9 @@ namespace GhostMap.Scanner.UI
 
             if (primaryButton != null)
             {
-                primaryButton.gameObject.SetActive(floorLocked || sweeping);
+                // With the automatic room scan present, FloorLocked offers "Scan Room"
+                // (AutoScanHud); tracing walls by hand is its "Trace Walls Instead".
+                primaryButton.gameObject.SetActive((floorLocked && workflow.Auto == null) || sweeping);
                 primaryButton.interactable = IsPrimaryUsable(workflow);
             }
 

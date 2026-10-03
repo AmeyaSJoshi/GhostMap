@@ -150,6 +150,7 @@ namespace GhostMap.Scanner.Editor
             // Primary row: exactly one of these is visible in any phase, and
             // it takes the full width.
             Button lockFloorButton = ScannerUiKit.Button(primaryRow, "LockFloorButton", "Lock Floor", ButtonStyle.Primary, out _);
+            Button scanRoomButton = ScannerUiKit.Button(primaryRow, "ScanRoomButton", "Scan Room", ButtonStyle.Primary, out Text scanRoomLabel);
             Button sweepPrimaryButton = ScannerUiKit.Button(primaryRow, "SweepWallButton", "Start Tracing Walls", ButtonStyle.Primary, out Text sweepPrimaryLabel);
             Button cornerPrimaryButton = ScannerUiKit.Button(primaryRow, "CaptureCornerButton", "Capture Corner", ButtonStyle.Primary, out Text cornerPrimaryLabel);
             Button captureHeightButton = ScannerUiKit.Button(primaryRow, "CaptureHeightButton", "Measure Height", ButtonStyle.Primary, out Text captureHeightLabel);
@@ -169,6 +170,7 @@ namespace GhostMap.Scanner.Editor
             Button detectSkipButton = ScannerUiKit.Button(detectRow, "DetectSkipButton", "Skip", ButtonStyle.Secondary, out _);
             Button detectNextButton = ScannerUiKit.Button(detectRow, "DetectNextButton", "Next", ButtonStyle.Secondary, out _);
             Button detectAddButton = ScannerUiKit.Button(detectRow, "DetectAddButton", "Add", ButtonStyle.Next, out Text detectAddLabel);
+            Button addAllDetectedButton = ScannerUiKit.Button(detectRow, "AddAllDetectedButton", "Add All", ButtonStyle.Next, out _);
 
             // Typed height: the plan's fallback when the ceiling cannot be aimed at.
             InputField manualHeightInput = ScannerUiKit.Field(manualRow, "ManualHeightInput", "Or type height, e.g. 2.45", 100f);
@@ -187,6 +189,7 @@ namespace GhostMap.Scanner.Editor
             Button yawPlusButton = ScannerUiKit.Button(sizeRow2, "YawPlusButton", "Turn Right", ButtonStyle.Secondary, out _, 84f);
 
             // Secondary row: undo, redo, cancel, and moving on.
+            Button autoHelpButton = ScannerUiKit.Button(secondaryRow, "AutoHelpButton", "Help GhostMap", ButtonStyle.Secondary, out Text autoHelpLabel);
             Button sweepUndoButton = ScannerUiKit.Button(secondaryRow, "UndoWallButton", "Undo", ButtonStyle.Secondary, out _);
             Button sweepCancelButton = ScannerUiKit.Button(secondaryRow, "CancelSweepButton", "Cancel", ButtonStyle.Secondary, out _);
             Button walkCornersButton = ScannerUiKit.Button(secondaryRow, "WalkCornersButton", "Walk Corners Instead", ButtonStyle.Secondary, out _);
@@ -301,6 +304,7 @@ namespace GhostMap.Scanner.Editor
             ScannerUiKit.Label(detailsContent, "DetailsTitle", "Developer details", 36, ScannerUiKit.TextPrimary, FontStyle.Bold);
             Text scanStatusText = DetailsText(detailsContent, "ScanStatusText");
             Text floorLockReadout = DetailsText(detailsContent, "FloorLockReadout");
+            Text autoScanReadout = DetailsText(detailsContent, "AutoScanReadout");
             Text sweepReadout = DetailsText(detailsContent, "WallSweepReadout");
             Text cornerReadout = DetailsText(detailsContent, "CornerCaptureReadout");
             Text heightReadout = DetailsText(detailsContent, "HeightCaptureReadout");
@@ -329,7 +333,20 @@ namespace GhostMap.Scanner.Editor
                 ("lockFloorButton", lockFloorButton),
                 ("readoutText", floorLockReadout));
 
-            // ADR-0005 wall sweeping — the default capture path.
+            // The automatic room scan: turn once, GhostMap finds the walls.
+            var autoScanHudGo = new GameObject("AutoScanHud", typeof(AutoScanHud));
+            AssignSerializedReferences(
+                autoScanHudGo.GetComponent<AutoScanHud>(),
+                ("floorLockHud", floorLockHud),
+                ("spatialProvider", spatialProvider),
+                ("primaryButton", scanRoomButton),
+                ("primaryButtonLabel", scanRoomLabel),
+                ("secondaryButton", autoHelpButton),
+                ("secondaryButtonLabel", autoHelpLabel),
+                ("addAllButton", addAllDetectedButton),
+                ("readoutText", autoScanReadout));
+
+            // ADR-0005 wall sweeping — now the "Help GhostMap" fallback.
             var sweepHudGo = new GameObject("WallSweepHud", typeof(WallSweepHud));
             AssignSerializedReferences(
                 sweepHudGo.GetComponent<WallSweepHud>(),
@@ -528,6 +545,19 @@ namespace GhostMap.Scanner.Editor
                 var hud = FindInScene<FloorLockHud>(scene);
                 Require(hud != null, "no FloorLockHud");
                 RequireAssigned(hud, "spatialProvider", "lockFloorButton", "readoutText");
+
+                var autoHud = FindInScene<AutoScanHud>(scene);
+                Require(autoHud != null, "no AutoScanHud");
+                RequireAssigned(
+                    autoHud,
+                    "floorLockHud",
+                    "spatialProvider",
+                    "primaryButton",
+                    "primaryButtonLabel",
+                    "secondaryButton",
+                    "secondaryButtonLabel",
+                    "addAllButton",
+                    "readoutText");
 
                 var sweepHud = FindInScene<WallSweepHud>(scene);
                 Require(sweepHud != null, "no WallSweepHud");

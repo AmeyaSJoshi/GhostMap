@@ -205,14 +205,12 @@ namespace GhostMap.Scanner.UI
             switch (workflow.Phase)
             {
                 case ScanPhase.FloorLocked:
-                    return "Start Walls";
+                    return "Start Tracing Walls";
 
                 case ScanPhase.SweepWalls:
                     if (sweep.IsSweeping)
                     {
-                        return sweep.ActiveSweepLooksUsable
-                            ? $"Finish Wall {sweep.WallCount + 1}"
-                            : $"Finish Wall {sweep.WallCount + 1} (keep sweeping)";
+                        return $"Done with Wall {sweep.WallCount + 1}";
                     }
 
                     if (sweep.IsComplete)
@@ -221,7 +219,7 @@ namespace GhostMap.Scanner.UI
                     }
 
                     return
-                        $"Sweep Wall {sweep.WallCount + 1}/" +
+                        $"Start Wall {sweep.WallCount + 1} of " +
                         $"{WallSweepController.RequiredWallCount}";
 
                 default:
@@ -353,6 +351,7 @@ namespace GhostMap.Scanner.UI
         private GameObject CreateMarker(string markerName, float diameterM)
         {
             GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            MarkerMaterials.MakeUnlit(marker);
             marker.name = markerName;
             marker.transform.SetParent(transform, worldPositionStays: false);
             marker.transform.localScale = Vector3.one * diameterM;

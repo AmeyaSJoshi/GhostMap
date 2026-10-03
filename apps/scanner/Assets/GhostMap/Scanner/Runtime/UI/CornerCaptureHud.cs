@@ -54,6 +54,7 @@ namespace GhostMap.Scanner.UI
         private readonly List<GameObject> cornerMarkers = new List<GameObject>();
 
         private GameObject closureMarker;
+        private Text redoLabel;
 
         private void Awake()
         {
@@ -151,23 +152,34 @@ namespace GhostMap.Scanner.UI
                 primaryButtonLabel.text = PrimaryLabel(workflow);
             }
 
+            // Undoing one derived corner of a swept room would drop the user
+            // into walking corners, so Undo belongs to the walked path only.
             if (undoButton != null)
             {
                 undoButton.gameObject.SetActive(
                     workflow.Phase == ScanPhase.CaptureCorners
-                    || workflow.Phase == ScanPhase.VerifyClosure);
+                    || (workflow.Phase == ScanPhase.VerifyClosure && !workflow.RoomWasSwept));
 
                 undoButton.interactable = capture.CornerCount > 0;
             }
 
-            // Redo only appears once there is something to redo: a measured
-            // closure the user might want to reject, or one already rejected.
+            // Redo is offered as soon as there is a footprint to throw away,
+            // and returns to whichever path produced it (RedoRoom).
             if (redoButton != null)
             {
                 redoButton.gameObject.SetActive(
                     workflow.Phase == ScanPhase.VerifyClosure
-                        ? capture.HasClosureMeasurement
-                        : workflow.Phase == ScanPhase.CaptureHeight);
+                    || workflow.Phase == ScanPhase.CaptureHeight);
+
+                if (redoLabel == null)
+                {
+                    redoLabel = redoButton.GetComponentInChildren<Text>(includeInactive: true);
+                }
+
+                if (redoLabel != null)
+                {
+                    redoLabel.text = workflow.RoomWasSwept ? "Redo Walls" : "Redo Corners";
+                }
             }
         }
 
@@ -178,10 +190,10 @@ namespace GhostMap.Scanner.UI
             switch (workflow.Phase)
             {
                 case ScanPhase.CaptureCorners:
-                    return $"Capture Corner {capture.CornerCount + 1}/{CornerCaptureController.RequiredCornerCount}";
+                    return $"Capture Corner {capture.CornerCount + 1} of {CornerCaptureController.RequiredCornerCount}";
 
                 case ScanPhase.VerifyClosure:
-                    return "Verify First Corner";
+                    return "Check Corner";
 
                 default:
                     return "—";
@@ -211,7 +223,7 @@ namespace GhostMap.Scanner.UI
 
         private void OnUndoPressed() => Workflow?.TryUndoCorner(out _);
 
-        private void OnRedoPressed() => Workflow?.RedoCorners();
+        private void OnRedoPressed() => Workflow?.RedoRoom();
 
         // -------------------------------------------------------------------
         // Markers
@@ -279,6 +291,7 @@ namespace GhostMap.Scanner.UI
         private GameObject CreateMarker(string markerName, float diameterM)
         {
             GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            MarkerMaterials.MakeUnlit(marker);
             marker.name = markerName;
             marker.transform.SetParent(transform, worldPositionStays: false);
             marker.transform.localScale = Vector3.one * diameterM;

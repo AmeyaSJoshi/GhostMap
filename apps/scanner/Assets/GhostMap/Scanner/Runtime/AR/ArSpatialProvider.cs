@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
+using UnityEngine.XR.Management;
 
 namespace GhostMap.Scanner.AR
 {
@@ -23,6 +24,11 @@ namespace GhostMap.Scanner.AR
     /// both, and a raycast hit and the camera position can be compared and
     /// subtracted directly.</para>
     ///
+    /// <para><b>Demo mode.</b> In the Unity Editor and the iOS Simulator there
+    /// is no ARKit, so this provider answers from a <see cref="SimulatedRoom"/>
+    /// instead. <see cref="SimulatedRoom.ShouldSimulate"/> never selects it on
+    /// a physical iPhone.</para>
+    ///
     /// <para>That is what makes the GhostMap frame immune to
     /// <c>CameraYOffset</c>: the frame's origin is the floor hit, and
     /// <c>WorldToGhost</c> subtracts that origin, so any constant offset shared
@@ -36,17 +42,33 @@ namespace GhostMap.Scanner.AR
         [SerializeField] private ARRaycastManager raycastManager;
         [SerializeField] private Camera arCamera;
 
+        /// <summary>A fixed id for the demo floor, so repeated hits read as one plane.</summary>
+        private static readonly TrackableId SimulatedFloorId = new TrackableId(0x6768_6f73_7400_0001, 1);
+
         private readonly List<ARRaycastHit> hits = new List<ARRaycastHit>();
+
+        private SimulatedRoom simulatedRoom;
 
         public Camera ArCamera => arCamera;
 
-        public ARSessionState SessionState => ARSession.state;
+        /// <summary>True when answering from the demo room rather than ARKit.</summary>
+        public bool IsSimulated => simulatedRoom != null;
 
-        public NotTrackingReason NotTrackingReason => ARSession.notTrackingReason;
+        public ARSessionState SessionState =>
+            IsSimulated
+                ? (simulatedRoom.IsTrackingGood ? ARSessionState.SessionTracking : ARSessionState.SessionInitializing)
+                : ARSession.state;
+
+        public NotTrackingReason NotTrackingReason =>
+            IsSimulated
+                ? (simulatedRoom.IsTrackingGood ? NotTrackingReason.None : NotTrackingReason.Initializing)
+                : ARSession.notTrackingReason;
 
         public bool IsTrackingGood =>
-            ARSession.state == ARSessionState.SessionTracking &&
-            ARSession.notTrackingReason == NotTrackingReason.None;
+            IsSimulated
+                ? simulatedRoom.IsTrackingGood
+                : ARSession.state == ARSessionState.SessionTracking &&
+                  ARSession.notTrackingReason == NotTrackingReason.None;
 
         public Vector2 CenterScreenPoint => new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
 
@@ -56,9 +78,47 @@ namespace GhostMap.Scanner.AR
             arCamera = Camera.main;
         }
 
+        private void Awake()
+        {
+            XRManagerSettings manager = XRGeneralSettings.Instance != null
+                ? XRGeneralSettings.Instance.Manager
+                : null;
+
+            bool hasActiveLoader = manager != null && manager.activeLoader != null;
+
+            if (arCamera != null
+                && SimulatedRoom.ShouldSimulate(Application.isEditor, SimulatedRoom.IsRunningInIosSimulator(), hasActiveLoader))
+            {
+                // With no XR loader the AR session can only fail; stop it
+                // trying, so it logs nothing in a mode where that is expected.
+                ARSession session = FindFirstObjectByType<ARSession>();
+                if (session != null)
+                {
+                    session.enabled = false;
+                }
+
+                var demoGo = new GameObject("Demo Mode (no ARKit)");
+                simulatedRoom = demoGo.AddComponent<SimulatedRoom>();
+                simulatedRoom.Initialize(arCamera);
+
+                Debug.Log("GhostMap: no ARKit here, so the scanner is running in demo mode with a virtual room.");
+            }
+        }
+
         public bool TryGetFloorHit(Vector2 screenPoint, out FloorHit hit)
         {
             hit = default;
+
+            if (IsSimulated)
+            {
+                if (!SimulatedRoom.TryRaycastFloor(GetScreenRay(screenPoint), out Vector3 floorPoint))
+                {
+                    return false;
+                }
+
+                hit = new FloorHit(floorPoint, PlaneAlignment.HorizontalUp, SimulatedFloorId);
+                return true;
+            }
 
             if (raycastManager == null)
             {

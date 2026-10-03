@@ -520,6 +520,25 @@ namespace GhostMap.Scanner.Workflow
             return true;
         }
 
+        /// <summary>
+        /// True when the current footprint came from swept walls rather than
+        /// walked corners. Swept walls are kept after the room is derived, and
+        /// the walked fallback clears them, so their presence identifies the path.
+        /// </summary>
+        public bool RoomWasSwept => wallSweep.WallCount > 0;
+
+        /// <summary>
+        /// Discards the footprint and returns to whichever capture path
+        /// produced it: <see cref="RedoWallSweeps"/> for a swept room,
+        /// <see cref="RedoCorners"/> for a walked one. A user who swept must
+        /// not be dropped into walking corners just because they asked to
+        /// try again.
+        /// </summary>
+        public bool RedoRoom()
+        {
+            return RoomWasSwept ? RedoWallSweeps() : RedoCorners();
+        }
+
         // -------------------------------------------------------------------
         // Task S4 — height capture
         // -------------------------------------------------------------------

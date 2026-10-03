@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using GhostMap.Scanner.AR;
 using GhostMap.Scanner.Bootstrap;
@@ -21,70 +22,32 @@ namespace GhostMap.Scanner.Editor
     /// own "GameObject/XR/AR Session" and "GameObject/XR/XR Origin (Mobile AR)"
     /// menu commands to create the AR Session and AR Camera hierarchy, so the
     /// tracked-pose wiring matches exactly what the package expects, then adds
-    /// ARPlaneManager and ARRaycastManager, the S1 diagnostics Canvas, and the
-    /// Task S2 floor-lock UI.
+    /// ARPlaneManager and ARRaycastManager and the scan UI.
+    ///
+    /// <para><b>The UI is three layers, none positioned by pixel:</b></para>
+    /// <list type="bullet">
+    /// <item><description>a top bar with Restart, the computer chip, Details,
+    /// and a header card naming the step and showing progress;</description></item>
+    /// <item><description>the crosshair at dead center, with a bubble beside it
+    /// naming what to point at;</description></item>
+    /// <item><description>one bottom sheet holding the instruction, a message
+    /// line, and every step's buttons in shared rows.</description></item>
+    /// </list>
+    ///
+    /// <para>Each HUD still shows only its own step's buttons, and
+    /// <see cref="ScannerGuideHud"/> collapses rows with nothing visible, so
+    /// the sheet always fits exactly the current step. The per-step debug
+    /// readouts the S1-S6 device tests rely on are kept, behind Details.</para>
     /// </summary>
     public static class ScannerSceneBuilder
     {
         private const string ScenePath = "Assets/GhostMap/Scanner/Scanner.unity";
 
-        /// <summary>
-        /// Y of the Task S3 button row, above the Lock Floor button (90-220)
-        /// and below the readouts. All three S3 buttons share it.
-        /// </summary>
-        private const float S3ButtonRowY = 240f;
-
-        /// <summary>
-        /// Y of the two Task S4 button rows, stacked above the Task S3 corner
-        /// readout (690-990) rather than squeezed into the already-tight space
-        /// below it. This screen is bring-up instrumentation, not the capture
-        /// UI Task S6 owns — see the S3 handoff's "screen is now crowded" note.
-        /// </summary>
-        private const float S4WallRowY = 1080f;
-
-        private const float S4ManualRowY = 1200f;
-
-        /// <summary>
-        /// Task S5 Part 1 (openings) button rows, stacked above the Task S4
-        /// block (1080-1290). Bring-up instrumentation, not the capture UI —
-        /// see the S3/S4 handoffs' "screen is now crowded" notes, which this
-        /// continues rather than solves; Task S6 owns the real layout.
-        /// </summary>
-        private const float S5OpeningsRow1Y = 1330f;
-
-        private const float S5OpeningsRow2Y = 1440f;
-
-        private const float S5OpeningsReadoutY = 1500f;
-
-        /// <summary>Task S5 Part 2 (furniture) button rows, stacked above the openings block.</summary>
-        private const float S5ObjectsRow1Y = 1710f;
-
-        private const float S5ObjectsRow2Y = 1810f;
-
-        private const float S5ObjectsRow3Y = 1900f;
-
-        private const float S5ObjectsReadoutY = 1990f;
-
-        /// <summary>
-        /// Task S6 elements are top-anchored rather than added to the bottom
-        /// stack above: the bottom stack already runs past the 1920-tall
-        /// reference resolution (see the S5 handoff's "screen is now extremely
-        /// crowded" note), so status, networking and finalization — controls
-        /// that must stay reachable regardless of that overflow — sit just
-        /// below the Task S1 diagnostics block instead, measured in pixels
-        /// down from the top of the canvas.
-        /// </summary>
-        private const float S6StatusY = 400f;
-
-        private const float S6NetworkStatusY = 520f;
-
-        private const float S6ConnectRowY = 580f;
-
-        private const float S6ActionRowY = 660f;
-
         [MenuItem("GhostMap/Build Scanner Scene")]
         public static void BuildScene()
         {
+            ScannerUiKit.EnsureSprites();
+
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             GameObject arSessionGo = CreateFromMenu("GameObject/XR/AR Session");
@@ -114,11 +77,225 @@ namespace GhostMap.Scanner.Editor
             // failure.
             CreateEventSystem();
 
-            GameObject canvasGo = CreateCanvas();
-            Text diagnosticsText = CreateDiagnosticsText(canvasGo);
-            Graphic crosshair = CreateCrosshair(canvasGo);
-            Text floorLockReadout = CreateFloorLockReadout(canvasGo);
-            Button lockFloorButton = CreateLockFloorButton(canvasGo);
+            Transform canvas = CreateCanvas().transform;
+
+            // ---------------------------------------------------------------
+            // Crosshair and the bubble that names what to point at
+            // ---------------------------------------------------------------
+
+            // Outside the safe area on purpose: the raycast fires through the
+            // exact screen center (ISpatialProvider.CenterScreenPoint), so the
+            // crosshair must sit there regardless of notch or home indicator.
+            Image crosshair = ScannerUiKit.Dot(canvas, "Crosshair", 84f, Color.white, ScannerUiKit.Ring);
+            Center(crosshair.rectTransform, Vector2.zero);
+            Image crosshairCenter = ScannerUiKit.Dot(crosshair.transform, "CrosshairCenter", 14f, Color.white);
+            Center(crosshairCenter.rectTransform, Vector2.zero);
+
+            RectTransform bubble = ScannerUiKit.Rect("CoachBubble", canvas);
+            Center(bubble, new Vector2(0f, 64f));
+            bubble.pivot = new Vector2(0.5f, 0f);
+            Image bubbleBackground = ScannerUiKit.PanelBackground(bubble.gameObject, new Color(0.07f, 0.08f, 0.10f, 0.86f), 30f);
+            bubbleBackground.raycastTarget = false;
+            var bubbleLayout = bubble.gameObject.AddComponent<HorizontalLayoutGroup>();
+            bubbleLayout.padding = new RectOffset(30, 30, 14, 14);
+            bubbleLayout.childControlWidth = true;
+            bubbleLayout.childControlHeight = true;
+            var bubbleFitter = bubble.gameObject.AddComponent<ContentSizeFitter>();
+            bubbleFitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            bubbleFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            Text coachText = ScannerUiKit.Label(
+                bubble, "CoachText", "Aim at the floor", 30, Color.white, FontStyle.Bold, TextAnchor.MiddleCenter);
+            coachText.horizontalOverflow = HorizontalWrapMode.Overflow;
+
+            RectTransform safeArea = ScannerUiKit.Rect("SafeArea", canvas);
+            ScannerUiKit.Stretch(safeArea);
+            safeArea.gameObject.AddComponent<SafeAreaFitter>();
+
+            // ---------------------------------------------------------------
+            // Bottom sheet
+            // ---------------------------------------------------------------
+
+            RectTransform sheet = ScannerUiKit.Card("Sheet", safeArea, ScannerUiKit.CardColor, 44f, 32, 16f);
+            sheet.anchorMin = new Vector2(0f, 0f);
+            sheet.anchorMax = new Vector2(1f, 0f);
+            sheet.pivot = new Vector2(0.5f, 0f);
+            sheet.offsetMin = new Vector2(16f, 16f);
+            sheet.offsetMax = new Vector2(-16f, 16f);
+            ScannerUiKit.HugHeight(sheet.gameObject);
+
+            Text instructionText = ScannerUiKit.Label(sheet, "Instruction", string.Empty, 38, ScannerUiKit.TextPrimary);
+
+            RectTransform messagePill = ScannerUiKit.Rect("MessagePill", sheet);
+            Image messageBackground = ScannerUiKit.PanelBackground(messagePill.gameObject, ScannerUiKit.Fill, 22f);
+            messageBackground.raycastTarget = false;
+            ScannerUiKit.Column(messagePill.gameObject, 22, 14, 0f);
+            Text messageText = ScannerUiKit.Label(messagePill, "MessageText", string.Empty, 29, ScannerUiKit.TextSecondary);
+            messageText.lineSpacing = 1f;
+
+            RectTransform primaryRow = ScannerUiKit.Row("PrimaryRow", sheet, 16f);
+            RectTransform choiceRow = ScannerUiKit.Row("ChoiceRow", sheet, 16f);
+            RectTransform manualRow = ScannerUiKit.Row("ManualHeightRow", sheet, 16f);
+            RectTransform sizeRow1 = ScannerUiKit.Row("SizeRow1", sheet, 12f);
+            RectTransform sizeRow2 = ScannerUiKit.Row("SizeRow2", sheet, 12f);
+            RectTransform secondaryRow = ScannerUiKit.Row("SecondaryRow", sheet, 16f);
+
+            // Primary row: exactly one of these is visible in any phase, and
+            // it takes the full width.
+            Button lockFloorButton = ScannerUiKit.Button(primaryRow, "LockFloorButton", "Lock Floor", ButtonStyle.Primary, out _);
+            Button sweepPrimaryButton = ScannerUiKit.Button(primaryRow, "SweepWallButton", "Start Tracing Walls", ButtonStyle.Primary, out Text sweepPrimaryLabel);
+            Button cornerPrimaryButton = ScannerUiKit.Button(primaryRow, "CaptureCornerButton", "Capture Corner", ButtonStyle.Primary, out Text cornerPrimaryLabel);
+            Button captureHeightButton = ScannerUiKit.Button(primaryRow, "CaptureHeightButton", "Measure Height", ButtonStyle.Primary, out Text captureHeightLabel);
+            Button captureOpeningPointButton = ScannerUiKit.Button(primaryRow, "CaptureOpeningPointButton", "Mark Bottom-Left", ButtonStyle.Primary, out Text captureOpeningPointLabel);
+            Button placeObjectButton = ScannerUiKit.Button(primaryRow, "PlaceObjectButton", "Place", ButtonStyle.Primary, out _);
+            Button finalizeButton = ScannerUiKit.Button(primaryRow, "FinalizeButton", "Finish & Send", ButtonStyle.Primary, out _);
+
+            // Choice row: which wall, which kind of thing.
+            Button selectWallButton = ScannerUiKit.Button(choiceRow, "SelectWallButton", "Wall 1 of 4", ButtonStyle.Secondary, out Text selectWallLabel);
+            Button selectOpeningWallButton = ScannerUiKit.Button(choiceRow, "SelectOpeningWallButton", "Wall 1 of 4", ButtonStyle.Secondary, out Text selectOpeningWallLabel);
+            Button toggleOpeningTypeButton = ScannerUiKit.Button(choiceRow, "ToggleOpeningTypeButton", "Type: Door", ButtonStyle.Secondary, out Text toggleOpeningTypeLabel);
+            Button selectObjectTypeButton = ScannerUiKit.Button(choiceRow, "SelectObjectTypeButton", "Type: Bed", ButtonStyle.Secondary, out Text selectObjectTypeLabel);
+
+            // Typed height: the plan's fallback when the ceiling cannot be aimed at.
+            InputField manualHeightInput = ScannerUiKit.Field(manualRow, "ManualHeightInput", "Or type height, e.g. 2.45", 100f);
+            manualHeightInput.contentType = InputField.ContentType.DecimalNumber;
+            ScannerUiKit.Size(manualHeightInput.gameObject, 100f, flexibleWidth: 2f);
+            Button useManualHeightButton = ScannerUiKit.Button(manualRow, "UseManualHeightButton", "Use", ButtonStyle.Secondary, out _);
+
+            // Furniture size, shown only once something has been placed.
+            Button widthMinusButton = ScannerUiKit.Button(sizeRow1, "WidthMinusButton", "Width −", ButtonStyle.Secondary, out _, 84f);
+            Button widthPlusButton = ScannerUiKit.Button(sizeRow1, "WidthPlusButton", "Width +", ButtonStyle.Secondary, out _, 84f);
+            Button depthMinusButton = ScannerUiKit.Button(sizeRow1, "DepthMinusButton", "Depth −", ButtonStyle.Secondary, out _, 84f);
+            Button depthPlusButton = ScannerUiKit.Button(sizeRow1, "DepthPlusButton", "Depth +", ButtonStyle.Secondary, out _, 84f);
+            Button heightMinusButton = ScannerUiKit.Button(sizeRow2, "HeightMinusButton", "Height −", ButtonStyle.Secondary, out _, 84f);
+            Button heightPlusButton = ScannerUiKit.Button(sizeRow2, "HeightPlusButton", "Height +", ButtonStyle.Secondary, out _, 84f);
+            Button yawMinusButton = ScannerUiKit.Button(sizeRow2, "YawMinusButton", "Turn Left", ButtonStyle.Secondary, out _, 84f);
+            Button yawPlusButton = ScannerUiKit.Button(sizeRow2, "YawPlusButton", "Turn Right", ButtonStyle.Secondary, out _, 84f);
+
+            // Secondary row: undo, redo, cancel, and moving on.
+            Button sweepUndoButton = ScannerUiKit.Button(secondaryRow, "UndoWallButton", "Undo", ButtonStyle.Secondary, out _);
+            Button sweepCancelButton = ScannerUiKit.Button(secondaryRow, "CancelSweepButton", "Cancel", ButtonStyle.Secondary, out _);
+            Button walkCornersButton = ScannerUiKit.Button(secondaryRow, "WalkCornersButton", "Walk Corners Instead", ButtonStyle.Secondary, out _);
+            Button cornerUndoButton = ScannerUiKit.Button(secondaryRow, "UndoCornerButton", "Undo", ButtonStyle.Secondary, out _);
+            Button redoButton = ScannerUiKit.Button(secondaryRow, "RedoCornersButton", "Redo Walls", ButtonStyle.Secondary, out _);
+            Button undoOpeningButton = ScannerUiKit.Button(secondaryRow, "UndoOpeningButton", "Undo", ButtonStyle.Secondary, out _);
+            Button finishOpeningsButton = ScannerUiKit.Button(secondaryRow, "FinishOpeningsButton", "Next", ButtonStyle.Next, out _);
+            Button undoObjectButton = ScannerUiKit.Button(secondaryRow, "UndoObjectButton", "Undo", ButtonStyle.Secondary, out _);
+            Button finishObjectsButton = ScannerUiKit.Button(secondaryRow, "FinishObjectsButton", "Next", ButtonStyle.Next, out _);
+
+            // ---------------------------------------------------------------
+            // Top bar
+            // ---------------------------------------------------------------
+
+            RectTransform topBar = ScannerUiKit.Rect("TopBar", safeArea);
+            topBar.anchorMin = new Vector2(0f, 1f);
+            topBar.anchorMax = new Vector2(1f, 1f);
+            topBar.pivot = new Vector2(0.5f, 1f);
+            topBar.offsetMin = new Vector2(16f, -8f);
+            topBar.offsetMax = new Vector2(-16f, -8f);
+            ScannerUiKit.Column(topBar.gameObject, 0, 0, 14f);
+            ScannerUiKit.HugHeight(topBar.gameObject);
+
+            RectTransform topRow = ScannerUiKit.Row("TopRow", topBar, 12f);
+            topRow.GetComponent<HorizontalLayoutGroup>().childForceExpandWidth = false;
+
+            Button resetButton = ScannerUiKit.Button(topRow, "ResetButton", "Restart", ButtonStyle.Pill, out Text resetLabel);
+            ScannerUiKit.Size(resetButton.gameObject, 80f, 210f, 0f);
+
+            RectTransform spacer = ScannerUiKit.Rect("Spacer", topRow);
+            ScannerUiKit.Size(spacer.gameObject, 80f, 0f, 1f);
+
+            Button connectionChip = ScannerUiKit.Button(topRow, "ConnectionChip", "Connect computer", ButtonStyle.Pill, out Text connectionChipLabel);
+            ScannerUiKit.Size(connectionChip.gameObject, 80f, 340f, 0f);
+            connectionChipLabel.rectTransform.offsetMin = new Vector2(52f, 4f);
+            Image connectionDot = ScannerUiKit.Dot(connectionChip.transform, "StatusDot", 18f, new Color(1f, 1f, 1f, 0.45f));
+            connectionDot.rectTransform.anchorMin = new Vector2(0f, 0.5f);
+            connectionDot.rectTransform.anchorMax = new Vector2(0f, 0.5f);
+            connectionDot.rectTransform.anchoredPosition = new Vector2(36f, 0f);
+
+            Button detailsButton = ScannerUiKit.Button(topRow, "DetailsButton", "Details", ButtonStyle.Pill, out Text detailsButtonLabel);
+            ScannerUiKit.Size(detailsButton.gameObject, 80f, 170f, 0f);
+
+            RectTransform header = ScannerUiKit.Card("HeaderCard", topBar, ScannerUiKit.CardColor, 40f, 28, 8f);
+            Text stepLabel = ScannerUiKit.Label(header, "StepLabel", "STEP 1 OF 7", 24, ScannerUiKit.Accent, FontStyle.Bold);
+            Text titleText = ScannerUiKit.Label(header, "Title", "Find the floor", 50, ScannerUiKit.TextPrimary, FontStyle.Bold);
+
+            RectTransform progress = ScannerUiKit.Row("Progress", header, 8f);
+            var segments = new Image[ScanGuide.StepCount];
+            for (int i = 0; i < segments.Length; i++)
+            {
+                RectTransform segment = ScannerUiKit.Rect($"Segment{i + 1}", progress);
+                segments[i] = ScannerUiKit.Background(segment.gameObject, new Color(1f, 1f, 1f, 0.18f), 4f);
+                segments[i].raycastTarget = false;
+                ScannerUiKit.Size(segment.gameObject, 8f, flexibleWidth: 1f);
+            }
+
+            RectTransform demoBadge = ScannerUiKit.Rect("DemoBadge", topBar);
+            ScannerUiKit.PanelBackground(demoBadge.gameObject, new Color(1f, 0.71f, 0.28f, 0.22f), 26f).raycastTarget = false;
+            ScannerUiKit.Column(demoBadge.gameObject, 24, 12, 0f);
+            ScannerUiKit.Label(
+                demoBadge, "DemoText", "Demo room — no camera here. Drag to look around.", 26,
+                new Color(1f, 0.86f, 0.62f), FontStyle.Normal, TextAnchor.MiddleCenter);
+
+            RectTransform connectPanel = ScannerUiKit.Card("ConnectPanel", topBar, ScannerUiKit.CardColor, 40f, 28, 16f);
+            ScannerUiKit.Label(connectPanel, "ConnectTitle", "Connect to your computer", 36, ScannerUiKit.TextPrimary, FontStyle.Bold);
+            ScannerUiKit.Label(
+                connectPanel, "ConnectHelp",
+                "Open GhostMap on your computer, on the same Wi-Fi. Type the address it shows.", 28,
+                ScannerUiKit.TextSecondary);
+            RectTransform addressRow = ScannerUiKit.Row("AddressRow", connectPanel, 12f);
+            InputField hostInput = ScannerUiKit.Field(addressRow, "HostInput", "Address, e.g. 192.168.1.20", 96f);
+            ScannerUiKit.Size(hostInput.gameObject, 96f, flexibleWidth: 3f);
+            InputField portInput = ScannerUiKit.Field(addressRow, "PortInput", "Port", 96f);
+            ScannerUiKit.Size(portInput.gameObject, 96f, 190f, 0f);
+            portInput.text = ProtocolConstants.Port.ToString();
+            portInput.contentType = InputField.ContentType.IntegerNumber;
+            Button connectButton = ScannerUiKit.Button(connectPanel, "ConnectButton", "Connect", ButtonStyle.Primary, out _, 104f);
+            Text networkStatusText = ScannerUiKit.Label(connectPanel, "NetworkStatusText", string.Empty, 24, ScannerUiKit.TextSecondary);
+
+            // ---------------------------------------------------------------
+            // Details: every per-step debug readout, out of the user's way
+            // ---------------------------------------------------------------
+
+            // Created after the top bar so it covers the header card, and
+            // starting below the top row so Details/Close stays reachable.
+            RectTransform details = ScannerUiKit.Rect("DetailsPanel", safeArea);
+            ScannerUiKit.Stretch(details, 16f, 16f, 16f, 120f);
+            ScannerUiKit.Background(details.gameObject, new Color(0.05f, 0.06f, 0.08f, 0.96f), 40f);
+
+            RectTransform viewport = ScannerUiKit.Rect("Viewport", details);
+            ScannerUiKit.Stretch(viewport, 28f, 28f, 28f, 28f);
+            viewport.gameObject.AddComponent<RectMask2D>();
+
+            RectTransform detailsContent = ScannerUiKit.Rect("Content", viewport);
+            detailsContent.anchorMin = new Vector2(0f, 1f);
+            detailsContent.anchorMax = new Vector2(1f, 1f);
+            detailsContent.pivot = new Vector2(0.5f, 1f);
+            detailsContent.offsetMin = Vector2.zero;
+            detailsContent.offsetMax = Vector2.zero;
+            ScannerUiKit.Column(detailsContent.gameObject, 0, 0, 22f);
+            ScannerUiKit.HugHeight(detailsContent.gameObject);
+
+            var scroll = details.gameObject.AddComponent<ScrollRect>();
+            scroll.viewport = viewport;
+            scroll.content = detailsContent;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 30f;
+
+            ScannerUiKit.Label(detailsContent, "DetailsTitle", "Developer details", 36, ScannerUiKit.TextPrimary, FontStyle.Bold);
+            Text scanStatusText = DetailsText(detailsContent, "ScanStatusText");
+            Text floorLockReadout = DetailsText(detailsContent, "FloorLockReadout");
+            Text sweepReadout = DetailsText(detailsContent, "WallSweepReadout");
+            Text cornerReadout = DetailsText(detailsContent, "CornerCaptureReadout");
+            Text heightReadout = DetailsText(detailsContent, "HeightCaptureReadout");
+            Text openingReadout = DetailsText(detailsContent, "OpeningCaptureReadout");
+            Text objectReadout = DetailsText(detailsContent, "ObjectPlacementReadout");
+            Text diagnosticsText = DetailsText(detailsContent, "DiagnosticsText");
+
+            // ---------------------------------------------------------------
+            // Behaviours
+            // ---------------------------------------------------------------
 
             var bootstrapGo = new GameObject("ScannerBootstrap", typeof(ScannerBootstrap));
             AssignSerializedReferences(
@@ -134,32 +311,9 @@ namespace GhostMap.Scanner.Editor
                 floorLockHud,
                 ("spatialProvider", spatialProvider),
                 ("lockFloorButton", lockFloorButton),
-                ("crosshair", crosshair),
                 ("readoutText", floorLockReadout));
 
             // ADR-0005 wall sweeping — the default capture path.
-            //
-            // Deliberately shares the S3 button row and readout area. SweepWalls
-            // and CaptureCorners are mutually exclusive phases and both HUDs
-            // blank themselves outside their own, so reusing the row adds no
-            // clutter to a screen the S5/S6 handoffs already flagged as
-            // crowded. Cancel and "Walk Corners Instead" share one slot for the
-            // same reason: one shows only while a sweep is running, the other
-            // only while none is.
-            Text sweepReadout = CreateWallSweepReadout(canvasGo);
-            Button sweepPrimaryButton = CreateActionButton(
-                canvasGo, "SweepWallButton", "Start Walls",
-                new Vector2(0f, S3ButtonRowY), new Vector2(380f, 110f), 32, out Text sweepPrimaryLabel);
-            Button sweepUndoButton = CreateActionButton(
-                canvasGo, "UndoWallButton", "Undo Wall",
-                new Vector2(-350f, S3ButtonRowY), new Vector2(300f, 110f), 30, out _);
-            Button sweepCancelButton = CreateActionButton(
-                canvasGo, "CancelSweepButton", "Cancel Sweep",
-                new Vector2(350f, S3ButtonRowY), new Vector2(300f, 110f), 28, out _);
-            Button walkCornersButton = CreateActionButton(
-                canvasGo, "WalkCornersButton", "Walk Corners Instead",
-                new Vector2(350f, S3ButtonRowY), new Vector2(300f, 110f), 22, out _);
-
             var sweepHudGo = new GameObject("WallSweepHud", typeof(WallSweepHud));
             AssignSerializedReferences(
                 sweepHudGo.GetComponent<WallSweepHud>(),
@@ -173,42 +327,18 @@ namespace GhostMap.Scanner.Editor
                 ("readoutText", sweepReadout));
 
             // Task S3 corner capture — retained as the ADR-0005 fallback.
-            Text cornerReadout = CreateCornerReadout(canvasGo);
-            Button primaryButton = CreateActionButton(
-                canvasGo, "CaptureCornerButton", "Start Corners",
-                new Vector2(0f, S3ButtonRowY), new Vector2(380f, 110f), 34, out Text primaryLabel);
-            Button undoButton = CreateActionButton(
-                canvasGo, "UndoCornerButton", "Undo",
-                new Vector2(-350f, S3ButtonRowY), new Vector2(300f, 110f), 34, out _);
-            Button redoButton = CreateActionButton(
-                canvasGo, "RedoCornersButton", "Redo Corners",
-                new Vector2(350f, S3ButtonRowY), new Vector2(300f, 110f), 30, out _);
-
             var cornerHudGo = new GameObject("CornerCaptureHud", typeof(CornerCaptureHud));
             AssignSerializedReferences(
                 cornerHudGo.GetComponent<CornerCaptureHud>(),
                 ("floorLockHud", floorLockHud),
                 ("spatialProvider", spatialProvider),
-                ("primaryButton", primaryButton),
-                ("primaryButtonLabel", primaryLabel),
-                ("undoButton", undoButton),
+                ("primaryButton", cornerPrimaryButton),
+                ("primaryButtonLabel", cornerPrimaryLabel),
+                ("undoButton", cornerUndoButton),
                 ("redoButton", redoButton),
                 ("readoutText", cornerReadout));
 
             // Task S4 height capture.
-            Text heightReadout = CreateHeightReadout(canvasGo);
-            Button selectWallButton = CreateActionButton(
-                canvasGo, "SelectWallButton", "Wall 1/4",
-                new Vector2(-260f, S4WallRowY), new Vector2(300f, 100f), 32, out Text selectWallLabel);
-            Button captureHeightButton = CreateActionButton(
-                canvasGo, "CaptureHeightButton", "Capture Height",
-                new Vector2(260f, S4WallRowY), new Vector2(300f, 100f), 30, out Text captureHeightLabel);
-            InputField manualHeightInput = CreateManualHeightInputField(
-                canvasGo, new Vector2(-220f, S4ManualRowY), new Vector2(340f, 90f));
-            Button useManualHeightButton = CreateActionButton(
-                canvasGo, "UseManualHeightButton", "Use Manual Height",
-                new Vector2(260f, S4ManualRowY), new Vector2(340f, 90f), 26, out _);
-
             var heightHudGo = new GameObject("HeightCaptureHud", typeof(HeightCaptureHud));
             AssignSerializedReferences(
                 heightHudGo.GetComponent<HeightCaptureHud>(),
@@ -223,23 +353,6 @@ namespace GhostMap.Scanner.Editor
                 ("readoutText", heightReadout));
 
             // Task S5 Part 1: openings.
-            Text openingReadout = CreateOpeningReadout(canvasGo);
-            Button selectOpeningWallButton = CreateActionButton(
-                canvasGo, "SelectOpeningWallButton", "Wall 1/4",
-                new Vector2(-350f, S5OpeningsRow1Y), new Vector2(280f, 90f), 28, out Text selectOpeningWallLabel);
-            Button toggleOpeningTypeButton = CreateActionButton(
-                canvasGo, "ToggleOpeningTypeButton", "Type: door",
-                new Vector2(0f, S5OpeningsRow1Y), new Vector2(280f, 90f), 28, out Text toggleOpeningTypeLabel);
-            Button captureOpeningPointButton = CreateActionButton(
-                canvasGo, "CaptureOpeningPointButton", "Capture Lower-Left",
-                new Vector2(350f, S5OpeningsRow1Y), new Vector2(280f, 90f), 24, out Text captureOpeningPointLabel);
-            Button undoOpeningButton = CreateActionButton(
-                canvasGo, "UndoOpeningButton", "Undo Opening",
-                new Vector2(-260f, S5OpeningsRow2Y), new Vector2(300f, 90f), 28, out _);
-            Button finishOpeningsButton = CreateActionButton(
-                canvasGo, "FinishOpeningsButton", "Finish Openings",
-                new Vector2(260f, S5OpeningsRow2Y), new Vector2(300f, 90f), 28, out _);
-
             var openingHudGo = new GameObject("OpeningCaptureHud", typeof(OpeningCaptureHud));
             AssignSerializedReferences(
                 openingHudGo.GetComponent<OpeningCaptureHud>(),
@@ -256,46 +369,6 @@ namespace GhostMap.Scanner.Editor
                 ("readoutText", openingReadout));
 
             // Task S5 Part 2: furniture.
-            Text objectReadout = CreateObjectReadout(canvasGo);
-            Button selectObjectTypeButton = CreateActionButton(
-                canvasGo, "SelectObjectTypeButton", "Type: bed",
-                new Vector2(-350f, S5ObjectsRow1Y), new Vector2(280f, 80f), 26, out Text selectObjectTypeLabel);
-            Button placeObjectButton = CreateActionButton(
-                canvasGo, "PlaceObjectButton", "Place Object",
-                new Vector2(0f, S5ObjectsRow1Y), new Vector2(280f, 80f), 26, out _);
-            Button undoObjectButton = CreateActionButton(
-                canvasGo, "UndoObjectButton", "Undo Object",
-                new Vector2(350f, S5ObjectsRow1Y), new Vector2(280f, 80f), 26, out _);
-
-            Button widthMinusButton = CreateActionButton(
-                canvasGo, "WidthMinusButton", "W -",
-                new Vector2(-450f, S5ObjectsRow2Y), new Vector2(160f, 70f), 26, out _);
-            Button widthPlusButton = CreateActionButton(
-                canvasGo, "WidthPlusButton", "W +",
-                new Vector2(-270f, S5ObjectsRow2Y), new Vector2(160f, 70f), 26, out _);
-            Button depthMinusButton = CreateActionButton(
-                canvasGo, "DepthMinusButton", "D -",
-                new Vector2(-70f, S5ObjectsRow2Y), new Vector2(160f, 70f), 26, out _);
-            Button depthPlusButton = CreateActionButton(
-                canvasGo, "DepthPlusButton", "D +",
-                new Vector2(110f, S5ObjectsRow2Y), new Vector2(160f, 70f), 26, out _);
-            Button heightMinusButton = CreateActionButton(
-                canvasGo, "HeightMinusButton", "H -",
-                new Vector2(290f, S5ObjectsRow2Y), new Vector2(160f, 70f), 26, out _);
-            Button heightPlusButton = CreateActionButton(
-                canvasGo, "HeightPlusButton", "H +",
-                new Vector2(470f, S5ObjectsRow2Y), new Vector2(160f, 70f), 26, out _);
-
-            Button yawMinusButton = CreateActionButton(
-                canvasGo, "YawMinusButton", "Yaw -",
-                new Vector2(-260f, S5ObjectsRow3Y), new Vector2(200f, 70f), 26, out _);
-            Button yawPlusButton = CreateActionButton(
-                canvasGo, "YawPlusButton", "Yaw +",
-                new Vector2(-40f, S5ObjectsRow3Y), new Vector2(200f, 70f), 26, out _);
-            Button finishObjectsButton = CreateActionButton(
-                canvasGo, "FinishObjectsButton", "Finish Objects",
-                new Vector2(260f, S5ObjectsRow3Y), new Vector2(300f, 70f), 26, out _);
-
             var objectHudGo = new GameObject("ObjectPlacementHud", typeof(ObjectPlacementHud));
             AssignSerializedReferences(
                 objectHudGo.GetComponent<ObjectPlacementHud>(),
@@ -316,28 +389,11 @@ namespace GhostMap.Scanner.Editor
                 ("finishObjectsButton", finishObjectsButton),
                 ("readoutText", objectReadout));
 
-            // Task S6: networking, finalization and one consolidated status line.
-            Text scanStatusText = CreateTopAnchoredText(canvasGo, "ScanStatusText", 26, S6StatusY, 110f);
-            Text networkStatusText = CreateTopAnchoredText(canvasGo, "NetworkStatusText", 24, S6NetworkStatusY, 50f);
-
-            InputField hostInput = CreateTopAnchoredInputField(
-                canvasGo, "HostInput", "Laptop IP", 24f, S6ConnectRowY, new Vector2(420f, 70f));
-            InputField portInput = CreateTopAnchoredInputField(
-                canvasGo, "PortInput", "Port", 460f, S6ConnectRowY, new Vector2(160f, 70f));
-            portInput.text = ProtocolConstants.Port.ToString();
-            portInput.contentType = InputField.ContentType.IntegerNumber;
-
-            Button connectButton = CreateTopAnchoredButton(
-                canvasGo, "ConnectButton", "Connect", 640f, S6ConnectRowY, new Vector2(220f, 70f), 30, out _);
-
-            Button resetButton = CreateTopAnchoredButton(
-                canvasGo, "ResetButton", "Reset", 24f, S6ActionRowY, new Vector2(260f, 70f), 30, out _);
-            Button finalizeButton = CreateTopAnchoredButton(
-                canvasGo, "FinalizeButton", "Finalize GhostMap", 300f, S6ActionRowY, new Vector2(360f, 70f), 26, out _);
-
+            // Task S6: networking, finalization, restart.
             var scannerHudGo = new GameObject("ScannerHudController", typeof(ScannerHudController));
+            var scannerHud = scannerHudGo.GetComponent<ScannerHudController>();
             AssignSerializedReferences(
-                scannerHudGo.GetComponent<ScannerHudController>(),
+                scannerHud,
                 ("floorLockHud", floorLockHud),
                 ("spatialProvider", spatialProvider),
                 ("hostInput", hostInput),
@@ -346,7 +402,53 @@ namespace GhostMap.Scanner.Editor
                 ("networkStatusText", networkStatusText),
                 ("resetButton", resetButton),
                 ("finalizeButton", finalizeButton),
-                ("statusText", scanStatusText));
+                ("statusText", scanStatusText),
+                ("resetLabel", resetLabel),
+                ("connectionChipButton", connectionChip),
+                ("connectionChipLabel", connectionChipLabel),
+                ("connectionChipDot", connectionDot),
+                ("connectPanel", connectPanel.gameObject));
+
+            // The guide: words, progress, crosshair state, row collapsing.
+            var guideGo = new GameObject("ScannerGuideHud", typeof(ScannerGuideHud));
+            var guide = guideGo.GetComponent<ScannerGuideHud>();
+            AssignSerializedReferences(
+                guide,
+                ("floorLockHud", floorLockHud),
+                ("spatialProvider", spatialProvider),
+                ("scannerHud", scannerHud),
+                ("stepLabel", stepLabel),
+                ("titleText", titleText),
+                ("demoBadge", demoBadge.gameObject),
+                ("crosshair", crosshair),
+                ("coachBubble", bubble.gameObject),
+                ("coachBubbleBackground", bubbleBackground),
+                ("coachText", coachText),
+                ("instructionText", instructionText),
+                ("messagePill", messagePill.gameObject),
+                ("messageBackground", messageBackground),
+                ("messageText", messageText),
+                ("detailsButton", detailsButton),
+                ("detailsButtonLabel", detailsButtonLabel),
+                ("detailsPanel", details.gameObject));
+            AssignSerializedArray(guide, "progressSegments", segments);
+            AssignSerializedArray(
+                guide,
+                "collapsibleRows",
+                new UnityEngine.Object[]
+                {
+                    primaryRow.gameObject,
+                    choiceRow.gameObject,
+                    manualRow.gameObject,
+                    sizeRow1.gameObject,
+                    sizeRow2.gameObject,
+                    secondaryRow.gameObject
+                });
+
+            // Start hidden; the HUDs and the guide reveal what each step needs.
+            details.gameObject.SetActive(false);
+            connectPanel.gameObject.SetActive(false);
+            demoBadge.gameObject.SetActive(false);
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath) !);
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -357,8 +459,8 @@ namespace GhostMap.Scanner.Editor
         }
 
         /// <summary>
-        /// Opens the saved scene and asserts that every component Task S2 needs
-        /// is present and wired.
+        /// Opens the saved scene and asserts that every component the scan
+        /// needs is present and wired.
         ///
         /// This exists for the same reason
         /// <c>ScannerXrSettings.VerifyIosArKitConfiguration</c> does: a scene
@@ -389,9 +491,11 @@ namespace GhostMap.Scanner.Editor
                 Require(provider != null, "no ArSpatialProvider");
                 RequireAssigned(provider, "raycastManager", "arCamera");
 
+                Require(FindInScene<SafeAreaFitter>(scene) != null, "no SafeAreaFitter; the UI would sit under the Dynamic Island");
+
                 var hud = FindInScene<FloorLockHud>(scene);
                 Require(hud != null, "no FloorLockHud");
-                RequireAssigned(hud, "spatialProvider", "lockFloorButton", "crosshair", "readoutText");
+                RequireAssigned(hud, "spatialProvider", "lockFloorButton", "readoutText");
 
                 var sweepHud = FindInScene<WallSweepHud>(scene);
                 Require(sweepHud != null, "no WallSweepHud");
@@ -481,7 +585,36 @@ namespace GhostMap.Scanner.Editor
                     "networkStatusText",
                     "resetButton",
                     "finalizeButton",
-                    "statusText");
+                    "statusText",
+                    "resetLabel",
+                    "connectionChipButton",
+                    "connectionChipLabel",
+                    "connectionChipDot",
+                    "connectPanel");
+
+                var guide = FindInScene<ScannerGuideHud>(scene);
+                Require(guide != null, "no ScannerGuideHud");
+                RequireAssigned(
+                    guide,
+                    "floorLockHud",
+                    "spatialProvider",
+                    "scannerHud",
+                    "stepLabel",
+                    "titleText",
+                    "demoBadge",
+                    "crosshair",
+                    "coachBubble",
+                    "coachBubbleBackground",
+                    "coachText",
+                    "instructionText",
+                    "messagePill",
+                    "messageBackground",
+                    "messageText",
+                    "detailsButton",
+                    "detailsButtonLabel",
+                    "detailsPanel");
+                RequireArray(guide, "progressSegments", ScanGuide.StepCount);
+                RequireArray(guide, "collapsibleRows", 1);
             }
             finally
             {
@@ -507,6 +640,22 @@ namespace GhostMap.Scanner.Editor
                 Require(
                     property.objectReferenceValue != null,
                     $"{target.GetType().Name}.{fieldName} is not assigned");
+            }
+        }
+
+        /// <summary>Asserts an array field has at least <paramref name="minimum"/> entries, none null.</summary>
+        private static void RequireArray(UnityEngine.Object target, string fieldName, int minimum)
+        {
+            var serialized = new SerializedObject(target);
+            SerializedProperty property = serialized.FindProperty(fieldName);
+            string name = $"{target.GetType().Name}.{fieldName}";
+
+            Require(property != null && property.isArray, $"{name} does not exist");
+            Require(property.arraySize >= minimum, $"{name} has {property.arraySize} entries, expected {minimum}+");
+
+            for (int i = 0; i < property.arraySize; i++)
+            {
+                Require(property.GetArrayElementAtIndex(i).objectReferenceValue != null, $"{name}[{i}] is not assigned");
             }
         }
 
@@ -544,6 +693,30 @@ namespace GhostMap.Scanner.Editor
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
+        private static void AssignSerializedArray(
+            UnityEngine.Object target,
+            string field,
+            IReadOnlyList<UnityEngine.Object> values)
+        {
+            var serialized = new SerializedObject(target);
+            SerializedProperty property = serialized.FindProperty(field);
+
+            if (property == null || !property.isArray)
+            {
+                throw new InvalidOperationException(
+                    $"{target.GetType().Name} has no serialized array '{field}'.");
+            }
+
+            property.arraySize = values.Count;
+
+            for (int i = 0; i < values.Count; i++)
+            {
+                property.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
+            }
+
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         private static void CreateEventSystem()
         {
             var eventSystemGo = new GameObject("EventSystem", typeof(EventSystem));
@@ -551,7 +724,7 @@ namespace GhostMap.Scanner.Editor
 
             // Without actions the module resolves nothing and every tap is
             // swallowed. The defaults cover point/click, which is all the
-            // floor-lock button needs.
+            // buttons need.
             module.AssignDefaultActions();
         }
 
@@ -569,417 +742,17 @@ namespace GhostMap.Scanner.Editor
             return canvasGo;
         }
 
-        private static Text CreateDiagnosticsText(GameObject canvasGo)
+        private static void Center(RectTransform rect, Vector2 offset)
         {
-            Text text = CreateText(canvasGo, "DiagnosticsText", 24);
-
-            RectTransform rect = text.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(1f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(24f, -48f);
-            rect.sizeDelta = new Vector2(-48f, 340f);
-
-            return text;
-        }
-
-        /// <summary>
-        /// The Task S2 readout, anchored to the bottom so it sits clear of the
-        /// S1 diagnostics block above and the Lock Floor button below.
-        /// </summary>
-        private static Text CreateFloorLockReadout(GameObject canvasGo)
-        {
-            Text text = CreateText(canvasGo, "FloorLockReadout", 26);
-
-            RectTransform rect = text.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 0f);
-            rect.anchorMax = new Vector2(1f, 0f);
-            rect.pivot = new Vector2(0f, 0f);
-            rect.anchoredPosition = new Vector2(24f, 380f);
-            rect.sizeDelta = new Vector2(-48f, 280f);
-
-            return text;
-        }
-
-        /// <summary>
-        /// The Task S3 readout, above the floor-lock block: corner count, the
-        /// live crosshair projection, every captured corner in Ghost
-        /// coordinates, and the closure result.
-        /// </summary>
-        /// <summary>
-        /// The ADR-0005 sweep readout. Shares the S3 corner readout's area
-        /// (690-990) because the two phases are mutually exclusive and each HUD
-        /// blanks its own text outside its phase, so only one is ever populated.
-        /// </summary>
-        private static Text CreateWallSweepReadout(GameObject canvasGo)
-        {
-            Text text = CreateText(canvasGo, "WallSweepReadout", 26);
-
-            RectTransform rect = text.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 0f);
-            rect.anchorMax = new Vector2(1f, 0f);
-            rect.pivot = new Vector2(0f, 0f);
-            rect.anchoredPosition = new Vector2(24f, 690f);
-            rect.sizeDelta = new Vector2(-48f, 300f);
-
-            return text;
-        }
-
-        private static Text CreateCornerReadout(GameObject canvasGo)
-        {
-            Text text = CreateText(canvasGo, "CornerCaptureReadout", 26);
-
-            RectTransform rect = text.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 0f);
-            rect.anchorMax = new Vector2(1f, 0f);
-            rect.pivot = new Vector2(0f, 0f);
-            rect.anchoredPosition = new Vector2(24f, 690f);
-            rect.sizeDelta = new Vector2(-48f, 300f);
-
-            return text;
-        }
-
-        /// <summary>
-        /// The Task S4 readout, above the S3 corner readout (690-990): the
-        /// selected wall, the live aim projection, and the captured height.
-        /// </summary>
-        private static Text CreateHeightReadout(GameObject canvasGo)
-        {
-            Text text = CreateText(canvasGo, "HeightCaptureReadout", 26);
-
-            RectTransform rect = text.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 0f);
-            rect.anchorMax = new Vector2(1f, 0f);
-            rect.pivot = new Vector2(0f, 0f);
-            rect.anchoredPosition = new Vector2(24f, 1000f);
-            rect.sizeDelta = new Vector2(-48f, 260f);
-
-            return text;
-        }
-
-        /// <summary>
-        /// The Task S5 Part 1 readout, above the Task S4 block: the selected
-        /// wall and type, the live aim and pending-point projections, and
-        /// every captured opening.
-        /// </summary>
-        private static Text CreateOpeningReadout(GameObject canvasGo)
-        {
-            Text text = CreateText(canvasGo, "OpeningCaptureReadout", 24);
-
-            RectTransform rect = text.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 0f);
-            rect.anchorMax = new Vector2(1f, 0f);
-            rect.pivot = new Vector2(0f, 0f);
-            rect.anchoredPosition = new Vector2(24f, S5OpeningsReadoutY);
-            rect.sizeDelta = new Vector2(-48f, 200f);
-
-            return text;
-        }
-
-        /// <summary>
-        /// The Task S5 Part 2 readout, above the openings block: the object
-        /// count, next type, live floor aim, and every placed object's
-        /// dimensions and yaw.
-        /// </summary>
-        private static Text CreateObjectReadout(GameObject canvasGo)
-        {
-            Text text = CreateText(canvasGo, "ObjectPlacementReadout", 24);
-
-            RectTransform rect = text.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 0f);
-            rect.anchorMax = new Vector2(1f, 0f);
-            rect.pivot = new Vector2(0f, 0f);
-            rect.anchoredPosition = new Vector2(24f, S5ObjectsReadoutY);
-            rect.sizeDelta = new Vector2(-48f, 220f);
-
-            return text;
-        }
-
-        /// <summary>
-        /// A legacy <see cref="InputField"/> for the Task S4 manual height
-        /// fallback (implementation plan section 8.7): a failed automatic
-        /// capture must never block the scan.
-        /// </summary>
-        private static InputField CreateManualHeightInputField(
-            GameObject canvasGo, Vector2 anchoredPosition, Vector2 size)
-        {
-            var fieldGo = new GameObject("ManualHeightInput", typeof(Image), typeof(InputField));
-            fieldGo.transform.SetParent(canvasGo.transform, false);
-
-            var background = fieldGo.GetComponent<Image>();
-            background.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
-            background.type = Image.Type.Sliced;
-            background.color = new Color(0.92f, 0.92f, 0.92f, 0.95f);
-
-            RectTransform rect = fieldGo.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0.5f, 0f);
-            rect.anchorMax = new Vector2(0.5f, 0f);
-            rect.pivot = new Vector2(0.5f, 0f);
-            rect.anchoredPosition = anchoredPosition;
-            rect.sizeDelta = size;
-
-            Text text = CreateText(fieldGo, "Text", 32);
-            text.color = Color.black;
-            text.alignment = TextAnchor.MiddleLeft;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-
-            RectTransform textRect = text.GetComponent<RectTransform>();
-            textRect.anchorMin = Vector2.zero;
-            textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = new Vector2(16f, 6f);
-            textRect.offsetMax = new Vector2(-16f, -6f);
-
-            Text placeholder = CreateText(fieldGo, "Placeholder", 32);
-            placeholder.text = "Height (m)";
-            placeholder.color = new Color(0f, 0f, 0f, 0.4f);
-            placeholder.fontStyle = FontStyle.Italic;
-
-            RectTransform placeholderRect = placeholder.GetComponent<RectTransform>();
-            placeholderRect.anchorMin = Vector2.zero;
-            placeholderRect.anchorMax = Vector2.one;
-            placeholderRect.offsetMin = new Vector2(16f, 6f);
-            placeholderRect.offsetMax = new Vector2(-16f, -6f);
-
-            var field = fieldGo.GetComponent<InputField>();
-            field.textComponent = text;
-            field.placeholder = placeholder;
-            field.contentType = InputField.ContentType.DecimalNumber;
-
-            return field;
-        }
-
-        /// <summary>
-        /// A top-anchored, full-width readout. Used by Task S6's status lines,
-        /// which must stay visible regardless of how far the bottom button/
-        /// readout stack already runs past the reference resolution.
-        /// </summary>
-        private static Text CreateTopAnchoredText(GameObject canvasGo, string name, int fontSize, float yFromTop, float height)
-        {
-            Text text = CreateText(canvasGo, name, fontSize);
-
-            RectTransform rect = text.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(1f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(24f, -yFromTop);
-            rect.sizeDelta = new Vector2(-48f, height);
-
-            return text;
-        }
-
-        /// <summary>A top-anchored button at an explicit x offset, for Task S6's connection/action row.</summary>
-        private static Button CreateTopAnchoredButton(
-            GameObject canvasGo,
-            string name,
-            string labelText,
-            float x,
-            float yFromTop,
-            Vector2 size,
-            int fontSize,
-            out Text label)
-        {
-            var buttonGo = new GameObject(name, typeof(Image), typeof(Button));
-            buttonGo.transform.SetParent(canvasGo.transform, false);
-
-            var background = buttonGo.GetComponent<Image>();
-            background.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
-            background.type = Image.Type.Sliced;
-            background.color = new Color(0.16f, 0.16f, 0.18f, 0.92f);
-
-            RectTransform rect = buttonGo.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(x, -yFromTop);
-            rect.sizeDelta = size;
-
-            var button = buttonGo.GetComponent<Button>();
-            button.targetGraphic = background;
-
-            label = CreateText(buttonGo, "Label", fontSize);
-            label.text = labelText;
-            label.alignment = TextAnchor.MiddleCenter;
-            label.raycastTarget = false;
-
-            RectTransform labelRect = label.GetComponent<RectTransform>();
-            labelRect.anchorMin = Vector2.zero;
-            labelRect.anchorMax = Vector2.one;
-            labelRect.pivot = new Vector2(0.5f, 0.5f);
-            labelRect.anchoredPosition = Vector2.zero;
-            labelRect.sizeDelta = Vector2.zero;
-
-            return button;
-        }
-
-        /// <summary>A top-anchored text input at an explicit x offset, for Task S6's laptop IP / port fields.</summary>
-        private static InputField CreateTopAnchoredInputField(
-            GameObject canvasGo, string name, string placeholderText, float x, float yFromTop, Vector2 size)
-        {
-            var fieldGo = new GameObject(name, typeof(Image), typeof(InputField));
-            fieldGo.transform.SetParent(canvasGo.transform, false);
-
-            var background = fieldGo.GetComponent<Image>();
-            background.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
-            background.type = Image.Type.Sliced;
-            background.color = new Color(0.92f, 0.92f, 0.92f, 0.95f);
-
-            RectTransform rect = fieldGo.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(x, -yFromTop);
-            rect.sizeDelta = size;
-
-            Text text = CreateText(fieldGo, "Text", 30);
-            text.color = Color.black;
-            text.alignment = TextAnchor.MiddleLeft;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-
-            RectTransform textRect = text.GetComponent<RectTransform>();
-            textRect.anchorMin = Vector2.zero;
-            textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = new Vector2(16f, 6f);
-            textRect.offsetMax = new Vector2(-16f, -6f);
-
-            Text placeholder = CreateText(fieldGo, "Placeholder", 30);
-            placeholder.text = placeholderText;
-            placeholder.color = new Color(0f, 0f, 0f, 0.4f);
-            placeholder.fontStyle = FontStyle.Italic;
-
-            RectTransform placeholderRect = placeholder.GetComponent<RectTransform>();
-            placeholderRect.anchorMin = Vector2.zero;
-            placeholderRect.anchorMax = Vector2.one;
-            placeholderRect.offsetMin = new Vector2(16f, 6f);
-            placeholderRect.offsetMax = new Vector2(-16f, -6f);
-
-            var field = fieldGo.GetComponent<InputField>();
-            field.textComponent = text;
-            field.placeholder = placeholder;
-
-            return field;
-        }
-
-        private static Text CreateText(GameObject canvasGo, string name, int fontSize)
-        {
-            var textGo = new GameObject(name, typeof(Text));
-            textGo.transform.SetParent(canvasGo.transform, false);
-
-            var text = textGo.GetComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.fontSize = fontSize;
-            text.color = Color.white;
-            text.alignment = TextAnchor.UpperLeft;
-            text.horizontalOverflow = HorizontalWrapMode.Overflow;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
-
-            return text;
-        }
-
-        /// <summary>
-        /// The reticle the floor raycast is fired through: dead center, because
-        /// <c>ISpatialProvider.CenterScreenPoint</c> is what the lock reads.
-        /// Its color is the fastest read on whether a lock is possible.
-        /// </summary>
-        private static Graphic CreateCrosshair(GameObject canvasGo)
-        {
-            var crosshairGo = new GameObject("Crosshair", typeof(Image));
-            crosshairGo.transform.SetParent(canvasGo.transform, false);
-
-            var image = crosshairGo.GetComponent<Image>();
-            image.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
-            image.color = Color.white;
-            image.raycastTarget = false;
-
-            RectTransform rect = crosshairGo.GetComponent<RectTransform>();
             rect.anchorMin = new Vector2(0.5f, 0.5f);
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.anchoredPosition = Vector2.zero;
-            rect.sizeDelta = new Vector2(48f, 48f);
-
-            return image;
+            rect.anchoredPosition = offset;
         }
 
-        private static Button CreateLockFloorButton(GameObject canvasGo)
+        private static Text DetailsText(Transform parent, string name)
         {
-            var buttonGo = new GameObject("LockFloorButton", typeof(Image), typeof(Button));
-            buttonGo.transform.SetParent(canvasGo.transform, false);
-
-            var background = buttonGo.GetComponent<Image>();
-            background.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
-            background.type = Image.Type.Sliced;
-            background.color = new Color(0.16f, 0.16f, 0.18f, 0.92f);
-
-            RectTransform rect = buttonGo.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0.5f, 0f);
-            rect.anchorMax = new Vector2(0.5f, 0f);
-            rect.pivot = new Vector2(0.5f, 0f);
-            rect.anchoredPosition = new Vector2(0f, 90f);
-            rect.sizeDelta = new Vector2(560f, 130f);
-
-            var button = buttonGo.GetComponent<Button>();
-            button.targetGraphic = background;
-
-            Text label = CreateText(buttonGo, "Label", 40);
-            label.text = "Lock Floor";
-            label.alignment = TextAnchor.MiddleCenter;
-            label.raycastTarget = false;
-
-            RectTransform labelRect = label.GetComponent<RectTransform>();
-            labelRect.anchorMin = Vector2.zero;
-            labelRect.anchorMax = Vector2.one;
-            labelRect.pivot = new Vector2(0.5f, 0.5f);
-            labelRect.anchoredPosition = Vector2.zero;
-            labelRect.sizeDelta = Vector2.zero;
-
-            return button;
-        }
-
-        /// <summary>
-        /// A bottom-anchored button. The label is handed back so
-        /// <see cref="CornerCaptureHud"/> can retitle the primary control as
-        /// the phase changes.
-        /// </summary>
-        private static Button CreateActionButton(
-            GameObject canvasGo,
-            string name,
-            string labelText,
-            Vector2 anchoredPosition,
-            Vector2 size,
-            int fontSize,
-            out Text label)
-        {
-            var buttonGo = new GameObject(name, typeof(Image), typeof(Button));
-            buttonGo.transform.SetParent(canvasGo.transform, false);
-
-            var background = buttonGo.GetComponent<Image>();
-            background.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
-            background.type = Image.Type.Sliced;
-            background.color = new Color(0.16f, 0.16f, 0.18f, 0.92f);
-
-            RectTransform rect = buttonGo.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0.5f, 0f);
-            rect.anchorMax = new Vector2(0.5f, 0f);
-            rect.pivot = new Vector2(0.5f, 0f);
-            rect.anchoredPosition = anchoredPosition;
-            rect.sizeDelta = size;
-
-            var button = buttonGo.GetComponent<Button>();
-            button.targetGraphic = background;
-
-            label = CreateText(buttonGo, "Label", fontSize);
-            label.text = labelText;
-            label.alignment = TextAnchor.MiddleCenter;
-            label.raycastTarget = false;
-
-            RectTransform labelRect = label.GetComponent<RectTransform>();
-            labelRect.anchorMin = Vector2.zero;
-            labelRect.anchorMax = Vector2.one;
-            labelRect.pivot = new Vector2(0.5f, 0.5f);
-            labelRect.anchoredPosition = Vector2.zero;
-            labelRect.sizeDelta = Vector2.zero;
-
-            return button;
+            return ScannerUiKit.Label(parent, name, string.Empty, 24, ScannerUiKit.TextSecondary);
         }
 
         private static GameObject CreateFromMenu(string menuPath)

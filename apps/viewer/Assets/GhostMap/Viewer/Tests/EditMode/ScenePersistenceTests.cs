@@ -308,6 +308,47 @@ namespace GhostMap.Viewer.Tests.EditMode
             Assert.AreEqual(180f, loaded.room.objects[0].yawDeg, 1e-5f);
         }
 
+        // ---- Full pipeline: ScenePersistence.TryLoad -> ViewerEditableScene.LoadExternalSnapshot ----
+
+        [Test]
+        public void AFinalizedSavedFileLoadsThroughTheFullPipelineAndBecomesEditable()
+        {
+            ScenePersistence.TrySave(BuildSnapshot(finalized: true), TempFile(), out string saveError);
+
+            Assert.IsTrue(ScenePersistence.TryLoad(TempFile(), out SceneSnapshot loaded, out string loadError),
+                loadError ?? saveError);
+
+            var editable = new ViewerEditableScene();
+            bool installed = editable.LoadExternalSnapshot(loaded, out string installError);
+
+            Assert.IsTrue(installed, installError);
+            Assert.IsTrue(editable.EditingEnabled);
+            Assert.IsTrue(editable.Current.finalized);
+        }
+
+        [Test]
+        public void AnUnfinalizedSavedFileIsRejectedAtTheInstallationBoundary()
+        {
+            // ScenePersistence.TryLoad only checks well-formedness and
+            // RoomValidator/OpeningValidator/FurnitureValidator — an
+            // unfinalized room can be perfectly legal on its own — so the
+            // authoritative rejection for "this is not a Viewer-owned scene"
+            // happens one layer in, at ViewerEditableScene.LoadExternalSnapshot
+            // (ADR-0003).
+            ScenePersistence.TrySave(BuildSnapshot(finalized: false), TempFile(), out string saveError);
+            Assert.IsTrue(ScenePersistence.TryLoad(TempFile(), out SceneSnapshot loaded, out string loadError),
+                loadError ?? saveError);
+            Assert.IsFalse(loaded.finalized);
+
+            var editable = new ViewerEditableScene();
+            bool installed = editable.LoadExternalSnapshot(loaded, out string installError);
+
+            Assert.IsFalse(installed);
+            Assert.IsNotEmpty(installError);
+            Assert.IsNull(editable.Current);
+            Assert.IsFalse(editable.EditingEnabled);
+        }
+
         // ---- 13-15: rejection paths ----
 
         [Test]

@@ -5,6 +5,7 @@ using GhostMap.Viewer.Bootstrap;
 using GhostMap.Viewer.Interaction;
 using GhostMap.Viewer.Networking;
 using GhostMap.Viewer.Persistence;
+using GhostMap.Viewer.Scene;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -42,6 +43,15 @@ namespace GhostMap.Viewer.UI
         [SerializeField] private Button loadButton;
 
         /// <summary>
+        /// Fix (post-V6 review): a successful Load replaces what the user is
+        /// inspecting, so it must reset transient interaction state that
+        /// referenced the old room — never on a failed load, which leaves
+        /// the current scene (and therefore this state) untouched.
+        /// </summary>
+        [SerializeField] private ObjectSelectionController selectionController;
+        [SerializeField] private MeasurementController measurementController;
+
+        /// <summary>
         /// The fixture loaded by the button. Resolved relative to the repo
         /// root at edit/dev time; V1 targets desktop development, not a
         /// standalone player deployment.
@@ -57,6 +67,17 @@ namespace GhostMap.Viewer.UI
         [SerializeField] private string saveFileName = "ghostmap-scene.json";
 
         private string _lastPersistenceMessage = string.Empty;
+
+        /// <summary>Test-time wiring, mirroring the <c>SetX</c> pattern every
+        /// other interaction controller already uses (e.g.
+        /// <c>ObjectSelectionController.SetRoomRenderer</c>), so the small
+        /// pure/testable pieces below can be exercised without a full scene
+        /// build.</summary>
+        public void SetSelectionController(ObjectSelectionController value) => selectionController = value;
+
+        public void SetMeasurementController(MeasurementController value) => measurementController = value;
+
+        public void SetCameraController(OrbitCameraController value) => cameraController = value;
 
         private void Awake()
         {
@@ -110,21 +131,30 @@ namespace GhostMap.Viewer.UI
 
         private void OnSaveClicked()
         {
-            SceneSnapshot current = bootstrap != null ? bootstrap.EditableScene?.Current : null;
-            if (current == null)
+            ViewerEditableScene editable = bootstrap != null ? bootstrap.EditableScene : null;
+
+            if (!CanSave(editable))
             {
-                _lastPersistenceMessage = "Nothing to save yet.";
+                _lastPersistenceMessage = "Save unavailable until the scan is finalized.";
                 return;
             }
 
             string path = ResolveSaveFilePath();
-            _lastPersistenceMessage = ScenePersistence.TrySave(current, path, out string error)
+            _lastPersistenceMessage = ScenePersistence.TrySave(editable.Current, path, out string error)
                 ? $"Saved to {path}"
                 : $"Save failed: {error}";
         }
 
         private void OnLoadClicked()
         {
+            ViewerEditableScene editable = bootstrap != null ? bootstrap.EditableScene : null;
+
+            if (!CanLoad(editable))
+            {
+                _lastPersistenceMessage = "Finish or reset the active scan before loading a saved room.";
+                return;
+            }
+
             string path = ResolveSaveFilePath();
             if (!ScenePersistence.TryLoad(path, out SceneSnapshot loaded, out string error))
             {
@@ -132,9 +162,64 @@ namespace GhostMap.Viewer.UI
                 return;
             }
 
-            _lastPersistenceMessage = bootstrap.EditableScene.LoadExternalSnapshot(loaded, out string loadError)
-                ? $"Loaded from {path}"
-                : $"Load failed: {loadError}";
+            if (!editable.LoadExternalSnapshot(loaded, out string loadError))
+            {
+                _lastPersistenceMessage = $"Load failed: {loadError}";
+                return;
+            }
+
+            ResetTransientStateAfterLoad();
+            _lastPersistenceMessage = $"Loaded from {path}";
+        }
+
+        /// <summary>
+        /// Fix (post-V6 review), ADR-0003: Save must only ever persist a
+        /// Viewer-owned, finalized scene — never a Scanner-owned, in-progress
+        /// scan. <see cref="ViewerEditableScene.EditingEnabled"/> and
+        /// <see cref="SceneSnapshot.finalized"/> are kept in sync by
+        /// construction (every path that sets <c>Current</c> sets
+        /// <c>EditingEnabled</c> from that same snapshot's <c>finalized</c>
+        /// flag), but both are checked here anyway so this boundary does not
+        /// rely on an invariant holding elsewhere. Public and static so it is
+        /// directly testable without a scene.
+        /// </summary>
+        public static bool CanSave(ViewerEditableScene editable)
+            => editable != null && editable.Current != null && editable.EditingEnabled && editable.Current.finalized;
+
+        /// <summary>
+        /// Fix (post-V6 review), ADR-0003: Load must never replace a
+        /// Scanner-owned, in-progress scan — only an empty Viewer (nothing to
+        /// protect yet) or an already Viewer-owned/finalized scene may be
+        /// replaced. Public and static for the same reason as
+        /// <see cref="CanSave"/>.
+        /// </summary>
+        public static bool CanLoad(ViewerEditableScene editable)
+            => editable == null || editable.Current == null || editable.EditingEnabled;
+
+        /// <summary>
+        /// Fix (post-V6 review): a successful Load replaces the inspected
+        /// room, so whatever the user was doing to the *previous* room
+        /// (a selection, an in-progress or completed measurement) must not
+        /// silently carry over and reference stale geometry. Only called
+        /// after <see cref="ViewerEditableScene.LoadExternalSnapshot"/>
+        /// actually succeeds — a failed load must never touch any of this.
+        /// Public so it is directly testable by wiring real controllers via
+        /// the <c>SetX</c> methods above, without a full scene build.
+        /// </summary>
+        public void ResetTransientStateAfterLoad()
+        {
+            selectionController?.ClearSelection();
+
+            if (measurementController != null)
+            {
+                measurementController.SetActive(false);
+                measurementController.Clear();
+            }
+
+            if (cameraController != null)
+            {
+                cameraController.FrameRoom();
+            }
         }
 
         private string ResolveSaveFilePath() => Path.Combine(Application.persistentDataPath, saveFileName);

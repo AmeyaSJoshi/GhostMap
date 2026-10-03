@@ -17,15 +17,30 @@
   - `ViewerEditableScene.LoadExternalSnapshot(SceneSnapshot, out error)` —
     **new**. Installs a loaded scene through the same clone-and-`Changed`
     path a scanner finalized snapshot uses (no second rendering path).
-    Always sets `EditingEnabled = true` on success — a loaded file is put
-    back exactly where editing left off. Reuses V5's existing same-session
-    guard unmodified: a stale/duplicate reconnect resend of the loaded
-    session is ignored (the loaded/edited scene is protected); a
+    **Authority rule (`ADR-0003`), corrected by a post-review fix on this
+    branch**: only a snapshot whose own `finalized` flag is already `true`
+    may be installed — anything else is rejected outright, `Current` is
+    left completely untouched, and `EditingEnabled` is then derived from
+    `Current.finalized` (never hard-coded true). Also re-runs
+    `SceneSnapshotValidator` itself as defense in depth for this public
+    scene-replacement boundary. Once installed, this reuses V5's existing
+    same-session guard unmodified: a stale/duplicate reconnect resend of
+    the loaded session is ignored (the loaded/edited scene is protected); a
     genuinely new scanner session still replaces it, per `ADR-0003`.
   - **Save always persists `ViewerEditableScene.Current`**, never the raw
     `ViewerSceneStore.Current` — the effective, post-finalization,
     locally-edited state, proved by a dedicated test that the two diverge
     and the saved file matches the edited one.
+  - **Save/Load are gated at the HUD boundary (`ADR-0003`), added by the
+    same post-review fix**: `ViewerHudController.CanSave` requires a
+    finalized, Viewer-owned scene (refuses an unfinalized, Scanner-owned
+    one — "Save unavailable until the scan is finalized."), and
+    `ViewerHudController.CanLoad` refuses to replace a Scanner-owned,
+    in-progress scan ("Finish or reset the active scan before loading a
+    saved room."). A successful Load also calls
+    `ViewerHudController.ResetTransientStateAfterLoad()`, clearing the
+    previous selection and measurement and re-framing the camera on the
+    newly loaded room — never on a failed load.
   - `ViewerHudController` gains **Save**/**Load** buttons (single fixed
     slot at `Application.persistentDataPath/ghostmap-scene.json`, so — unlike
     the V1 "Load fixture" dev button's repo-relative path — it resolves
@@ -367,11 +382,14 @@
   `79d49c0` (V3), `197d4bd` (V2).
 
 ## Tests run
-- **V6 result: 458 tests, 458 passed, 0 failed, 0 skipped.** Unity exit code
-  `0`. That is the prior 430 (V1-V5, unchanged) + **28 new V6 tests**: 21
-  `ScenePersistenceTests`, 7 `ViewerEditableSceneLoadTests`. Shared
-  `TestProject` re-run standalone: **156 tests, 156 passed, 0 failed** — no
-  file under `shared/**` was touched. Full breakdown, the end-to-end
+- **V6 result (after the post-review persistence-authority fix): 475 tests,
+  475 passed, 0 failed, 0 skipped.** Unity exit code `0`. That is the prior
+  430 (V1-V5, unchanged) + 28 first-pass V6 tests (23 `ScenePersistenceTests`,
+  10 `ViewerEditableSceneLoadTests` after the fix added more to each) +
+  **12 new `ViewerHudControllerPersistenceGatingTests`** covering
+  `CanSave`/`CanLoad`/`ResetTransientStateAfterLoad`. Shared `TestProject`
+  re-run standalone: **156 tests, 156 passed, 0 failed** — no file under
+  `shared/**` was touched. Full breakdown, the end-to-end
   persistence smoke test, and the standalone macOS build verification are
   in the V6 handoff.
 - Command:
@@ -505,7 +523,16 @@
   two above; `Pump()`, `LoadFixture(string)`.
 - `GhostMap.Viewer.Bootstrap.ViewerBootstrap` — the `MonoBehaviour` wrapper;
   `Session` property.
-- `GhostMap.Viewer.UI.ViewerHudController` — diagnostics/Load-fixture HUD.
+- `GhostMap.Viewer.UI.ViewerHudController` — diagnostics/Load-fixture/
+  Save/Load HUD. `CanSave(ViewerEditableScene)` and
+  `CanLoad(ViewerEditableScene)` (both `public static`, V6 post-review fix)
+  are the pure/testable Save/Load authority gates (`ADR-0003`), the same
+  split `ViewerInteractionRouter.IsClick` already established.
+  `ResetTransientStateAfterLoad()` (public instance method, same fix) clears
+  selection/measurement and re-frames the camera after a successful Load.
+  `SetSelectionController`/`SetMeasurementController`/`SetCameraController`
+  are test-wiring setters mirroring every other interaction controller's
+  `SetX` pattern.
 - `GhostMap.Viewer.Rendering.FloorCeilingRenderer` — static;
   `TryBuildFloorMesh(RoomModel, out Mesh)`, `TryBuildCeilingMesh(RoomModel, out Mesh)`.
 - `GhostMap.Viewer.Rendering.WallSliceGenerator` — static;
@@ -588,10 +615,13 @@
 
 ## Known issues
 - **None blocking Integration.** V1-V6 are complete; the next safe task is
-  I1. V6-specific limitations (single save slot, no confirmation-before-
-  overwrite, a loaded scene's `EditingEnabled` always forced `true`) are
-  documented in full in the V6 handoff and are deliberate MVP-scope
-  decisions, not defects.
+  I1. A post-review pass fixed four persistence-authority bugs on
+  `viewer/v6-persistence-hud` (Save/Load were not properly gated by
+  `ADR-0003`, and a successful Load did not reset selection/measurement/
+  camera state) — see the V6 handoff's "Post-review fix" section for full
+  detail. Remaining V6-specific limitations (single save slot, no
+  confirmation-before-overwrite) are documented in full in the V6 handoff
+  and are deliberate MVP-scope decisions, not defects.
 - **In dollhouse mode the near wall still occludes furniture standing against
   it.** Only the ceiling is hidden, which is exactly what section 12.2
   specifies; orbiting or raising the pitch reveals them. Wall fading is not

@@ -177,33 +177,43 @@ namespace GhostMap.Viewer.Scene
         }
 
         /// <summary>
-        /// Task V6: installs a previously-saved, previously-validated
-        /// <see cref="SceneSnapshot"/> (<c>Persistence.ScenePersistence.TryLoad</c>
-        /// already ran it through <see cref="SceneSnapshotValidator"/>) as the
-        /// new effective scene, exactly like a scanner finalized snapshot
-        /// would — same clone-and-<see cref="Changed"/> path, so
-        /// <c>RoomRenderer</c>/<c>OrbitCameraController</c>/every interaction
-        /// controller pick it up through the one existing
-        /// <see cref="IViewerSceneSource"/> channel rather than a second,
-        /// load-specific rendering path.
+        /// Task V6 (fixed post-review): installs a previously-saved
+        /// <see cref="SceneSnapshot"/> as the new effective scene, exactly
+        /// like a scanner finalized snapshot would — same clone-and-
+        /// <see cref="Changed"/> path, so <c>RoomRenderer</c>/
+        /// <c>OrbitCameraController</c>/every interaction controller pick it
+        /// up through the one existing <see cref="IViewerSceneSource"/>
+        /// channel rather than a second, load-specific rendering path.
         ///
-        /// <para><b>Authority decision (this task):</b> a successfully loaded
-        /// scene always becomes <see cref="EditingEnabled"/> <c>true</c> —
-        /// the only reason a scene is ever saved is that it was already
-        /// post-finalization (editing was enabled when Save ran), so a loaded
-        /// file is put back exactly where it left off, ready to keep
-        /// editing. This reuses <see cref="OnSourceChanged"/>'s own
-        /// same-session/EditingEnabled guard: if the tracked scanner session
-        /// later resends the *same* <c>sessionId</c> the loaded file carries
-        /// (a stale reconnect resend), it is ignored exactly as a duplicate
-        /// finalized resend already is; a genuinely different
+        /// <para><b>This is a public scene-replacement boundary and does not
+        /// rely on the caller having already validated anything</b> — it
+        /// re-runs <see cref="SceneSnapshotValidator"/> itself (the exact
+        /// same check <c>Persistence.ScenePersistence.TryLoad</c> already
+        /// ran, not a second copy of the rules) as defense in depth.</para>
+        ///
+        /// <para><b>Authority rule, exactly `ADR-0003`:</b> the Viewer owns
+        /// scene state only after finalization, so only a snapshot whose
+        /// <c>finalized</c> flag is already <c>true</c> may become the new
+        /// effective scene. <see cref="EditingEnabled"/> is then set from
+        /// that same flag (<c>Current.finalized</c>) — never hard-coded to
+        /// <c>true</c> — so the two can never silently disagree. A persisted
+        /// file always carries <c>finalized == true</c> in practice (the
+        /// Save boundary, <c>UI.ViewerHudController.CanSave</c>, refuses to
+        /// write a file otherwise), but a hand-edited or corrupted file
+        /// claiming otherwise is rejected here rather than quietly becoming
+        /// editable.</para>
+        ///
+        /// <para>Once installed, this reuses <see cref="OnSourceChanged"/>'s
+        /// own same-session/EditingEnabled guard: if the tracked scanner
+        /// session later resends the *same* <c>sessionId</c> the loaded file
+        /// carries (a stale reconnect resend), it is ignored exactly as a
+        /// duplicate finalized resend already is; a genuinely different
         /// <c>sessionId</c> still replaces the room, unconditionally, per
         /// <c>ADR-0003</c> — a new scan session always wins.</para>
         ///
         /// <para>Fails without side effects — <see cref="Current"/> is left
-        /// exactly as it was — for a null snapshot or one with no room, so a
-        /// caller that skips <c>ScenePersistence.TryLoad</c>'s own validation
-        /// still cannot corrupt the currently displayed room.</para>
+        /// exactly as it was — for a null snapshot, one with no room, one
+        /// that is not finalized, or one that fails domain validation.</para>
         /// </summary>
         public bool LoadExternalSnapshot(SceneSnapshot loaded, out string error)
         {
@@ -213,8 +223,20 @@ namespace GhostMap.Viewer.Scene
                 return false;
             }
 
+            if (!loaded.finalized)
+            {
+                error = "Loaded scene is not finalized; only a finalized, Viewer-owned scene can be loaded.";
+                return false;
+            }
+
+            if (!SceneSnapshotValidator.TryValidate(loaded, out string validationError))
+            {
+                error = validationError;
+                return false;
+            }
+
             Current = Clone(loaded);
-            EditingEnabled = true;
+            EditingEnabled = Current.finalized;
             error = string.Empty;
             Changed?.Invoke(Current);
             return true;

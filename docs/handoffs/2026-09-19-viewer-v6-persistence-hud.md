@@ -8,7 +8,69 @@
 and Viewer V1-V5 complete)
 
 ## Head commit
-`3017e37` (V6 implementation)
+`3017e37` (V6 implementation), fixed by a follow-up commit on this same
+branch — persistence-authority fix (this branch, pending commit at
+hand-off time); see "Post-review fix" immediately below.
+
+## Post-review fix: ADR-0003 persistence authority (supersedes parts of
+"What changed" below)
+An independent review of the pushed V6 code found four real authority bugs,
+all now fixed on this branch without redesigning the persistence
+architecture (`ScenePersistence`, `SceneSnapshotValidator`,
+`ViewerEditableScene`, the bare `SceneSnapshot` JSON format, the
+`Application.persistentDataPath` fixed slot, and atomic writes are all
+unchanged):
+
+1. **Save was not Viewer-authoritative.** `ViewerHudController.OnSaveClicked`
+   saved any non-null `ViewerEditableScene.Current`, including an
+   unfinalized, Scanner-owned scene — a direct `ADR-0003` violation. Fixed:
+   `ViewerHudController.CanSave(ViewerEditableScene)` (public, static, the
+   pure/testable piece of an otherwise-thin button handler — the same split
+   `ViewerInteractionRouter.IsClick` already established) now requires
+   `editable != null && editable.Current != null && editable.EditingEnabled
+   && editable.Current.finalized` before Save writes anything. Otherwise the
+   HUD shows **"Save unavailable until the scan is finalized."** and writes
+   nothing.
+2. **A loaded scene could become editable without actually being
+   finalized.** `ViewerEditableScene.LoadExternalSnapshot` used to force
+   `EditingEnabled = true` unconditionally. Fixed: it now rejects any
+   snapshot whose `finalized` flag is `false` *before* installing it —
+   `Current` and `EditingEnabled` are left completely untouched — and only
+   then sets `EditingEnabled = Current.finalized` (derived from the flag,
+   never hard-coded). It also now re-runs `SceneSnapshotValidator` itself
+   (defense in depth for this public scene-replacement boundary, reusing the
+   one validator rather than copying its rules).
+3. **Load could interrupt an active, unfinalized scan.** Fixed:
+   `ViewerHudController.CanLoad(ViewerEditableScene)` (public, static) is
+   `true` only when `editable == null || editable.Current == null ||
+   editable.EditingEnabled` — i.e. nothing exists yet, or the current room
+   is already Viewer-owned. While a Scanner-owned scan is in progress
+   (`Current != null && EditingEnabled == false`), Load is refused, the
+   HUD shows **"Finish or reset the active scan before loading a saved
+   room."**, and neither the displayed scene nor the Scanner session is
+   touched.
+4. **A successful Load left stale interaction state pointing at the old
+   room.** Fixed: `ViewerHudController.ResetTransientStateAfterLoad()` (also
+   public, for the same testability reason) runs only after
+   `LoadExternalSnapshot` actually succeeds, calling exactly the existing
+   APIs the task named: `ObjectSelectionController.ClearSelection()`,
+   `MeasurementController.SetActive(false)` + `.Clear()`, and
+   `OrbitCameraController.FrameRoom()`. `ViewerHudController` gained two new
+   serialized references (`selectionController`, `measurementController`,
+   wired in `ViewerSceneBuilder` alongside the existing `cameraController`)
+   and `SetSelectionController`/`SetMeasurementController`/
+   `SetCameraController` test-wiring setters mirroring the pattern every
+   other interaction controller already uses.
+
+**The "Load authority semantics" and "Known limitations" sections below are
+corrected by this fix** — in particular, the earlier claim that "a loaded
+scene's `EditingEnabled` is always forced `true`, regardless of the loaded
+file's own `finalized` flag" is **no longer true** and is removed; see the
+corrected rule in "Load authority semantics".
+
+17 new regression tests were added (`ViewerHudControllerPersistenceGatingTests`:
+12; `ViewerEditableSceneLoadTests`: 3 more; `ScenePersistenceTests`: 2 more),
+bringing the Viewer suite to **475/475**. Full breakdown in "Test results".
 
 ## What changed
 Task V6 from `docs/plans/ghostmap-implementation-plan.md` section 17:
@@ -46,7 +108,7 @@ HUD.
   load-specific rendering path. Fails without side effects (`Current`
   untouched) for a null snapshot or one with no room.
 
-### The what-gets-saved decision
+### The what-gets-saved decision, and the Save/Load authority gate
 `ViewerHudController`'s Save button always passes
 `bootstrap.EditableScene.Current` — never `bootstrap.Session.SceneStore.Current`
 — so a save always captures:
@@ -62,14 +124,29 @@ underlying `ViewerSceneStore.Current` still holds the **stale, pre-edit**
 position (proving the two are genuinely different objects, not aliases), and
 then confirms the saved-and-reloaded file holds the **edited** position.
 
-### Load authority semantics (this task's decision, per the brief's
-"choose the smallest architecture-consistent implementation, document it,
-test it")
-A successfully loaded scene always becomes `EditingEnabled = true` — the
-only reason a scene is ever saved is that it was already post-finalization,
-so a loaded file is put back exactly where it left off. This reuses
-`ViewerEditableScene`'s existing same-session/`EditingEnabled` guard
-unmodified:
+**Fixed by this post-review pass**: that was necessary but not sufficient —
+"passes the right snapshot" still let an unfinalized, Scanner-owned snapshot
+through. `ViewerHudController.CanSave`/`CanLoad` (both documented above)
+now gate both buttons *before* any write/install happens, per `ADR-0003`:
+
+| Button | Gate | Refused when | HUD message when refused |
+| --- | --- | --- | --- |
+| Save | `CanSave(editable)` | no scene, or the scene is Scanner-owned (`EditingEnabled == false`) | "Save unavailable until the scan is finalized." |
+| Load | `CanLoad(editable)` | a Scanner-owned, unfinalized scan is in progress (`Current != null && EditingEnabled == false`) | "Finish or reset the active scan before loading a saved room." |
+
+### Load authority semantics (corrected by this post-review pass)
+A loaded scene becomes `EditingEnabled = true` **only when its own
+`finalized` flag is already `true`** — `ViewerEditableScene.LoadExternalSnapshot`
+rejects anything else outright, leaving `Current` completely untouched.
+`EditingEnabled` is then derived from that same flag
+(`EditingEnabled = Current.finalized`), never hard-coded, so the two can
+never silently disagree. In practice a persisted file is always finalized
+(the Save gate above requires it before a file is ever written), but a
+hand-edited or corrupted file claiming `finalized: false` is rejected here,
+not silently granted editing rights.
+
+Once a finalized load *is* installed, this reuses `ViewerEditableScene`'s
+existing same-session/`EditingEnabled` guard unmodified:
 
 | Situation after a Load | Outcome |
 | --- | --- |
@@ -78,23 +155,44 @@ unmodified:
 
 Both directions are proved against the real `ViewerSceneStore` pipeline in
 `ViewerEditableSceneLoadTests` (`AStaleReconnectResendOfTheLoadedSessionDoesNotOverwriteTheLoadedScene`,
-`AGenuinelyNewSessionStillReplacesALoadedScene`). No ADR change was needed —
-this composes from `ADR-0003`'s existing rule and V5's existing
-`OnSourceChanged` guard without modifying either.
+`AGenuinelyNewSessionStillReplacesALoadedScene`); the finalized-only gate is
+proved in the same file (`ANonFinalizedSnapshotIsRejectedWithoutTouchingCurrent`,
+`LoadExternalSnapshotNeverForcesEditingEnabledForAnUnfinalizedSnapshot`) and
+end to end in `ScenePersistenceTests`
+(`AFinalizedSavedFileLoadsThroughTheFullPipelineAndBecomesEditable`,
+`AnUnfinalizedSavedFileIsRejectedAtTheInstallationBoundary`). No ADR change
+was needed — everything here composes from `ADR-0003`'s existing rule and
+V5's existing `OnSourceChanged` guard without modifying either.
+
+### Resetting transient interaction state after a successful Load
+A Load replaces the room the user was inspecting, so
+`ViewerHudController.ResetTransientStateAfterLoad()` — called only after
+`LoadExternalSnapshot` succeeds, never on a failed load — clears whatever
+referenced the *old* room: `ObjectSelectionController.ClearSelection()`,
+`MeasurementController.SetActive(false)` + `.Clear()` (both: leaves
+measurement mode off and discards any in-progress/completed measurement),
+and `OrbitCameraController.FrameRoom()` (re-frames the camera on the newly
+loaded room rather than leaving it wherever the user had orbited/panned to).
+Proved against real controllers — not mocks — in
+`ViewerHudControllerPersistenceGatingTests`.
 
 ### HUD
 - `Runtime/UI/ViewerHudController.cs` — polished into the real control
   surface:
-  - **Save** / **Load** buttons — new. Save writes
-    `bootstrap.EditableScene.Current` to a single fixed slot at
+  - **Save** / **Load** buttons — new, gated by `CanSave`/`CanLoad` (see
+    "Post-review fix" above) before anything is written or installed. Save
+    writes `bootstrap.EditableScene.Current` to a single fixed slot at
     `Application.persistentDataPath/ghostmap-scene.json` (unlike the V1
     "Load fixture" button's repo-relative dev shortcut, `persistentDataPath`
     resolves correctly in a standalone player build too — see "Standalone
     build" below). Load reads that slot through `ScenePersistence.TryLoad`
     and, on success, installs it via `ViewerEditableScene.LoadExternalSnapshot`,
     which fires `Changed` and rebuilds/displays the room immediately through
-    the existing `RoomRenderer` pipeline. Both report a one-line result
-    (`Saved to ...` / `Load failed: ...`) in the status text.
+    the existing `RoomRenderer` pipeline, then calls
+    `ResetTransientStateAfterLoad()`. Both report a one-line result
+    (`Saved to ...` / `Save unavailable until the scan is finalized.` /
+    `Loaded from ...` / `Load failed: ...` / `Finish or reset the active
+    scan before loading a saved room.`) in the status text.
   - **Shortened session id** — the status line now shows the effective
     scene's `sessionId` (`bootstrap.EditableScene.Current.sessionId`, not
     the raw scanner connection's `session.LastSessionId` — the two can
@@ -153,32 +251,39 @@ identical in shape to a protocol v1 fixture file (protocol v1 section 8).
 ```
 
 ## Test results
-- **Viewer project: 458 tests, 458 passed, 0 failed, 0 skipped.** Unity exit
-  code `0`. That is the prior 430 (156 embedded shared + 210 V1-V4 + 64 V5,
-  all unchanged) + **28 new V6 tests**:
-  - `ScenePersistenceTests` (21): save fixture, load fixture, full
-    semantic-equality round trip, corners/height/openings/furniture/
-    position/dimensions/yaw/finalized-flag individually, "the edit is what
-    gets saved, not the stale scanner copy", invalid JSON rejected,
-    unsupported schema version rejected, missing room (no `"room"` key at
-    all) rejected, a structurally-present-but-illegal room (bad height)
-    rejected, a failed load never installs over the current scene,
-    file-not-found handled cleanly, repeated save/load does not drift
-    values, an existing save file is overwritten intentionally, and no
-    `.tmp` file is left behind on success.
-  - `ViewerEditableSceneLoadTests` (7): a valid load installs and enables
-    editing, `Changed` fires, a null snapshot and a no-room snapshot are
-    both rejected without touching `Current`, editing works immediately
-    after a load, a stale same-session reconnect resend does not overwrite
-    a loaded scene, and a genuinely new session still replaces one.
+- **Viewer project: 475 tests, 475 passed, 0 failed, 0 skipped.** Unity exit
+  code `0`. That is the original V6 total of 458 (prior 430, all unchanged,
+  + the 28 first-pass V6 tests) + **17 new post-review fix tests**:
+  - `ScenePersistenceTests` (2 more, 23 total): a finalized saved file loads
+    through the full `ScenePersistence.TryLoad` -> `LoadExternalSnapshot`
+    pipeline and becomes editable; an unfinalized saved file parses fine at
+    the `TryLoad` layer (it is a perfectly legal room on its own) but is
+    rejected at the `LoadExternalSnapshot` installation boundary.
+  - `ViewerEditableSceneLoadTests` (3 more, 10 total): a non-finalized
+    snapshot is rejected without touching `Current`; `EditingEnabled` is
+    never force-enabled for a rejected (non-finalized) load; a finalized
+    snapshot that fails `SceneSnapshotValidator` (defense in depth) is also
+    rejected without touching `Current`.
+  - `ViewerHudControllerPersistenceGatingTests` (12, new file): `CanSave`
+    is false for a null editable, no scene, and an unfinalized
+    Scanner-owned scene, and true for a finalized Viewer-owned scene
+    (including after a local edit); `CanLoad` is true for a null editable,
+    no scene, or an already-Viewer-owned scene, and false while an
+    unfinalized scan is active; `ResetTransientStateAfterLoad` clears a
+    real selection, clears and deactivates a real in-progress measurement,
+    and re-frames a real camera — all against real
+    `ObjectSelectionController`/`MeasurementController`/
+    `OrbitCameraController` instances, not mocks.
 - **Shared `TestProject`: 156 tests, 156 passed, 0 failed.** Exit code `0`
   — confirms no `shared/**` regression, as expected since nothing there was
   touched.
 - `ViewerSceneBuilder.BuildScene` and `.VerifyScene` re-verified end to end
-  via a throwaway EditMode test (not committed; `-executeMethod` still hangs
-  in this sandbox — see prior handoffs). `VerifyScene` now also asserts the
-  HUD's `saveButton`/`loadButton`. The real `Viewer.unity` scene asset was
-  regenerated by this run and is part of this commit.
+  again after this fix, via a throwaway EditMode test (not committed;
+  `-executeMethod` still hangs in this sandbox — see prior handoffs).
+  `VerifyScene` now also asserts the HUD's `selectionController`/
+  `measurementController` references alongside the existing
+  `saveButton`/`loadButton`. The real `Viewer.unity` scene asset was
+  regenerated by this run and is part of this fix's commit.
 - Editor: Unity `6000.3.24f1`. Test framework `1.6.0`.
 
 ## End-to-end persistence smoke test
@@ -217,31 +322,67 @@ All ten steps passed on the real components. Full detail was in the
 throwaway test's assertions (not committed, per this sandbox's established
 convention for one-off verification code).
 
+**Re-run after the post-review fix**, with three additional phases driven
+through the real `ViewerHudController.CanSave`/`CanLoad`/
+`ResetTransientStateAfterLoad`, not just `ScenePersistence`/
+`ViewerEditableScene` directly:
+
+11. On a brand-new, empty pipeline, confirmed `CanSave` was `false` (nothing
+    loaded yet) and became `true` only once a scanner snapshot finalized.
+12. Started a **second**, independent in-progress (unfinalized) scan on a
+    fresh pipeline and confirmed `CanLoad` was `false` — simulating the HUD
+    refusing the Load click — and that the in-progress scan's session id and
+    `EditingEnabled == false` were completely undisturbed by the refusal.
+13. Finalized that second scan, confirmed `CanLoad` became `true`, then
+    actually loaded the step-3 save file over it and confirmed: a real,
+    pre-load `ObjectSelectionController` selection was cleared; a real,
+    half-placed `MeasurementController` measurement was cleared and
+    measurement mode left off; a real `OrbitCameraController` deliberately
+    moved far from the room (`(900, 900, 900)`) was re-framed back onto it;
+    the edited bed's position/yaw were still exactly as saved; and
+    selection, editing, measurement, and Dollhouse all continued to work
+    normally afterward.
+
 ## Standalone build verification
 A throwaway EditMode test (not committed) called
 `BuildPipeline.BuildPlayer` directly for `BuildTarget.StandaloneOSX` against
-the real `Viewer.unity` scene. Result: **`BuildResult.Succeeded`, 0 errors,
-0 warnings**, ~102 MB `.app` bundle produced and confirmed to exist on disk.
-No elaborate release pipeline was built — this only confirms the existing
-scene/build settings are correct and that V6 introduced no Editor-only
-dependency into runtime code (`grep -rl UnityEditor Runtime/` returns
-nothing). `EditorBuildSettings.scenes` already correctly lists only
+the real `Viewer.unity` scene — re-run after the post-review fix too.
+Result (both runs): **`BuildResult.Succeeded`, 0 errors, 0 warnings**,
+~102 MB `.app` bundle produced and confirmed to exist on disk. No elaborate
+release pipeline was built — this only confirms the existing scene/build
+settings are correct and that neither V6 nor its fix introduced any
+Editor-only dependency into runtime code (`grep -rl UnityEditor Runtime/`
+returns nothing). `EditorBuildSettings.scenes` already correctly lists only
 `Viewer.unity`, set by the existing `ViewerSceneBuilder.BuildScene()`.
 
-## Exact Save/Load behavior
-- **Save**: writes `bootstrap.EditableScene.Current` — the effective scene,
-  post-finalization Viewer edits included — to
+## Exact Save/Load behavior (corrected by the post-review fix)
+- **Save**: gated by `ViewerHudController.CanSave(editable)` — requires a
+  non-null `ViewerEditableScene`, a non-null `Current`,
+  `EditingEnabled == true`, **and** `Current.finalized == true`. If any of
+  those fail, nothing is written and the HUD shows **"Save unavailable
+  until the scan is finalized."**. Otherwise it writes
+  `bootstrap.EditableScene.Current` — the effective scene, post-finalization
+  Viewer edits included, never the raw `ViewerSceneStore.Current` — to
   `Application.persistentDataPath/ghostmap-scene.json`, atomically (temp
-  file + `File.Replace`/`Move`). Disabled in effect (shows "Nothing to save
-  yet.") when no scene is loaded.
-- **Load**: reads that same fixed slot, runs full well-formedness +
-  domain validation (`SceneSnapshotValidator`, the same validators every
-  scanner snapshot goes through) before touching anything, then installs
-  the result via `ViewerEditableScene.LoadExternalSnapshot`, which
-  immediately rebuilds the room through the existing `RoomRenderer` (via
-  `IViewerSceneSource.Changed`) and sets `EditingEnabled = true`. A bad or
-  missing file leaves the currently displayed scene completely untouched
-  and reports `Load failed: <reason>` in the HUD.
+  file + `File.Replace`/`Move`).
+- **Load**: gated by `ViewerHudController.CanLoad(editable)` — refused
+  (**"Finish or reset the active scan before loading a saved room."**, no
+  file read, no state touched) only when a Scanner-owned, unfinalized scan
+  is currently in progress (`Current != null && EditingEnabled == false`).
+  Otherwise it reads the fixed slot, runs full well-formedness + domain
+  validation (`ScenePersistence.TryLoad` via `SceneSnapshotValidator`, the
+  same validators every scanner snapshot goes through), and then
+  `ViewerEditableScene.LoadExternalSnapshot` performs one more check before
+  installing anything: the snapshot's own `finalized` flag must be `true`,
+  or it is rejected and `Current` is left completely untouched. Only once
+  installed does `EditingEnabled` become `true` — derived from
+  `Current.finalized`, never forced. A successful install immediately
+  rebuilds the room through the existing `RoomRenderer` (via
+  `IViewerSceneSource.Changed`) and then calls
+  `ResetTransientStateAfterLoad()` (clears selection, clears/deactivates
+  measurement, re-frames the camera). A bad, missing, or unfinalized file
+  leaves the currently displayed scene and all interaction state completely
+  untouched and reports `Load failed: <reason>` in the HUD.
 - Single fixed save slot (no file picker, no multiple slots) — an explicit
   MVP scope decision; the task brief does not ask for either and Unity's
   legacy UGUI has no built-in native file dialog, so building one would be
@@ -257,13 +398,6 @@ nothing). `EditorBuildSettings.scenes` already correctly lists only
   write itself is atomic/safe (never a half-written file), but there is no
   "are you sure" prompt distinguishing a fresh save from an overwrite. Not
   requested by the task brief.
-- **A loaded scene's `EditingEnabled` is always forced `true`**, regardless
-  of the loaded file's own `finalized` flag (see "Load authority
-  semantics" above). In practice this never diverges from `finalized`,
-  since the only path that ever produces a save file already required
-  `EditingEnabled == true`; a hand-edited save file with `finalized: false`
-  would still become editable on load, which is a deliberate,
-  documented choice, not an oversight.
 - Carried over from V1-V5, unchanged: `-executeMethod` hangs in this
   sandbox (use `-runTests`, wrapping target code in a throwaway EditMode
   test); `-nographics` segfaults on `Camera.Render()` (not needed for this

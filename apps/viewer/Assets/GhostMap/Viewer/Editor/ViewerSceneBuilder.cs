@@ -128,7 +128,9 @@ namespace GhostMap.Viewer.Editor
                 ("dollhouseButton", dollhouseButton),
                 ("cameraController", cameraController),
                 ("saveButton", saveButton),
-                ("loadButton", loadButton));
+                ("loadButton", loadButton),
+                ("selectionController", selectionController),
+                ("measurementController", measurementController));
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath) !);
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -200,7 +202,8 @@ namespace GhostMap.Viewer.Editor
                     hud,
                     "bootstrap", "loadFixtureButton", "statusText",
                     "resetViewButton", "dollhouseButton", "cameraController",
-                    "saveButton", "loadButton");
+                    "saveButton", "loadButton",
+                    "selectionController", "measurementController");
             }
             finally
             {

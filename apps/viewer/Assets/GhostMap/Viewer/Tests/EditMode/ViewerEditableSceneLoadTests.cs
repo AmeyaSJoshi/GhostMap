@@ -108,6 +108,58 @@ namespace GhostMap.Viewer.Tests.EditMode
         }
 
         [Test]
+        public void ANonFinalizedSnapshotIsRejectedWithoutTouchingCurrent()
+        {
+            // ADR-0003: the Viewer owns scene state only after finalization.
+            // A persistence file representing an in-progress, Scanner-owned
+            // scan must never become the effective, editable scene.
+            var editable = new ViewerEditableScene();
+            editable.LoadExternalSnapshot(Snapshot("original", 0, true, Obj("a")), out _);
+
+            bool loaded = editable.LoadExternalSnapshot(Snapshot("unfinalized", 3, false, Obj("b")), out string error);
+
+            Assert.IsFalse(loaded);
+            Assert.IsNotEmpty(error);
+            Assert.AreEqual("original", editable.Current.sessionId);
+            Assert.AreEqual("a", editable.Current.room.objects[0].id);
+            Assert.IsTrue(editable.EditingEnabled, "The previously-loaded, already-editable scene must be untouched.");
+        }
+
+        [Test]
+        public void LoadExternalSnapshotNeverForcesEditingEnabledForAnUnfinalizedSnapshot()
+        {
+            // Defensive regression for the fixed bug: editing must never be
+            // force-enabled independently of the installed snapshot's own
+            // finalized flag.
+            var editable = new ViewerEditableScene();
+
+            bool loaded = editable.LoadExternalSnapshot(Snapshot("not-finalized", 0, false, Obj("a")), out _);
+
+            Assert.IsFalse(loaded);
+            Assert.IsFalse(editable.EditingEnabled);
+            Assert.IsNull(editable.Current);
+        }
+
+        [Test]
+        public void AFinalizedSnapshotFailingSharedValidationIsRejectedWithoutTouchingCurrent()
+        {
+            // Defense in depth (this is a public scene-replacement boundary):
+            // LoadExternalSnapshot must re-run SceneSnapshotValidator itself
+            // rather than trusting that a caller already did.
+            var editable = new ViewerEditableScene();
+            editable.LoadExternalSnapshot(Snapshot("original", 0, true, Obj("a")), out _);
+
+            SceneSnapshot illegal = Snapshot("illegal", 0, true, Obj("b"));
+            illegal.room.heightM = 5.2f; // outside RoomValidator's 2.0-4.0 m range.
+
+            bool loaded = editable.LoadExternalSnapshot(illegal, out string error);
+
+            Assert.IsFalse(loaded);
+            Assert.IsNotEmpty(error);
+            Assert.AreEqual("original", editable.Current.sessionId);
+        }
+
+        [Test]
         public void EditingWorksImmediatelyAfterLoad()
         {
             var editable = new ViewerEditableScene();

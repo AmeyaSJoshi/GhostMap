@@ -104,6 +104,10 @@ namespace GhostMap.Scanner.Editor
             AssignSerializedReferences(
                 spatialProvider,
                 ("raycastManager", raycastManager),
+                // ADR-0006 enumerates detected planes for furniture detection,
+                // so the provider needs the plane manager and not only the
+                // raycast manager built on top of it.
+                ("planeManager", planeManager),
                 ("arCamera", arCamera));
 
             // The Button needs an EventSystem to receive touches at all. The
@@ -261,6 +265,42 @@ namespace GhostMap.Scanner.Editor
                 canvasGo, "FinishObjectsButton", "Finish Objects",
                 new Vector2(260f, S5ObjectsRow3Y), new Vector2(300f, 70f), 26, out _);
 
+            // ADR-0006 furniture detection.
+            //
+            // Deliberately shares the Task S5 openings button row and readout
+            // area. AddOpenings and AddObjects are mutually exclusive phases and
+            // both HUDs blank themselves outside their own, so reusing the row
+            // adds nothing to a screen the S5 and S6 handoffs already flagged as
+            // over-full.
+            Text detectionReadout = CreateFurnitureDetectionReadout(canvasGo);
+            Button detectTypeButton = CreateActionButton(
+                canvasGo, "DetectTypeButton", "Detect as: generic",
+                new Vector2(-350f, S5OpeningsRow1Y), new Vector2(280f, 90f), 22,
+                out Text detectTypeLabel);
+            Button detectNextButton = CreateActionButton(
+                canvasGo, "DetectNextButton", "Next Surface",
+                new Vector2(0f, S5OpeningsRow1Y), new Vector2(280f, 90f), 24, out _);
+            Button detectAddButton = CreateActionButton(
+                canvasGo, "DetectAddButton", "Add",
+                new Vector2(350f, S5OpeningsRow1Y), new Vector2(280f, 90f), 22,
+                out Text detectAddLabel);
+            Button detectSkipButton = CreateActionButton(
+                canvasGo, "DetectSkipButton", "Skip Surface",
+                new Vector2(0f, S5OpeningsRow2Y), new Vector2(280f, 90f), 24, out _);
+
+            var detectionHudGo = new GameObject("FurnitureDetectionHud", typeof(FurnitureDetectionHud));
+            AssignSerializedReferences(
+                detectionHudGo.GetComponent<FurnitureDetectionHud>(),
+                ("floorLockHud", floorLockHud),
+                ("spatialProvider", spatialProvider),
+                ("typeButton", detectTypeButton),
+                ("typeButtonLabel", detectTypeLabel),
+                ("nextButton", detectNextButton),
+                ("addButton", detectAddButton),
+                ("addButtonLabel", detectAddLabel),
+                ("skipButton", detectSkipButton),
+                ("readoutText", detectionReadout));
+
             var objectHudGo = new GameObject("ObjectPlacementHud", typeof(ObjectPlacementHud));
             AssignSerializedReferences(
                 objectHudGo.GetComponent<ObjectPlacementHud>(),
@@ -352,7 +392,7 @@ namespace GhostMap.Scanner.Editor
 
                 var provider = FindInScene<ArSpatialProvider>(scene);
                 Require(provider != null, "no ArSpatialProvider");
-                RequireAssigned(provider, "raycastManager", "arCamera");
+                RequireAssigned(provider, "raycastManager", "planeManager", "arCamera");
 
                 var hud = FindInScene<FloorLockHud>(scene);
                 Require(hud != null, "no FloorLockHud");
@@ -398,6 +438,20 @@ namespace GhostMap.Scanner.Editor
                     "capturePointLabel",
                     "undoOpeningButton",
                     "finishOpeningsButton",
+                    "readoutText");
+
+                var detectionHud = FindInScene<FurnitureDetectionHud>(scene);
+                Require(detectionHud != null, "no FurnitureDetectionHud");
+                RequireAssigned(
+                    detectionHud,
+                    "floorLockHud",
+                    "spatialProvider",
+                    "typeButton",
+                    "typeButtonLabel",
+                    "nextButton",
+                    "addButton",
+                    "addButtonLabel",
+                    "skipButton",
                     "readoutText");
 
                 var objectHud = FindInScene<ObjectPlacementHud>(scene);
@@ -558,6 +612,25 @@ namespace GhostMap.Scanner.Editor
         /// live crosshair projection, every captured corner in Ghost
         /// coordinates, and the closure result.
         /// </summary>
+        /// <summary>
+        /// The ADR-0006 detection readout. Shares the Task S5 openings readout
+        /// area, because the two phases are mutually exclusive and each HUD
+        /// blanks its own text outside its phase.
+        /// </summary>
+        private static Text CreateFurnitureDetectionReadout(GameObject canvasGo)
+        {
+            Text text = CreateText(canvasGo, "FurnitureDetectionReadout", 24);
+
+            RectTransform rect = text.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(1f, 0f);
+            rect.pivot = new Vector2(0f, 0f);
+            rect.anchoredPosition = new Vector2(24f, S5OpeningsReadoutY);
+            rect.sizeDelta = new Vector2(-48f, 200f);
+
+            return text;
+        }
+
         private static Text CreateCornerReadout(GameObject canvasGo)
         {
             Text text = CreateText(canvasGo, "CornerCaptureReadout", 26);

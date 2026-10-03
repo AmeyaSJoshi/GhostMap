@@ -97,3 +97,13 @@ venv/
 ghostmap-assets/
 ghostmap-assets.meta
 ghostmap-scene.json
+
+# ---------------------------------------------------------------------------
+# Per-machine Unity editor state
+#
+# PackageManagerSettings.asset records scoped-registry panel state for whoever
+# opened the project, not project configuration. Unity regenerates it on first
+# open, so it is untracked here and in apps/scanner (which has been opened on
+# macOS) — ignoring it keeps it from churning between the two machines.
+# ---------------------------------------------------------------------------
+**/ProjectSettings/PackageManagerSettings.asset

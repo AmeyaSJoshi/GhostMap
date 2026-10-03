@@ -101,8 +101,10 @@ Validation (`GhostMap.Shared.Validation`):
 
 ## Next safe task
 - **None in the foundation. F0-F3 are complete, F4 reviewed them, and the gate passes.**
-- The Scanner (`S1`) and Viewer (`V1`) workstreams may now split and run in
-  parallel. Both build against this frozen shared package.
+- The Scanner (`S1`–`S6`) and Viewer (`V1`–`V6`) workstreams have since split,
+  run in parallel against this frozen shared package, and are both complete
+  with no shared contract changes. The next stage is Integration (`I1`); see
+  `docs/status/integration.md`.
 - The next shared/integration work is reactive: handle contract-change requests
   from either workstream via the procedure in implementation plan section 27.
 

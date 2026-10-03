@@ -1,8 +1,10 @@
 # Integration Status
 
 ## Current state
-- Not started. Integration tasks `I1`–`I4` require `S3` + `V2` at minimum, and a
-  full demo requires `S6` + `V6`. None of these exist yet.
+- Not started, but **unblocked**. Integration tasks `I1`–`I4` require `S3` + `V2`
+  at minimum, and a full demo requires `S6` + `V6`. All of these are now
+  complete: Scanner `S1`–`S6` (verified on a physical iPhone) and Viewer
+  `V1`–`V6` (V6 merged to `main` in PR #12, merge commit `8f2b3f6`).
 - No end-to-end iPhone→viewer run has been attempted.
 - No accuracy benchmark has been recorded.
 
@@ -21,8 +23,8 @@
 - No physical iPhone has been connected to this project.
 
 ## Next safe task
-- **Blocked.** Integration begins only after the Scanner and Viewer workstreams
-  reach their gates.
+- **Unblocked.** The Scanner and Viewer workstreams have both reached their
+  gates (`S6` and `V6` complete).
 - First integration task: **I1 — Real iPhone → viewer live room**, which must
   succeed three consecutive times before any polish work.
 

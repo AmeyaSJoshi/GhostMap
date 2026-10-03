@@ -78,8 +78,17 @@ shared package from their own `Packages/manifest.json`:
 | Viewer | `apps/viewer/**` | `docs/status/viewer.md` |
 | Shared / Integration | `shared/**`, `fixtures/**`, `tools/**`, contracts, ADRs | `docs/status/shared.md`, `docs/status/integration.md` |
 
-Foundation tasks `F0`–`F3` must all be merged before the Scanner (`S*`) and
-Viewer (`V*`) workstreams may split and run in parallel.
+## Project status
+
+| Stage | State |
+| --- | --- |
+| Foundation `F0`–`F4` | Complete |
+| Scanner `S1`–`S6` | Complete, verified on a physical iPhone |
+| Viewer `V1`–`V6` | Complete (V6 merged in PR #12) |
+| Integration `I1`–`I4` | Not started. **Next: `I1` — real iPhone → Viewer live room** |
+
+Foundation, Scanner and Viewer workstreams are all done; only Integration
+remains before the MVP acceptance test.
 
 ## MVP scope
 

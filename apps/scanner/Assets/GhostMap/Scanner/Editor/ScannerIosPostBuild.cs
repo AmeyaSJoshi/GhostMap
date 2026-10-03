@@ -2,7 +2,9 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
+#if UNITY_IOS
 using UnityEditor.iOS.Xcode;
+#endif
 
 namespace GhostMap.Scanner.Editor
 {
@@ -12,11 +14,19 @@ namespace GhostMap.Scanner.Editor
     /// Swift runtime library search paths the Apple ARKit XR Plug-in adds, so a
     /// regenerated Xcode project never needs either fixed up by hand.
     /// </summary>
-    public sealed class ScannerIosPostBuild : IPostprocessBuildWithReport
+    public sealed class ScannerIosPostBuild
+#if UNITY_IOS
+        : IPostprocessBuildWithReport
+#endif
     {
+        /// <summary>
+        /// Read by <see cref="ScannerBuild"/> regardless of build target, so it
+        /// stays outside the <c>UNITY_IOS</c> guard below.
+        /// </summary>
         internal const string CameraUsageDescription =
             "GhostMap Scanner uses the camera to scan your room in AR.";
 
+#if UNITY_IOS
         private const string LocalNetworkUsageDescription =
             "GhostMap Scanner sends the scanned room to the Viewer app over your local network.";
 
@@ -106,5 +116,6 @@ namespace GhostMap.Scanner.Editor
 
             project.WriteToFile(projectPath);
         }
+#endif
     }
 }

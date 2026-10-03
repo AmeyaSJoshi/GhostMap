@@ -238,7 +238,7 @@ namespace GhostMap.Scanner.UI
             // Device-test observability: the numbers to compare against a
             // tape measure, in the Xcode console, without opening Details.
             Debug.Log(string.Format(
-                "GhostMap detect: {0} {1} G({2:F3},{3:F3}) w {4:F3} d {5:F3} top {6:F3} m yaw {7:F1} -> {8}",
+                "GhostMap detect: {0} {1} [ARKit {9}, suggested {10}] G({2:F3},{3:F3}) w {4:F3} d {5:F3} top {6:F3} m yaw {7:F1} -> {8}",
                 accepted ? "ADDED" : "REFUSED",
                 type,
                 candidate.CenterGhost.x,
@@ -249,7 +249,9 @@ namespace GhostMap.Scanner.UI
                 candidate.YawDeg,
                 accepted
                     ? $"objects {workflow.Objects.ObjectCount}"
-                    : $"{detectionRejection}/{placementRejection} {detection.LastError} {workflow.Objects.LastError}"));
+                    : $"{detectionRejection}/{placementRejection} {detection.LastError} {workflow.Objects.LastError}",
+                candidate.Classifications,
+                candidate.SuggestedType));
         }
 
         private void OnSkipPressed() => Workflow?.DismissDetectedCandidate();
@@ -374,6 +376,12 @@ namespace GhostMap.Scanner.UI
                     candidate.DepthM,
                     candidate.HeightM,
                     candidate.YawDeg);
+
+                builder.AppendFormat(
+                    "  ARKit label {0} -> {1}{2}\n",
+                    candidate.Classifications,
+                    detection.SelectedType,
+                    detection.TypeIsSuggested ? " (suggested)" : " (yours)");
             }
             else if (detection.CandidateCount == 0)
             {

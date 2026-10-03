@@ -84,7 +84,8 @@ namespace GhostMap.Scanner.Capture
             float widthM,
             float depthM,
             float heightM,
-            float yawDeg)
+            float yawDeg,
+            PlaneClassifications classifications = PlaneClassifications.None)
         {
             SurfaceId = surfaceId;
             CenterGhost = centerGhost;
@@ -92,6 +93,8 @@ namespace GhostMap.Scanner.Capture
             DepthM = depthM;
             HeightM = heightM;
             YawDeg = yawDeg;
+            Classifications = classifications;
+            SuggestedType = FurnitureTypeSuggester.Suggest(classifications, widthM, depthM, heightM);
         }
 
         public TrackableId SurfaceId { get; }
@@ -116,6 +119,15 @@ namespace GhostMap.Scanner.Capture
         public float HeightM { get; }
 
         public float YawDeg { get; }
+
+        /// <summary>ARKit's label for the surface, or None while undecided.</summary>
+        public PlaneClassifications Classifications { get; }
+
+        /// <summary>
+        /// <c>ADR-0007</c>: the type pre-selected for this surface from its
+        /// label and measured size. Always a supported type.
+        /// </summary>
+        public string SuggestedType { get; }
     }
 
     /// <summary>
@@ -129,10 +141,12 @@ namespace GhostMap.Scanner.Capture
     /// exactly the number the S5 manual path had to guess from a per-type
     /// default.</para>
     ///
-    /// <para><b>This recognizes nothing.</b> It finds a horizontal rectangle and
-    /// measures it. The user picks the type. <c>AGENTS.md</c> rule 6, which
-    /// prohibits automatic object recognition and cloud inference until the MVP
-    /// acceptance test passes, is not touched — see <c>ADR-0006</c>.</para>
+    /// <para><b>Type.</b> Under <c>ADR-0006</c> the user picked every type.
+    /// <c>ADR-0007</c> pre-selects one from ARKit's on-device plane label
+    /// (Table / Seat) and the measured size; the user confirms or changes it.
+    /// That is an owner-approved exception to <c>AGENTS.md</c> rule 6, recorded
+    /// in the ADR. No camera images are classified and nothing leaves the
+    /// device.</para>
     ///
     /// <para><b>This does not weaken <c>ADR-0004</c>.</b> That rejected
     /// depending on detection of blank <i>vertical</i> walls. Horizontal
@@ -213,8 +227,24 @@ namespace GhostMap.Scanner.Capture
 
         public bool HasSelection => SelectedIndex >= 0 && SelectedIndex < candidates.Count;
 
-        /// <summary>The type the user has chosen for the next accepted candidate.</summary>
+        /// <summary>
+        /// The type the next accepted candidate becomes: the selected
+        /// candidate's <see cref="FurnitureCandidate.SuggestedType"/>, unless
+        /// the user has picked one with <see cref="SetType"/> (ADR-0007).
+        /// </summary>
         public string SelectedType { get; private set; } = "generic";
+
+        /// <summary>
+        /// True when <see cref="SelectedType"/> is GhostMap's suggestion for the
+        /// selected surface rather than the user's own choice.
+        /// </summary>
+        public bool TypeIsSuggested => HasSelection && !typeChosenByUser;
+
+        // ADR-0007. A user's choice sticks to the surface it was made for
+        // (or, made with nothing selected, to the next surface offered); any
+        // other surface gets its own suggestion.
+        private bool typeChosenByUser;
+        private TrackableId typeChosenForSurface;
 
         public FurnitureDetectionRejection LastRejection { get; private set; }
 
@@ -250,8 +280,37 @@ namespace GhostMap.Scanner.Capture
             }
 
             SelectedType = type;
+            typeChosenByUser = true;
+            typeChosenForSurface = HasSelection ? candidates[SelectedIndex].SurfaceId : default;
             LastRejection = FurnitureDetectionRejection.None;
             return true;
+        }
+
+        /// <summary>
+        /// Brings <see cref="SelectedType"/> in line with the selected
+        /// candidate. Re-run after every refresh, because ARKit often labels a
+        /// plane a few seconds after first reporting it.
+        /// </summary>
+        private void ApplySuggestedType()
+        {
+            if (!HasSelection)
+            {
+                return;
+            }
+
+            FurnitureCandidate candidate = candidates[SelectedIndex];
+
+            if (typeChosenByUser
+                && (typeChosenForSurface.Equals(candidate.SurfaceId)
+                    || typeChosenForSurface.Equals(default(TrackableId))))
+            {
+                typeChosenForSurface = candidate.SurfaceId;
+                return;
+            }
+
+            typeChosenByUser = false;
+            typeChosenForSurface = candidate.SurfaceId;
+            SelectedType = candidate.SuggestedType;
         }
 
         // -------------------------------------------------------------------
@@ -337,6 +396,7 @@ namespace GhostMap.Scanner.Capture
                 SelectedIndex = 0;
             }
 
+            ApplySuggestedType();
             rejection = Succeed();
             return true;
         }
@@ -412,7 +472,8 @@ namespace GhostMap.Scanner.Capture
                 widthM,
                 depthM,
                 centerGhost.y,
-                YawFromSurface(surface, frame));
+                YawFromSurface(surface, frame),
+                surface.Classifications);
 
             return SurfaceVerdict.Accepted;
         }
@@ -465,6 +526,7 @@ namespace GhostMap.Scanner.Capture
             }
 
             SelectedIndex = index;
+            ApplySuggestedType();
             LastRejection = FurnitureDetectionRejection.None;
             return true;
         }
@@ -479,6 +541,7 @@ namespace GhostMap.Scanner.Capture
             }
 
             SelectedIndex = (SelectedIndex + 1) % candidates.Count;
+            ApplySuggestedType();
             LastRejection = FurnitureDetectionRejection.None;
             return true;
         }
@@ -617,6 +680,7 @@ namespace GhostMap.Scanner.Capture
                     SelectedIndex = candidates.Count > 0 ? 0 : -1;
                 }
 
+                ApplySuggestedType();
                 return;
             }
         }

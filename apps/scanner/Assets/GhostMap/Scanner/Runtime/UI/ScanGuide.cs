@@ -408,10 +408,17 @@ namespace GhostMap.Scanner.UI
                     ? $"Surface {detection.SelectedIndex + 1} of {detection.CandidateCount}: "
                     : "Found a surface: ";
 
+                // ADR-0007: when GhostMap has a specific guess, the user's
+                // usual job is a single tap.
+                string suggested = detection.SelectedType;
+                string instruction = detection.TypeIsSuggested && suggested != FurnitureTypeSuggester.Fallback
+                    ? $"Looks like a {suggested} at the yellow dot. Tap Add. Wrong type? Tap Is: to change it, or Skip."
+                    : "Found something at the yellow dot. Tap Is: to say what it is, then Add. Or Skip it.";
+
                 return new ScanGuideStep(
                     6,
                     "Add furniture",
-                    "Found something at the yellow dot. Tap Is: to say what it is, then Add. Or Skip it.",
+                    instruction,
                     null,
                     string.IsNullOrEmpty(error)
                         ? $"{found}{candidate.WidthM:F2} × {candidate.DepthM:F2} m, top {candidate.HeightM:F2} m high."

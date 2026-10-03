@@ -213,7 +213,8 @@ namespace GhostMap.Scanner.AR
                     planeTransform.TransformPoint(plane.center),
                     planeTransform.rotation,
                     plane.size,
-                    plane.alignment));
+                    plane.alignment,
+                    plane.classifications));
             }
 
             return true;

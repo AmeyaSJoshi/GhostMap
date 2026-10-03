@@ -342,7 +342,8 @@ namespace GhostMap.Scanner.Tests.EditMode
             ScanGuideStep step = ScanGuide.Describe(workflow, Tracking);
 
             Assert.AreEqual(6, step.Number);
-            StringAssert.Contains("Add", step.Instruction);
+            StringAssert.Contains("Looks like a desk", step.Instruction);
+            StringAssert.Contains("Tap Add", step.Instruction);
             StringAssert.Contains("Skip", step.Instruction);
             Assert.IsNull(step.AimHint, "a detected surface needs no aiming");
             StringAssert.Contains("Found a surface", step.Message);

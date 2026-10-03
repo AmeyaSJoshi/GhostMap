@@ -56,13 +56,15 @@ namespace GhostMap.Scanner.AR
             Vector3 worldCenter,
             Quaternion worldRotation,
             Vector2 extentsM,
-            PlaneAlignment alignment)
+            PlaneAlignment alignment,
+            PlaneClassifications classifications = PlaneClassifications.None)
         {
             Id = id;
             WorldCenter = worldCenter;
             WorldRotation = worldRotation;
             ExtentsM = extentsM;
             Alignment = alignment;
+            Classifications = classifications;
         }
 
         /// <summary>
@@ -87,6 +89,13 @@ namespace GhostMap.Scanner.AR
         public Vector2 ExtentsM { get; }
 
         public PlaneAlignment Alignment { get; }
+
+        /// <summary>
+        /// ARKit's own label for the surface (<c>ADR-0007</c>): Table, Seat,
+        /// Floor and so on, or None while ARKit has not decided yet. ARKit
+        /// labels planes on A12 and later devices without LiDAR.
+        /// </summary>
+        public PlaneClassifications Classifications { get; }
     }
 
     /// <summary>

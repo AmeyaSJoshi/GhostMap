@@ -58,7 +58,7 @@ The only source of truth for:
 - **Domain** — `Vec3Dto`, `CornerModel`, `OpeningModel`, `SceneObjectModel`,
   `RoomModel`, `SceneSnapshot`, `ValidationResult`, `WallDefinition`.
 - **Geometry** — `GhostCoordinateFrame`, `RayPlaneMath`, `RoomGeometry`,
-  `WallGeometry`, `MeasurementMath`.
+  `WallGeometry`, `WallFitting`, `MeasurementMath`.
 - **Protocol** — `ProtocolConstants`, `WireMessages`, `ProtocolSerializer`.
 - **Validation** — `RoomValidator`, `OpeningValidator`, `FurnitureValidator`.
 
@@ -83,7 +83,8 @@ selection/drag/resize/rotate, measurement, and persistence.
 ## 4. Capture model — why this works without LiDAR
 
 This is the central architectural decision. See
-`docs/decisions/ADR-0004-no-dense-depth-in-mvp.md`.
+`docs/decisions/ADR-0004-no-dense-depth-in-mvp.md` and
+`docs/decisions/ADR-0005-sweep-wall-capture.md`.
 
 AR plane detection is used **exactly once**: to find and lock the floor.
 
@@ -92,12 +93,39 @@ GhostMap already knows mathematically:
 
 | Capture | Ray | Plane |
 | --- | --- | --- |
-| Room corner | center-screen camera ray | locked floor plane (`Y = floorY`) |
+| Wall floor junction (swept) | center-screen camera ray, per frame | locked floor plane (`Y = floorY`) |
+| Room corner (walked, fallback) | center-screen camera ray | locked floor plane (`Y = floorY`) |
 | Furniture center | center-screen camera ray | locked floor plane |
 | Room height | center-screen camera ray | derived wall plane |
 | Door / window | center-screen camera ray | derived wall plane |
 
-Wall planes are generated from captured corners:
+### Two paths to the same four corners
+
+The default path is **sweeping** (`ADR-0005`): the user stands, turns, and
+sweeps the center-screen ray along each wall's floor junction. Each sweep's
+accumulated floor-plane samples are fitted to a line by total least squares
+(`WallFitting`), and corners are derived by intersecting consecutive wall lines:
+
+```text
+corner[i] = intersect(wall[i - 1], wall[i])     indices mod 4
+```
+
+This requires no walking and tolerates a corner hidden behind furniture, since
+a wall needs only a visible segment of its junction rather than its endpoints.
+Its cost is that aim error scales with the square of aim distance — see the
+Consequences section of `ADR-0005`, which also records why fit residual cannot
+detect a systematic aim bias.
+
+The **walked** path (Task S3) is retained as a fallback: the user walks to each
+corner and taps once. It is device-verified, and remains reachable until the
+swept path has accuracy numbers from Task `I2`.
+
+Both paths produce exactly four ordered Ghost-space floor corners and converge
+on `VerifyClosure`. A swept room is indistinguishable from a walked one on the
+wire.
+
+Wall planes for height and opening capture are generated from those corners,
+whichever path produced them:
 
 ```text
 tangent = normalize(B - A)
@@ -196,7 +224,7 @@ Boot
  → WaitingForTracking
  → FindFloor
  → FloorLocked
- → CaptureCorners
+ → SweepWalls          default (ADR-0005)
  → VerifyClosure
  → CaptureHeight
  → AddOpenings
@@ -205,14 +233,27 @@ Boot
  → Finalized
 ```
 
+`CaptureCorners` is the walked fallback, entered from `SweepWalls` and
+rejoining at `VerifyClosure`:
+
+```text
+FloorLocked    → SweepWalls      → VerifyClosure
+SweepWalls     → CaptureCorners  → VerifyClosure
+```
+
 Allowed back transitions:
 
 ```text
+VerifyClosure → SweepWalls
 VerifyClosure → CaptureCorners
+CaptureHeight → SweepWalls
 CaptureHeight → CaptureCorners
 AddOpenings   → CaptureHeight
 AddObjects    → AddOpenings
 ```
+
+A back transition returns to whichever capture path produced the current
+corners.
 
 ---
 
@@ -223,6 +264,10 @@ Bad scans are rejected, never silently rendered.
 | Gate | Rule |
 | --- | --- |
 | Tracking | `ARSession.notTrackingReason` must be `None` before a critical capture |
+| Sweep samples | ≥ 8 accepted floor-plane samples per wall |
+| Sweep span | ≥ 0.40 m swept along the fitted wall direction |
+| Sweep residual | RMS perpendicular residual within the scanner's accept limit |
+| Wall crossing | consecutive wall lines ≥ 5° apart before intersecting |
 | Corner spacing | ≥ 0.50 m from previous corner |
 | Corner separation | ≥ 0.20 m from any non-neighbor corner |
 | Polygon | no self-intersection in XZ |

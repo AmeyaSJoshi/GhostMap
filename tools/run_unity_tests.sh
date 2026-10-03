@@ -8,9 +8,11 @@
 # Linux. This finds it on either, so the documented workflow is one command
 # instead of three hand-edited ones.
 #
-#   ./tools/run_unity_tests.sh              # all three suites
-#   ./tools/run_unity_tests.sh shared       # just one
+#   ./tools/run_unity_tests.sh                       # all three suites
+#   ./tools/run_unity_tests.sh shared                # just one
 #   ./tools/run_unity_tests.sh viewer scanner
+#   ./tools/run_unity_tests.sh --rebuild-scenes      # regenerate both .unity files
+#   ./tools/run_unity_tests.sh --rebuild-scenes viewer
 #
 # Exit code is non-zero if any suite failed, so it is usable as a gate.
 #
@@ -116,6 +118,85 @@ dependency-change PR AGENTS.md rule 10 requires.
 EOF
     exit 1
 }
+
+# ---------------------------------------------------------------------------
+# Scene regeneration
+#
+# The committed .unity files are asserted by the scene tests, so any change to
+# a scene builder has to be followed by a rebuild before those tests pass.
+#
+# This is attempted with -executeMethod under a timeout, because the Viewer
+# status records -executeMethod hanging indefinitely in headless Unity at the
+# "Start Indexing on Editor startup" step - confirmed twice there, killed after
+# 26+ minutes. If that reproduces, the script says so and points at the GUI
+# menu items rather than sitting there looking busy.
+# ---------------------------------------------------------------------------
+REBUILD_TIMEOUT="${REBUILD_TIMEOUT:-420}"
+
+rebuild_scene() {
+    local suite="$1" project method log rc
+    project="$(project_path_for "$suite")" || return 1
+
+    case "$suite" in
+        scanner) method='GhostMap.Scanner.Editor.ScannerSceneBuilder.BuildScene' ;;
+        viewer)  method='GhostMap.Viewer.Editor.ViewerSceneBuilder.BuildScene' ;;
+        *)       printf '    %s has no scene to rebuild\n' "$suite"; return 0 ;;
+    esac
+
+    log="$RESULTS_DIR/rebuild-$suite.log"
+    printf '==> rebuilding %s scene (timeout %ss)\n' "$suite" "$REBUILD_TIMEOUT"
+
+    timeout "$REBUILD_TIMEOUT" "$UNITY_BIN" \
+        -batchmode -nographics -quit \
+        -projectPath "$REPO_ROOT/$project" \
+        -executeMethod "$method" \
+        -logFile "$log" \
+        >/dev/null 2>&1
+    rc=$?
+
+    if [[ $rc -eq 124 ]]; then
+        cat <<EOF
+    TIMED OUT after ${REBUILD_TIMEOUT}s - this is the documented -executeMethod
+    hang (see "Sandbox environment finding" in docs/status/viewer.md).
+
+    Do it from the GUI instead:
+      open the $project project, then menu GhostMap > Build $( [[ $suite == scanner ]] && echo Scanner || echo Viewer ) Scene
+    Then commit the regenerated .unity file.
+EOF
+        return 1
+    fi
+
+    if [[ $rc -ne 0 ]]; then
+        printf '    exit %s - see %s\n' "$rc" "$log"
+        grep -E 'error CS[0-9]+|Exception|error:' "$log" 2>/dev/null | head -10 | sed 's/^/      /'
+        return 1
+    fi
+
+    printf '    ok\n'
+    return 0
+}
+
+if [[ "${1:-}" == "--rebuild-scenes" ]]; then
+    shift
+    targets=("$@")
+    if [[ ${#targets[@]} -eq 0 ]]; then
+        targets=(scanner viewer)
+    fi
+
+    mkdir -p "$RESULTS_DIR"
+    printf 'Unity: %s\n\n' "$UNITY_BIN"
+
+    rebuild_status=0
+    for t in "${targets[@]}"; do
+        rebuild_scene "$t" || rebuild_status=1
+        printf '\n'
+    done
+
+    if [[ $rebuild_status -eq 0 ]]; then
+        printf 'Scenes rebuilt. Commit the changed .unity files, then run the suites.\n'
+    fi
+    exit $rebuild_status
+fi
 
 suites=("$@")
 if [[ ${#suites[@]} -eq 0 ]]; then

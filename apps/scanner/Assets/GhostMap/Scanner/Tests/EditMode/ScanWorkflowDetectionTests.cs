@@ -55,6 +55,7 @@ namespace GhostMap.Scanner.Tests.EditMode
         private static ScanWorkflowController Workflow(FakeSpatialProvider provider)
         {
             var floorLock = new FloorLockController(provider);
+            var wallSweep = new WallSweepController(provider, floorLock);
             var corners = new CornerCaptureController(provider, floorLock);
             var height = new HeightCaptureController(provider, floorLock, corners);
             var openingCapture = new OpeningCaptureController(provider, floorLock, corners, height);
@@ -62,7 +63,8 @@ namespace GhostMap.Scanner.Tests.EditMode
             var furnitureDetection = new FurnitureDetectionController(provider, floorLock, corners);
 
             return new ScanWorkflowController(
-                floorLock, corners, height, openingCapture, objectPlacement, furnitureDetection);
+                floorLock, wallSweep, corners, height, openingCapture, objectPlacement,
+                furnitureDetection);
         }
 
         private static void AimAtGhost(

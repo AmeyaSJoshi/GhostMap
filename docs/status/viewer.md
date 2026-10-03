@@ -20,13 +20,17 @@
     grid with openings cut out and the floor/ceiling are triangulated
     separately, so a room export is a larger job and `ADR-0006` declines to
     claim it.
-  - **Nothing was compiled and no test was run** (Linux, no Unity). 26 new
-    viewer tests exist and have never executed.
-  - **The Viewer scene test fails until `Viewer.unity` is regenerated**: the
-    committed scene has no `ExportAssetsButton`.
+  - **Compiled and run: 542 tests, 542 passed** (see "Tests run"). The 26 new
+    viewer tests pass.
+  - `Viewer.unity` has been regenerated and now contains `ExportAssetsButton`.
+    Note there is **no Viewer scene test** — unlike `ScannerSceneTests`, nothing
+    asserts the committed scene matches `ViewerSceneBuilder`, so this class of
+    staleness is invisible to the suite. See "Known issues".
   - **No exported file has been opened in an external tool.** The container is
-    asserted byte by byte in tests that have not run; that is not the same as a
-    `.glb` Blender will accept.
+    asserted byte by byte by tests that now pass, but a conformant-by-our-own-
+    reading `.glb` is not the same as one Blender accepts. Check it with the
+    Khronos validator (`npx gltf-validator <file>.glb`) and in Blender before
+    trusting the writer.
   - See `docs/handoffs/2026-10-03-integration-furniture-detect-and-export.md`.
 - **V6 complete: scene persistence and a polished HUD** (implementation
   plan section 17 Task V6). This completes the Viewer MVP (V1-V6).
@@ -409,6 +413,14 @@
   `79d49c0` (V3), `197d4bd` (V2).
 
 ## Tests run
+- **`integration/sweep-and-furniture` result (first execution of this branch,
+  Linux): 542 tests, 542 passed, 0 failed, 0 skipped.** Unity exit code `0`.
+  From the results XML: 345 viewer + 197 shared. Viewer-only went 319 -> 345
+  (**+26**, the `ADR-0006` export tests) and shared went 156 -> 197 (**+41**).
+  Note the viewer project re-runs the whole shared suite via `"testables"`, so
+  new shared tests are counted here too — the merge handoff's estimate of 501
+  missed that and was wrong by exactly those 41.
+  Run with `./tools/run_unity_tests.sh viewer`.
 - **V6 result (after the post-review persistence-authority fix): 475 tests,
   475 passed, 0 failed, 0 skipped.** Unity exit code `0`. That is the prior
   430 (V1-V5, unchanged) + 28 first-pass V6 tests (23 `ScenePersistenceTests`,

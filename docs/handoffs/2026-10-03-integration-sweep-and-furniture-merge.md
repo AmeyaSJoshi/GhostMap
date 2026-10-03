@@ -7,7 +7,7 @@
 `f5a7d30` (merge of PR #13), via both feature branches.
 
 ## Head commit
-`74888a6`
+`fb2320c` (was `74888a6` when this branch had never been compiled).
 
 ## What changed
 
@@ -40,7 +40,7 @@ corner store and the same single object store** — that was the central design
 choice in both ADRs, and this is where it pays off. But until this branch it
 was a design intention rather than an asserted fact.
 
-`ScanWorkflowSweepAndDetectionTests` (10 tests) now asserts it:
+`ScanWorkflowSweepAndDetectionTests` (9 tests) now asserts it:
 
 | Test | What it pins down |
 | --- | --- |
@@ -90,15 +90,21 @@ geometry additions (`WallFitting`, `RoomGeometry.ContainsPointXZ`).
 
 ## How to test
 
-**Steps 1 and 2 first.** Both scene builders changed on this branch.
+**Steps 1-5 are done and committed on this branch; they are kept here so the
+numbers can be reproduced.** Start at step 6.
 
-1. Regenerate the scanner scene: **GhostMap → Build Scanner Scene**. Commit it.
-2. Regenerate the viewer scene via `ViewerSceneBuilder`. Commit it.
-3. Shared suite: expect 156 + 32 (`WallFitting`) + 9 (`ContainsPointXZ`) = **197**.
-4. Scanner suite: 361 existing + 57 sweep + 42 detection + 10 integration.
-   Reconcile against the XML rather than trusting arithmetic — the scanner count
-   includes the embedded shared tests, so it moves when the shared package does.
-5. Viewer suite: 475 + 26 = **501**.
+1. ~~Regenerate the scanner scene~~ — done, committed. (`--rebuild-scenes
+   scanner`, or **GhostMap → Build Scanner Scene** from the GUI.)
+2. ~~Regenerate the viewer scene~~ — done, committed. (**GhostMap → Build
+   Viewer Scene**.)
+3. Shared suite: **197**. Confirmed.
+4. Scanner suite: **510**. Confirmed.
+5. Viewer suite: **542**, not the 501 originally estimated here. The viewer
+   project re-runs the whole shared suite via `"testables"`, so the 41 new
+   shared tests are counted in the viewer total as well; the estimate added the
+   26 new viewer tests but not those. Reconcile against the XML, never
+   arithmetic — this is the second count in this handoff that arithmetic got
+   wrong.
 6. `ScannerBuild.ConfigureXr`, then `ScannerBuild.BuildScanner`, then
    `xcodebuild`.
 7. Device-test both features. Each feature's own handoff has its procedure and
@@ -117,9 +123,33 @@ nothing off-device can predict it.
 
 ## Test results
 
-**None. Nothing was compiled and nothing was run.** Linux, no Unity, no
-`xcodebuild`, no iPhone. 87 tests across this branch were written and have
-**never executed**.
+**All three suites pass on Linux with Unity 6000.3.24f1.**
+
+| Suite | Result |
+| --- | --- |
+| shared | 197 tests, 197 passed |
+| viewer | 542 tests, 542 passed (345 viewer + 197 shared) |
+| scanner | 510 tests, 510 passed (313 scanner + 197 shared) |
+
+All 149 tests new to this branch pass. Run with `./tools/run_unity_tests.sh`.
+
+Two defects were found on first execution and are fixed in this branch:
+
+1. **The scanner did not compile.** `ScanWorkflowSweepTests` and
+   `ScanWorkflowDetectionTests` each still constructed the six-argument
+   `ScanWorkflowController` from their own feature branch. Both files were
+   *new* on their branch, so git merged them with no conflict and the
+   resolution pass below — which inspected only conflicted files — never looked
+   at them. **This is the gap in how the merge was reviewed**: two branches that
+   both widen one constructor produce a clean merge and a broken build, and the
+   "no conflict markers remain" check cannot see it. The integration tests did
+   not catch it either, because `ScanWorkflowSweepAndDetectionTests` has its own
+   factory and that one was correct.
+2. **`ScannerSceneTests` failed** on `ArSpatialProvider.planeManager is not
+   assigned`, as predicted below. Both scenes are regenerated and committed.
+
+Still untested: anything requiring a phone or Xcode, and no exported `.glb` has
+been opened in an external tool.
 
 What was verified for the merge specifically:
 
@@ -136,11 +166,15 @@ What was verified for the merge specifically:
 
 ## Known failures
 
-- **`ScannerSceneTests` and the Viewer scene test fail** until steps 1 and 2.
-  Both committed scenes are stale: the scanner scene has neither `WallSweepHud`
-  nor `FurnitureDetectionHud` nor `planeManager` on `ArSpatialProvider`, and the
-  viewer scene has no `ExportAssetsButton`.
-- Everything else is unknown, because nothing ran.
+- **None in the automated suites.** Both scenes have been regenerated and
+  committed, and all three suites pass.
+- **There is no Viewer scene test.** The prediction above that "the Viewer scene
+  test fails" was wrong — no such test exists. Only the scanner has one
+  (`ScannerSceneTests`), which is what caught the stale scanner scene. The
+  viewer scene was equally stale and the suite would never have said so. Worth
+  adding; a green viewer suite is currently not evidence that `Viewer.unity`
+  matches `ViewerSceneBuilder`.
+- Everything requiring a phone, Xcode, or a tape measure remains unknown.
 
 ## Known limitations
 
@@ -168,13 +202,31 @@ The merge adds two:
 
 ## Next task
 
-1. Regenerate and commit both scenes.
-2. Run all three suites; fix what does not compile. Expect this to take a pass —
-   nothing here has ever been through a compiler.
-3. Device-test both features in one session, and **tape-measure everything**:
+Both scenes are regenerated and committed, and all three suites pass. What is
+left is everything that needs hardware.
+
+1. **`ScannerBuild.ConfigureXr`, `ScannerBuild.BuildScanner`, then
+   `xcodebuild`** — on a Mac. Nothing about the iOS build has been exercised;
+   the Linux suite deliberately runs without `-buildTarget iOS`.
+2. **Device-test both features in one session, and tape-measure everything**:
    wall lengths for `ADR-0005`, furniture dimensions for `ADR-0006`. Both
-   features' real accuracy is unknown and neither can be established
-   off-device.
-4. Open one exported `.glb` in Blender before trusting the writer.
-5. `I1` is still not started. Plan section 25 still says this stretch work
+   features' real accuracy is still completely unknown — passing EditMode tests
+   say the math is self-consistent, not that it measures a room correctly.
+   `ADR-0005` records that systematic aim bias neither averages out nor shows up
+   in the fit residual, so a wrong wall can look confident.
+3. **Validate one exported `.glb` before trusting the writer** — Khronos
+   `npx gltf-validator <file>.glb` for spec conformance, then Blender for
+   whether it is actually usable. The container is asserted byte by byte by
+   tests that pass, which is not the same thing.
+4. **Consider adding a Viewer scene test.** The scanner has one and it earned
+   its keep this pass; the viewer has none, so viewer scene staleness is
+   invisible to a green suite.
+5. **Capture a real snapshot off the wire and commit it as a fixture.** The
+   three fixtures are hand-authored and suspiciously tidy — exact integer
+   corners, furniture at exactly the schema's catalog dimensions and exactly
+   90/0/180 degrees of yaw. The viewer renders fixture and phone data through
+   the same `ViewerSceneStore.TryApplyScannerSnapshot`, so a captured real
+   snapshot would let the viewer be developed against realistic geometry
+   without a phone in the room.
+6. `I1` is still not started. Plan section 25 still says this stretch work
    should have waited for it; `ADR-0006` records that it did not.

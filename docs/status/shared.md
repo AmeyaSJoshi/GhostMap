@@ -31,6 +31,11 @@
 - `47a6a0acbba0ad9ec05653df6361617f21bf5b08` (F4 review). Previous: `db347c13d8df8d5136fd86cd2b89da7705c8156d` (F3).
 
 ## Tests run
+- **`integration/sweep-and-furniture` result (first execution of this branch,
+  Linux): 197 tests, 197 passed, 0 failed, 0 skipped.** Unity exit code `0`.
+  156 (F4, unchanged) + 32 `WallFittingTests` + 9 `RoomContainmentTests`.
+  Run with `./tools/run_unity_tests.sh shared`, which finds the editor on
+  Linux or macOS; the macOS command below still applies verbatim.
 - Command:
   ```bash
   /Applications/Unity/Hub/Editor/6000.3.24f1/Unity.app/Contents/MacOS/Unity \
@@ -68,14 +73,12 @@ Geometry (`GhostMap.Shared.Geometry`):
 - `RoomGeometry` — `PolygonAreaXZ`, `SignedPolygonAreaXZ`, `HasSelfIntersectionXZ`,
   `BuildWalls`, `TryFindWall`, `InteriorAngleDeg`, `ContainsPointXZ`
   (`ContainsPointXZ` added by `ADR-0006` on branch
-  `integration/sweep-and-furniture` — **written but never compiled or
-  run**; 9 tests exist and have not executed)
+  `integration/sweep-and-furniture`; its 9 tests pass)
 - `WallGeometry` — `Normal`, `PlaneFor`, `ToWallLocal`, `FromWallLocal`, `ContainsSpan`
 - `WallFitting` — `TryFitWallLine`, `TryIntersectWallLinesXZ`, `TryDeriveCorners`;
   `WallLine` and `WallFitRejection`; limit constants `RequiredWallCount`,
   `MinSampleCount`, `MinSpanM`, `MinIntersectionAngleDeg` (added by `ADR-0005`
-  on branch `integration/sweep-and-furniture` — **written but never compiled or
-  run**; 32 tests exist and have not executed)
+  on branch `integration/sweep-and-furniture`; its 32 tests pass)
 - `MeasurementMath` — `Distance`, `DistanceXZ`, `RoomAreaM2`, `RoomVolumeM3`, `RoomPerimeterM`
 
 Protocol (`GhostMap.Shared.Protocol`):
@@ -93,11 +96,14 @@ Validation (`GhostMap.Shared.Validation`):
 - `ClosureQuality` — `Excellent`, `Acceptable`, `Rejected`
 
 ## Known issues
-- **`WallFitting` has never been compiled or run.** It was added by `ADR-0005`
-  on branch `integration/sweep-and-furniture`, authored on a machine with no Unity.
-  Its 32 tests exist and have not executed. Until the shared suite runs on a
-  machine with Unity, treat the whole class as unproven — the eigen
-  decomposition in `TryFitWallLine` is the part most likely to be wrong.
+- **`WallFitting`'s accuracy against a real room is still unknown.** Its 32
+  tests now pass, so the eigen decomposition in `TryFitWallLine` is correct on
+  synthetic input, including the conditioning branch that chooses between the
+  two candidate eigenvectors. What no EditMode test can establish is whether a
+  swept wall produces samples the fit handles well: `ADR-0005` records that
+  systematic aim bias does not average out and cannot be detected from the fit
+  residual, so a confidently-reported line can still be wrong. That needs a
+  phone and a tape measure.
 - `WallFitting`'s gates (`MinSampleCount`, `MinSpanM`,
   `MinIntersectionAngleDeg`) are capture-time conditioning guards, **not**
   serialized validation rules, so they deliberately have no counterpart in

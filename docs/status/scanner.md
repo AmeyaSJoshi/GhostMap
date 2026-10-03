@@ -13,11 +13,10 @@
   openings and `BuildSnapshot` are unchanged. No schema, protocol or viewer
   change. The Task S3 walked path is retained as a fallback, entered from the
   sweep phase.
-  - **Nothing was compiled and no test was run** — authored on a Linux machine
-    with no Unity, no `xcodebuild` and no iPhone. 89 tests were written and have
-    never executed.
-  - **`ScannerSceneTests` fails until `Scanner.unity` is regenerated**
-    (`GhostMap/Build Scanner Scene`). The committed scene has no `WallSweepHud`.
+  - **Compiled and run: 510 tests, 510 passed** (see "Tests run"). All 57 sweep
+    tests pass, including the 32 `WallFittingTests` in the shared package.
+  - `Scanner.unity` has been regenerated and `ScannerSceneTests` passes.
+    `WallSweepHud` is in the scene.
   - **No physical-device test.** Per `AGENTS.md` rule 12 this is not working
     until it runs on a real iPhone.
   - **The accuracy ceiling is real**: aim error at the floor grows with roughly
@@ -43,12 +42,12 @@
     plane detection, and this is the same horizontal detection the floor lock
     already relies on. Plan section 25's "wait for the MVP acceptance test" gate
     **is** deviated from, deliberately; `ADR-0006` records it.
-  - **Nothing was compiled and no test was run** — authored on a Linux machine
-    with no Unity, no `xcodebuild` and no iPhone. 77 tests across the branch were
-    written and have never executed.
-  - **`ScannerSceneTests` fails until `Scanner.unity` is regenerated**
-    (`GhostMap/Build Scanner Scene`): the committed scene has no
-    `FurnitureDetectionHud` and no `planeManager` on `ArSpatialProvider`.
+  - **Compiled and run: 510 tests, 510 passed** (see "Tests run"). All 42
+    detection tests pass.
+  - `Scanner.unity` has been regenerated and `ScannerSceneTests` passes.
+    `FurnitureDetectionHud` is in the scene and `ArSpatialProvider.planeManager`
+    is assigned — that missing assignment was the one genuine test failure on
+    first run of this branch.
   - **No physical-device test.** Unlike most of this project, *nothing* about
     detection quality can be established off-device.
   - **Known to be wrong for chairs and couches**: the detected plane is the seat,
@@ -975,6 +974,34 @@ session reaches tracking, the plane manager reports a floor candidate, and the
 screen shows session state, notTrackingReason and camera pose.
 
 ## Tests run
+
+### `integration/sweep-and-furniture` — first execution of this branch, Linux
+**510 tests, 510 passed, 0 failed, 0 skipped.** Unity exit code `0`.
+From the results XML: 313 scanner + 197 shared. Run with
+`./tools/run_unity_tests.sh scanner`, which omits `-buildTarget iOS` because
+the Linux editor has no iOS Build Support module — `ScannerIosPostBuild` is
+guarded behind `UNITY_IOS` so the suite still compiles. The iOS build itself
+is unchanged and still needs a Mac.
+
+New on this branch: 34 `WallSweepControllerTests`, 23 `ScanWorkflowSweepTests`,
+30 `FurnitureDetectionControllerTests`, 12 `ScanWorkflowDetectionTests`,
+9 `ScanWorkflowSweepAndDetectionTests`, plus 32 `WallFittingTests` and
+9 `RoomContainmentTests` from the shared package.
+
+Two things the first run caught, both now fixed:
+
+1. **The scanner did not compile.** `ScanWorkflowSweepTests` and
+   `ScanWorkflowDetectionTests` each still built the six-argument
+   `ScanWorkflowController` from their own feature branch — the sweep file was
+   missing `furnitureDetection`, the detection file was missing `wallSweep`.
+   Each was a *new* file on its branch, so git merged both without a conflict
+   and the merge review, which only inspected conflicted files, never saw them.
+   Worth remembering: a clean merge of two branches that both change one
+   constructor's arity is exactly the case conflict markers do not catch.
+2. **`ScannerSceneTests` failed** with `ArSpatialProvider.planeManager is not
+   assigned` — the predicted stale scene. Regenerated with
+   `./tools/run_unity_tests.sh --rebuild-scenes scanner`; the documented
+   `-executeMethod` hang did not reproduce.
 
 ### S6 — final, physical-device pass at `f087aaa`
 The re-run below was followed immediately by the physical-device pass

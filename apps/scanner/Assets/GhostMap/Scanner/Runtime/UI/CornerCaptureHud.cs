@@ -217,6 +217,17 @@ namespace GhostMap.Scanner.UI
 
                 case ScanPhase.VerifyClosure:
                     workflow.TryVerifyClosure(out _, out _);
+
+                    if (workflow.Corners.HasClosureMeasurement)
+                    {
+                        Debug.Log(string.Format(
+                            "GhostMap closure: error {0:F3} m quality {1} ({2}) {3}",
+                            workflow.Corners.ClosureErrorM,
+                            workflow.Corners.LastClosureQuality,
+                            workflow.RoomWasSwept ? "swept" : "walked",
+                            DescribeFootprint(workflow.Corners)));
+                    }
+
                     break;
             }
         }
@@ -340,6 +351,41 @@ namespace GhostMap.Scanner.UI
         // Readout
         // -------------------------------------------------------------------
 
+        /// <summary>
+        /// Corner-to-corner wall lengths, c1→c2 first: the numbers a
+        /// tape-measure comparison needs, whichever path made the corners.
+        /// </summary>
+        public static string DescribeWallLengths(CornerCaptureController capture)
+        {
+            var lengths = new StringBuilder("Walls");
+            int count = capture.Corners.Count;
+
+            for (int i = 0; i < count; i++)
+            {
+                Vector3 a = capture.Corners[i].position.ToVector3();
+                Vector3 b = capture.Corners[(i + 1) % count].position.ToVector3();
+                float length = new Vector2(b.x - a.x, b.z - a.z).magnitude;
+
+                lengths.AppendFormat(" L{0} {1:F3}", i + 1, length);
+            }
+
+            return lengths.Append(" m").ToString();
+        }
+
+        /// <summary>Corners and wall lengths on one line, for the Xcode console.</summary>
+        public static string DescribeFootprint(CornerCaptureController capture)
+        {
+            var footprint = new StringBuilder();
+
+            for (int i = 0; i < capture.Corners.Count; i++)
+            {
+                Vector3 ghost = capture.Corners[i].position.ToVector3();
+                footprint.AppendFormat("c{0} ({1:F3},{2:F3}) ", i + 1, ghost.x, ghost.z);
+            }
+
+            return footprint.Append(DescribeWallLengths(capture)).ToString();
+        }
+
         private string BuildReadout(ScanWorkflowController workflow)
         {
             CornerCaptureController capture = workflow.Corners;
@@ -364,6 +410,11 @@ namespace GhostMap.Scanner.UI
 
                 builder.AppendFormat(
                     "  c{0} G({1:F2},{2:F2},{3:F2})\n", i + 1, ghost.x, ghost.y, ghost.z);
+            }
+
+            if (capture.IsComplete)
+            {
+                builder.Append(DescribeWallLengths(capture)).Append('\n');
             }
 
             AppendClosureLine(builder, capture);

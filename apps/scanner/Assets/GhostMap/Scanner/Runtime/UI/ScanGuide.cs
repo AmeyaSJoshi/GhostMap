@@ -395,11 +395,32 @@ namespace GhostMap.Scanner.UI
         private static ScanGuideStep DescribeObjects(ScanWorkflowController workflow)
         {
             ObjectPlacementController objects = workflow.Objects;
+            FurnitureDetectionController detection = workflow.FurnitureDetection;
             string type = Capitalize(objects.SelectedType);
             string error = objects.LastError;
 
+            // ADR-0006: a detected surface is offered first. GhostMap measured
+            // it; the user still says what it is.
+            if (detection.HasSelection)
+            {
+                FurnitureCandidate candidate = detection.Candidates[detection.SelectedIndex];
+                string found = detection.CandidateCount > 1
+                    ? $"Surface {detection.SelectedIndex + 1} of {detection.CandidateCount}: "
+                    : "Found a surface: ";
+
+                return new ScanGuideStep(
+                    6,
+                    "Add furniture",
+                    "Found something at the yellow dot. Tap Is: to say what it is, then Add. Or Skip it.",
+                    null,
+                    string.IsNullOrEmpty(error)
+                        ? $"{found}{candidate.WidthM:F2} × {candidate.DepthM:F2} m, top {candidate.HeightM:F2} m high."
+                        : error,
+                    string.IsNullOrEmpty(error) ? GuideMessageKind.Tip : GuideMessageKind.Error);
+            }
+
             string tip = objects.ObjectCount == 0
-                ? "No furniture to add? Just tap Next."
+                ? "Look at desk and table tops to detect them. No furniture? Just tap Next."
                 : "Use the size buttons to match the last thing you placed.";
 
             return new ScanGuideStep(

@@ -66,12 +66,15 @@ Geometry (`GhostMap.Shared.Geometry`):
   `GhostDirectionToWorld`, `WorldRayToGhost`, `GhostRayToWorld`, `FloorWorldY`
 - `RayPlaneMath` — `TryIntersectHorizontalPlane`, `TryIntersectPlane`
 - `RoomGeometry` — `PolygonAreaXZ`, `SignedPolygonAreaXZ`, `HasSelfIntersectionXZ`,
-  `BuildWalls`, `TryFindWall`, `InteriorAngleDeg`
+  `BuildWalls`, `TryFindWall`, `InteriorAngleDeg`, `ContainsPointXZ`
+  (`ContainsPointXZ` added by `ADR-0006` on branch
+  `integration/sweep-and-furniture` — **written but never compiled or
+  run**; 9 tests exist and have not executed)
 - `WallGeometry` — `Normal`, `PlaneFor`, `ToWallLocal`, `FromWallLocal`, `ContainsSpan`
 - `WallFitting` — `TryFitWallLine`, `TryIntersectWallLinesXZ`, `TryDeriveCorners`;
   `WallLine` and `WallFitRejection`; limit constants `RequiredWallCount`,
   `MinSampleCount`, `MinSpanM`, `MinIntersectionAngleDeg` (added by `ADR-0005`
-  on branch `scanner/sweep-wall-capture` — **written but never compiled or
+  on branch `integration/sweep-and-furniture` — **written but never compiled or
   run**; 32 tests exist and have not executed)
 - `MeasurementMath` — `Distance`, `DistanceXZ`, `RoomAreaM2`, `RoomVolumeM3`, `RoomPerimeterM`
 
@@ -91,7 +94,7 @@ Validation (`GhostMap.Shared.Validation`):
 
 ## Known issues
 - **`WallFitting` has never been compiled or run.** It was added by `ADR-0005`
-  on branch `scanner/sweep-wall-capture`, authored on a machine with no Unity.
+  on branch `integration/sweep-and-furniture`, authored on a machine with no Unity.
   Its 32 tests exist and have not executed. Until the shared suite runs on a
   machine with Unity, treat the whole class as unproven — the eigen
   decomposition in `TryFitWallLine` is the part most likely to be wrong.

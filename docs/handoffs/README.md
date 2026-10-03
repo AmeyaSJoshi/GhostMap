@@ -96,3 +96,5 @@ or
 | 2026-09-19 | viewer | [V6 — persistence and polished HUD](2026-09-19-viewer-v6-persistence-hud.md) |
 | 2026-10-03 | shared | [Status docs refresh after V6](2026-10-03-shared-status-docs-refresh.md) |
 | 2026-10-03 | scanner | [Sweep wall capture (ADR-0005), not compiled, not device-tested](2026-10-03-scanner-sweep-wall-capture.md) |
+| 2026-10-03 | integration | [Furniture detection + glTF asset export (ADR-0006), not compiled, not device-tested](2026-10-03-integration-furniture-detect-and-export.md) |
+| 2026-10-03 | integration | [Sweep + furniture merged into one branch, integration seam tested](2026-10-03-integration-sweep-and-furniture-merge.md) |

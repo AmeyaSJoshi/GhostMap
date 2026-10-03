@@ -1,7 +1,9 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using GhostMap.Shared.Domain;
 using GhostMap.Viewer.Bootstrap;
+using GhostMap.Viewer.Export;
 using GhostMap.Viewer.Interaction;
 using GhostMap.Viewer.Networking;
 using GhostMap.Viewer.Persistence;
@@ -40,6 +42,7 @@ namespace GhostMap.Viewer.UI
         /// <summary>Task V6: save/load the effective (post-finalization,
         /// locally-edited) scene to a single fixed slot.</summary>
         [SerializeField] private Button saveButton;
+        [SerializeField] private Button exportAssetsButton;
         [SerializeField] private Button loadButton;
 
         /// <summary>
@@ -96,6 +99,11 @@ namespace GhostMap.Viewer.UI
                 dollhouseButton.onClick.AddListener(OnDollhouseClicked);
             }
 
+            if (exportAssetsButton != null)
+            {
+                exportAssetsButton.onClick.AddListener(OnExportAssetsClicked);
+            }
+
             if (saveButton != null)
             {
                 saveButton.onClick.AddListener(OnSaveClicked);
@@ -143,6 +151,58 @@ namespace GhostMap.Viewer.UI
             _lastPersistenceMessage = ScenePersistence.TrySave(editable.Current, path, out string error)
                 ? $"Saved to {path}"
                 : $"Save failed: {error}";
+        }
+
+        /// <summary>
+        /// ADR-0006: writes one <c>.glb</c> per furniture object.
+        ///
+        /// <para>Gated by <see cref="CanExportAssets"/> rather than
+        /// <see cref="CanSave"/>, because the two refuse for different reasons:
+        /// Save is blocked by ADR-0003 authority, and export is additionally
+        /// pointless with no furniture in the room. Both messages have to be
+        /// distinguishable or the user cannot tell which problem they have.</para>
+        /// </summary>
+        private void OnExportAssetsClicked()
+        {
+            ViewerEditableScene editable = bootstrap != null ? bootstrap.EditableScene : null;
+
+            if (!CanExportAssets(editable))
+            {
+                _lastPersistenceMessage = CanSave(editable)
+                    ? "Nothing to export: this room has no furniture."
+                    : "Export unavailable until the scan is finalized.";
+                return;
+            }
+
+            string directory = FurnitureAssetExporter.DefaultDirectory;
+
+            if (!FurnitureAssetExporter.TryExportRoomObjects(
+                    editable.Current.room,
+                    directory,
+                    out IReadOnlyList<AssetExportResult> results,
+                    out string error))
+            {
+                _lastPersistenceMessage = $"Export failed: {error}";
+                return;
+            }
+
+            int succeeded = 0;
+
+            for (int i = 0; i < results.Count; i++)
+            {
+                if (results[i].Succeeded)
+                {
+                    succeeded++;
+                }
+            }
+
+            // A partial export is reported as partial. Saying "exported" when
+            // two of five objects failed would be the kind of quiet lie the
+            // handoff rules exist to prevent.
+            _lastPersistenceMessage = succeeded == results.Count
+                ? $"Exported {succeeded} assets to {directory}"
+                : $"Exported {succeeded} of {results.Count} assets to {directory}; " +
+                  "the rest could not be built.";
         }
 
         private void OnLoadClicked()
@@ -195,6 +255,22 @@ namespace GhostMap.Viewer.UI
         /// </summary>
         public static bool CanLoad(ViewerEditableScene editable)
             => editable == null || editable.Current == null || editable.EditingEnabled;
+
+        /// <summary>
+        /// ADR-0006: asset export requires everything <see cref="CanSave"/>
+        /// requires — a finalized, Viewer-owned scene, per ADR-0003 — plus at
+        /// least one object to export.
+        /// </summary>
+        public static bool CanExportAssets(ViewerEditableScene editable)
+        {
+            if (!CanSave(editable))
+            {
+                return false;
+            }
+
+            RoomModel room = editable.Current.room;
+            return room?.objects != null && room.objects.Length > 0;
+        }
 
         /// <summary>
         /// Fix (post-V6 review): a successful Load replaces the inspected

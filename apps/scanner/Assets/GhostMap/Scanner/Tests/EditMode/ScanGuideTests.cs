@@ -1,3 +1,4 @@
+using GhostMap.Scanner.AR;
 using GhostMap.Scanner.Capture;
 using GhostMap.Scanner.UI;
 using GhostMap.Scanner.Workflow;
@@ -51,7 +52,8 @@ namespace GhostMap.Scanner.Tests.EditMode
                 corners,
                 height,
                 new OpeningCaptureController(provider, floorLock, corners, height),
-                new ObjectPlacementController(provider, floorLock));
+                new ObjectPlacementController(provider, floorLock),
+                new FurnitureDetectionController(provider, floorLock, corners));
         }
 
         private static ScanWorkflowController SweepingWorkflow(FakeSpatialProvider provider)
@@ -280,6 +282,101 @@ namespace GhostMap.Scanner.Tests.EditMode
                 workflow, new ScanGuideContext(true, FloorLockRejection.None, connectedToComputer: true));
             StringAssert.Contains("Finish & Send", connected.Instruction);
             Assert.AreEqual(GuideMessageKind.Success, connected.MessageKind);
+        }
+
+        // -------------------------------------------------------------------
+        // Step 6 — detected furniture (ADR-0006)
+        // -------------------------------------------------------------------
+
+        private static ScanWorkflowController SweptRoomAtAddObjects(FakeSpatialProvider provider)
+        {
+            ScanWorkflowController workflow = SweepingWorkflow(provider);
+            SweepLegalRoom(provider, workflow);
+            Assert.IsTrue(workflow.TryDeriveRoomFromSweeps(out _, out _));
+            AimAtGhost(provider, workflow.Frame, 0f, 0f);
+            Assert.IsTrue(workflow.TryVerifyClosure(out _, out _));
+            Assert.IsTrue(workflow.TrySetManualHeight(2.5f, out _));
+            Assert.IsTrue(workflow.FinishAddingOpenings());
+            Assert.AreEqual(ScanPhase.AddObjects, workflow.Phase);
+            return workflow;
+        }
+
+        private static DetectedSurface DeskTop(GhostCoordinateFrame frame, ulong id, float x, float z)
+        {
+            Quaternion rotation =
+                Quaternion.LookRotation(frame.GhostDirectionToWorld(Vector3.forward), Vector3.up)
+                * Quaternion.Euler(0f, -90f, 0f);
+
+            return new DetectedSurface(
+                new TrackableId(id, 0),
+                frame.GhostToWorld(new Vector3(x, 0.74f, z)),
+                rotation,
+                new Vector2(1.2f, 0.6f),
+                PlaneAlignment.HorizontalUp);
+        }
+
+        [Test]
+        public void Step6_WithNothingDetected_KeepsTheManualPlacementWording()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = SweptRoomAtAddObjects(provider);
+            Assert.IsTrue(workflow.TryRefreshFurnitureDetection(out _));
+
+            ScanGuideStep step = ScanGuide.Describe(workflow, Tracking);
+
+            Assert.AreEqual(6, step.Number);
+            StringAssert.Contains("tap Place", step.Instruction);
+            Assert.IsFalse(string.IsNullOrEmpty(step.AimHint));
+            StringAssert.Contains("Next", step.Message);
+        }
+
+        [Test]
+        public void Step6_WithADetectedSurface_OffersItWithItsMeasurements()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = SweptRoomAtAddObjects(provider);
+            provider.DetectedSurfaces.Add(DeskTop(workflow.Frame, 7001, 2f, 1.5f));
+            Assert.IsTrue(workflow.TryRefreshFurnitureDetection(out _));
+            Assert.IsTrue(workflow.FurnitureDetection.HasSelection);
+
+            ScanGuideStep step = ScanGuide.Describe(workflow, Tracking);
+
+            Assert.AreEqual(6, step.Number);
+            StringAssert.Contains("Add", step.Instruction);
+            StringAssert.Contains("Skip", step.Instruction);
+            Assert.IsNull(step.AimHint, "a detected surface needs no aiming");
+            StringAssert.Contains("Found a surface", step.Message);
+            StringAssert.Contains("top 0.74 m", step.Message);
+        }
+
+        [Test]
+        public void Step6_WithSeveralSurfaces_SaysWhichOneIsOffered()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = SweptRoomAtAddObjects(provider);
+            provider.DetectedSurfaces.Add(DeskTop(workflow.Frame, 7002, 1f, 1f));
+            provider.DetectedSurfaces.Add(DeskTop(workflow.Frame, 7003, 3f, 2f));
+            Assert.IsTrue(workflow.TryRefreshFurnitureDetection(out _));
+
+            StringAssert.Contains("Surface 1 of 2", ScanGuide.Describe(workflow, Tracking).Message);
+        }
+
+        [Test]
+        public void Step6_AfterTheOnlySurfaceIsAdded_ReturnsToManualWording()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = SweptRoomAtAddObjects(provider);
+            provider.DetectedSurfaces.Add(DeskTop(workflow.Frame, 7004, 2f, 1.5f));
+            Assert.IsTrue(workflow.TryRefreshFurnitureDetection(out _));
+            Assert.IsTrue(workflow.SetDetectedFurnitureType("desk"));
+            Assert.IsTrue(workflow.TryAcceptDetectedFurniture(out _, out _));
+            Assert.IsTrue(workflow.TryRefreshFurnitureDetection(out _));
+
+            ScanGuideStep step = ScanGuide.Describe(workflow, Tracking);
+
+            Assert.IsFalse(workflow.FurnitureDetection.HasSelection, "an added surface must not be offered again");
+            StringAssert.Contains("tap Place", step.Instruction);
+            Assert.AreEqual(1, workflow.Objects.ObjectCount);
         }
 
         // -------------------------------------------------------------------

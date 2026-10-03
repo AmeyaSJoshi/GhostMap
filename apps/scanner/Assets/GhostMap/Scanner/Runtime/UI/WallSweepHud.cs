@@ -245,11 +245,16 @@ namespace GhostMap.Scanner.UI
                 case ScanPhase.SweepWalls:
                     if (workflow.WallSweep.IsSweeping)
                     {
-                        workflow.TryCompleteWallSweep(out _);
+                        int sampleCount = workflow.WallSweep.ActiveSampleCount;
+                        float spanM = workflow.WallSweep.ActiveSpanM;
+                        bool accepted = workflow.TryCompleteWallSweep(out WallSweepRejection rejection);
+                        LogWall(workflow.WallSweep, accepted, sampleCount, spanM, rejection);
                     }
                     else if (workflow.WallSweep.IsComplete)
                     {
-                        workflow.TryDeriveRoomFromSweeps(out _, out _);
+                        bool built = workflow.TryDeriveRoomFromSweeps(
+                            out WallSweepRejection sweepRejection, out CornerCaptureRejection cornerRejection);
+                        LogDerivedRoom(workflow, built, sweepRejection, cornerRejection);
                     }
                     else
                     {
@@ -258,6 +263,50 @@ namespace GhostMap.Scanner.UI
 
                     break;
             }
+        }
+
+        /// <summary>
+        /// Device-test observability: every committed or refused wall, in the
+        /// Xcode console, so a sweep session can be compared against a tape
+        /// measure afterwards without transcribing the Details panel.
+        /// </summary>
+        private static void LogWall(
+            WallSweepController sweep, bool accepted, int sampleCount, float spanM, WallSweepRejection rejection)
+        {
+            if (!accepted)
+            {
+                Debug.Log(string.Format(
+                    "GhostMap sweep: wall {0} REFUSED n {1} span {2:F3} m -> {3} {4}",
+                    sweep.WallCount + 1, sampleCount, spanM, rejection, sweep.LastError));
+                return;
+            }
+
+            SweptWall wall = sweep.Walls[sweep.WallCount - 1];
+
+            Debug.Log(string.Format(
+                "GhostMap sweep: wall {0} ok n {1} span {2:F3} m rms {3:F4} m range {4:F2} m",
+                sweep.WallCount,
+                wall.Line.SampleCount,
+                wall.Line.SpanM,
+                wall.Line.RmsResidualM,
+                wall.MaxSampleDistanceM));
+        }
+
+        private static void LogDerivedRoom(
+            ScanWorkflowController workflow,
+            bool built,
+            WallSweepRejection sweepRejection,
+            CornerCaptureRejection cornerRejection)
+        {
+            if (!built)
+            {
+                Debug.Log(
+                    $"GhostMap sweep: Build Room REFUSED {sweepRejection}/{cornerRejection} " +
+                    $"{workflow.WallSweep.LastError} {workflow.Corners.LastError}");
+                return;
+            }
+
+            Debug.Log("GhostMap sweep: room built " + CornerCaptureHud.DescribeFootprint(workflow.Corners));
         }
 
         private void OnCancelPressed() => Workflow?.CancelWallSweep();
@@ -437,8 +486,9 @@ namespace GhostMap.Scanner.UI
                 WallLine line = sweep.Walls[i].Line;
 
                 builder.AppendFormat(
-                    "  w{0} span {1:F2} m rms {2:F3} m @{3:F1} m\n",
+                    "  w{0} n {1} span {2:F2} m rms {3:F3} m @{4:F1} m\n",
                     i + 1,
+                    line.SampleCount,
                     line.SpanM,
                     line.RmsResidualM,
                     sweep.Walls[i].MaxSampleDistanceM);

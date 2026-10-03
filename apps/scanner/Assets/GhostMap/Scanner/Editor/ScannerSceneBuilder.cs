@@ -67,6 +67,10 @@ namespace GhostMap.Scanner.Editor
             AssignSerializedReferences(
                 spatialProvider,
                 ("raycastManager", raycastManager),
+                // ADR-0006 enumerates detected planes for furniture detection,
+                // so the provider needs the plane manager and not only the
+                // raycast manager built on top of it.
+                ("planeManager", planeManager),
                 ("arCamera", arCamera));
 
             // The Button needs an EventSystem to receive touches at all. The
@@ -132,6 +136,10 @@ namespace GhostMap.Scanner.Editor
             Text messageText = ScannerUiKit.Label(messagePill, "MessageText", string.Empty, 29, ScannerUiKit.TextSecondary);
             messageText.lineSpacing = 1f;
 
+            // Above the manual Place row: when a surface has been detected,
+            // accepting it is the quicker path, and the row collapses away
+            // entirely when nothing is detected.
+            RectTransform detectRow = ScannerUiKit.Row("DetectRow", sheet, 12f);
             RectTransform primaryRow = ScannerUiKit.Row("PrimaryRow", sheet, 16f);
             RectTransform choiceRow = ScannerUiKit.Row("ChoiceRow", sheet, 16f);
             RectTransform manualRow = ScannerUiKit.Row("ManualHeightRow", sheet, 16f);
@@ -154,6 +162,13 @@ namespace GhostMap.Scanner.Editor
             Button selectOpeningWallButton = ScannerUiKit.Button(choiceRow, "SelectOpeningWallButton", "Wall 1 of 4", ButtonStyle.Secondary, out Text selectOpeningWallLabel);
             Button toggleOpeningTypeButton = ScannerUiKit.Button(choiceRow, "ToggleOpeningTypeButton", "Type: Door", ButtonStyle.Secondary, out Text toggleOpeningTypeLabel);
             Button selectObjectTypeButton = ScannerUiKit.Button(choiceRow, "SelectObjectTypeButton", "Type: Bed", ButtonStyle.Secondary, out Text selectObjectTypeLabel);
+
+            // ADR-0006 detected furniture: what it is, pass on it, see the
+            // next one, take it. Shown only while a candidate exists.
+            Button detectTypeButton = ScannerUiKit.Button(detectRow, "DetectTypeButton", "Is: Generic", ButtonStyle.Secondary, out Text detectTypeLabel);
+            Button detectSkipButton = ScannerUiKit.Button(detectRow, "DetectSkipButton", "Skip", ButtonStyle.Secondary, out _);
+            Button detectNextButton = ScannerUiKit.Button(detectRow, "DetectNextButton", "Next", ButtonStyle.Secondary, out _);
+            Button detectAddButton = ScannerUiKit.Button(detectRow, "DetectAddButton", "Add", ButtonStyle.Next, out Text detectAddLabel);
 
             // Typed height: the plan's fallback when the ceiling cannot be aimed at.
             InputField manualHeightInput = ScannerUiKit.Field(manualRow, "ManualHeightInput", "Or type height, e.g. 2.45", 100f);
@@ -290,6 +305,7 @@ namespace GhostMap.Scanner.Editor
             Text cornerReadout = DetailsText(detailsContent, "CornerCaptureReadout");
             Text heightReadout = DetailsText(detailsContent, "HeightCaptureReadout");
             Text openingReadout = DetailsText(detailsContent, "OpeningCaptureReadout");
+            Text detectionReadout = DetailsText(detailsContent, "FurnitureDetectionReadout");
             Text objectReadout = DetailsText(detailsContent, "ObjectPlacementReadout");
             Text diagnosticsText = DetailsText(detailsContent, "DiagnosticsText");
 
@@ -368,6 +384,21 @@ namespace GhostMap.Scanner.Editor
                 ("finishOpeningsButton", finishOpeningsButton),
                 ("readoutText", openingReadout));
 
+            // ADR-0006 furniture detection. Feeds the same object store as
+            // manual placement, which stays available as the fallback.
+            var detectionHudGo = new GameObject("FurnitureDetectionHud", typeof(FurnitureDetectionHud));
+            AssignSerializedReferences(
+                detectionHudGo.GetComponent<FurnitureDetectionHud>(),
+                ("floorLockHud", floorLockHud),
+                ("spatialProvider", spatialProvider),
+                ("typeButton", detectTypeButton),
+                ("typeButtonLabel", detectTypeLabel),
+                ("nextButton", detectNextButton),
+                ("addButton", detectAddButton),
+                ("addButtonLabel", detectAddLabel),
+                ("skipButton", detectSkipButton),
+                ("readoutText", detectionReadout));
+
             // Task S5 Part 2: furniture.
             var objectHudGo = new GameObject("ObjectPlacementHud", typeof(ObjectPlacementHud));
             AssignSerializedReferences(
@@ -437,6 +468,7 @@ namespace GhostMap.Scanner.Editor
                 "collapsibleRows",
                 new UnityEngine.Object[]
                 {
+                    detectRow.gameObject,
                     primaryRow.gameObject,
                     choiceRow.gameObject,
                     manualRow.gameObject,
@@ -489,7 +521,7 @@ namespace GhostMap.Scanner.Editor
 
                 var provider = FindInScene<ArSpatialProvider>(scene);
                 Require(provider != null, "no ArSpatialProvider");
-                RequireAssigned(provider, "raycastManager", "arCamera");
+                RequireAssigned(provider, "raycastManager", "planeManager", "arCamera");
 
                 Require(FindInScene<SafeAreaFitter>(scene) != null, "no SafeAreaFitter; the UI would sit under the Dynamic Island");
 
@@ -550,6 +582,20 @@ namespace GhostMap.Scanner.Editor
                     "capturePointLabel",
                     "undoOpeningButton",
                     "finishOpeningsButton",
+                    "readoutText");
+
+                var detectionHud = FindInScene<FurnitureDetectionHud>(scene);
+                Require(detectionHud != null, "no FurnitureDetectionHud");
+                RequireAssigned(
+                    detectionHud,
+                    "floorLockHud",
+                    "spatialProvider",
+                    "typeButton",
+                    "typeButtonLabel",
+                    "nextButton",
+                    "addButton",
+                    "addButtonLabel",
+                    "skipButton",
                     "readoutText");
 
                 var objectHud = FindInScene<ObjectPlacementHud>(scene);

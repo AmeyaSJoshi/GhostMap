@@ -49,6 +49,9 @@ namespace GhostMap.Viewer.Editor
             Text measurementText = CreateInspectorLine(canvasGo, "MeasurementText", -760f, 320f);
             Button saveButton = CreateActionButton(canvasGo, "SaveButton", "Save Scene", -760f);
             Button loadButton = CreateActionButton(canvasGo, "LoadButton", "Load Scene", -840f);
+            // ADR-0006: one .glb per furniture object.
+            Button exportAssetsButton = CreateActionButton(
+                canvasGo, "ExportAssetsButton", "Export Assets", -920f);
 
             var roomRendererGo = new GameObject("RoomRenderer", typeof(RoomRenderer));
             var roomRenderer = roomRendererGo.GetComponent<RoomRenderer>();
@@ -128,6 +131,7 @@ namespace GhostMap.Viewer.Editor
                 ("dollhouseButton", dollhouseButton),
                 ("cameraController", cameraController),
                 ("saveButton", saveButton),
+                ("exportAssetsButton", exportAssetsButton),
                 ("loadButton", loadButton),
                 ("selectionController", selectionController),
                 ("measurementController", measurementController));
@@ -202,7 +206,7 @@ namespace GhostMap.Viewer.Editor
                     hud,
                     "bootstrap", "loadFixtureButton", "statusText",
                     "resetViewButton", "dollhouseButton", "cameraController",
-                    "saveButton", "loadButton",
+                    "saveButton", "loadButton", "exportAssetsButton",
                     "selectionController", "measurementController");
             }
             finally

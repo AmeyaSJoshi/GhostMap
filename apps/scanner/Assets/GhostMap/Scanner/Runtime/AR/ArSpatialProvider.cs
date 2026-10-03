@@ -40,6 +40,7 @@ namespace GhostMap.Scanner.AR
     public sealed class ArSpatialProvider : MonoBehaviour, ISpatialProvider
     {
         [SerializeField] private ARRaycastManager raycastManager;
+        [SerializeField] private ARPlaneManager planeManager;
         [SerializeField] private Camera arCamera;
 
         /// <summary>A fixed id for the demo floor, so repeated hits read as one plane.</summary>
@@ -75,6 +76,7 @@ namespace GhostMap.Scanner.AR
         private void Reset()
         {
             raycastManager = FindFirstObjectByType<ARRaycastManager>();
+            planeManager = FindFirstObjectByType<ARPlaneManager>();
             arCamera = Camera.main;
         }
 
@@ -164,6 +166,56 @@ namespace GhostMap.Scanner.AR
 
             Transform cameraTransform = arCamera.transform;
             pose = new Pose(cameraTransform.position, cameraTransform.rotation);
+            return true;
+        }
+
+        /// <summary>
+        /// ADR-0006: enumerates detected planes for furniture detection.
+        ///
+        /// <para>This is the <b>second</b> use of plane detection in GhostMap,
+        /// and the only one besides the floor lock. It does not weaken
+        /// <c>ADR-0004</c>: that rejected depending on detection of blank
+        /// <i>vertical</i> walls, which is slow and partial on a non-Pro
+        /// device. Horizontal furniture surfaces are the favourable case —
+        /// textured, lit, seen from above — and are exactly what the
+        /// already-device-verified floor lock relies on.</para>
+        ///
+        /// <para>The world centre is <c>TransformPoint(plane.center)</c> rather
+        /// than <c>transform.position</c>: ARKit refines the observed centre
+        /// within the plane's own space as it sees more of the surface, and
+        /// <c>plane.center</c> is where that refinement lands.</para>
+        /// </summary>
+        public bool TryGetDetectedSurfaces(List<DetectedSurface> into)
+        {
+            if (into == null)
+            {
+                return false;
+            }
+
+            into.Clear();
+
+            if (planeManager == null || planeManager.trackables.count == 0)
+            {
+                return planeManager != null;
+            }
+
+            foreach (ARPlane plane in planeManager.trackables)
+            {
+                if (plane == null)
+                {
+                    continue;
+                }
+
+                Transform planeTransform = plane.transform;
+
+                into.Add(new DetectedSurface(
+                    plane.trackableId,
+                    planeTransform.TransformPoint(plane.center),
+                    planeTransform.rotation,
+                    plane.size,
+                    plane.alignment));
+            }
+
             return true;
         }
     }

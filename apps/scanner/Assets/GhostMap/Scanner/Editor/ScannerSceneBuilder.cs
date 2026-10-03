@@ -707,7 +707,7 @@ namespace GhostMap.Scanner.Editor
             fieldGo.transform.SetParent(canvasGo.transform, false);
 
             var background = fieldGo.GetComponent<Image>();
-            background.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+            background.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
             background.type = Image.Type.Sliced;
             background.color = new Color(0.92f, 0.92f, 0.92f, 0.95f);
 
@@ -782,7 +782,7 @@ namespace GhostMap.Scanner.Editor
             buttonGo.transform.SetParent(canvasGo.transform, false);
 
             var background = buttonGo.GetComponent<Image>();
-            background.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+            background.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
             background.type = Image.Type.Sliced;
             background.color = new Color(0.16f, 0.16f, 0.18f, 0.92f);
 
@@ -819,7 +819,7 @@ namespace GhostMap.Scanner.Editor
             fieldGo.transform.SetParent(canvasGo.transform, false);
 
             var background = fieldGo.GetComponent<Image>();
-            background.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+            background.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
             background.type = Image.Type.Sliced;
             background.color = new Color(0.92f, 0.92f, 0.92f, 0.95f);
 
@@ -886,7 +886,7 @@ namespace GhostMap.Scanner.Editor
             crosshairGo.transform.SetParent(canvasGo.transform, false);
 
             var image = crosshairGo.GetComponent<Image>();
-            image.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Knob.psd");
+            image.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
             image.color = Color.white;
             image.raycastTarget = false;
 
@@ -906,7 +906,7 @@ namespace GhostMap.Scanner.Editor
             buttonGo.transform.SetParent(canvasGo.transform, false);
 
             var background = buttonGo.GetComponent<Image>();
-            background.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+            background.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
             background.type = Image.Type.Sliced;
             background.color = new Color(0.16f, 0.16f, 0.18f, 0.92f);
 
@@ -953,7 +953,7 @@ namespace GhostMap.Scanner.Editor
             buttonGo.transform.SetParent(canvasGo.transform, false);
 
             var background = buttonGo.GetComponent<Image>();
-            background.sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
+            background.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
             background.type = Image.Type.Sliced;
             background.color = new Color(0.16f, 0.16f, 0.18f, 0.92f);
 

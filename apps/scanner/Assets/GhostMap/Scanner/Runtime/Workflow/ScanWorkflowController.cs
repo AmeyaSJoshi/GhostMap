@@ -5,6 +5,7 @@ using GhostMap.Shared.Domain;
 using GhostMap.Shared.Geometry;
 using GhostMap.Shared.Protocol;
 using GhostMap.Shared.Validation;
+using UnityEngine.XR.ARSubsystems;
 
 namespace GhostMap.Scanner.Workflow
 {
@@ -61,6 +62,7 @@ namespace GhostMap.Scanner.Workflow
         private readonly HeightCaptureController height;
         private readonly OpeningCaptureController openingCapture;
         private readonly ObjectPlacementController objectPlacement;
+        private readonly FurnitureDetectionController furnitureDetection;
 
         private bool isFinalized;
 
@@ -69,13 +71,15 @@ namespace GhostMap.Scanner.Workflow
             CornerCaptureController corners,
             HeightCaptureController height,
             OpeningCaptureController openingCapture,
-            ObjectPlacementController objectPlacement)
+            ObjectPlacementController objectPlacement,
+            FurnitureDetectionController furnitureDetection)
         {
             this.floorLock = floorLock;
             this.corners = corners;
             this.height = height;
             this.openingCapture = openingCapture;
             this.objectPlacement = objectPlacement;
+            this.furnitureDetection = furnitureDetection;
             SessionId = Guid.NewGuid().ToString();
             RoomId = Guid.NewGuid().ToString();
             Phase = ScanPhase.Boot;
@@ -109,6 +113,9 @@ namespace GhostMap.Scanner.Workflow
 
         /// <summary>Task S5 object placement. Read-only from outside the workflow.</summary>
         public ObjectPlacementController Objects => objectPlacement;
+
+        /// <summary>ADR-0006 furniture detection. Read-only from outside the workflow.</summary>
+        public FurnitureDetectionController FurnitureDetection => furnitureDetection;
 
         /// <summary>
         /// Advances the pre-floor-lock phases from tracking quality. Boot
@@ -578,6 +585,119 @@ namespace GhostMap.Scanner.Workflow
 
             Publish();
             return true;
+        }
+
+        // -------------------------------------------------------------------
+        // ADR-0006 — furniture detection, inside the existing AddObjects phase
+        // -------------------------------------------------------------------
+
+        /// <summary>
+        /// Re-reads detected planes and rebuilds the candidate list.
+        ///
+        /// <para><b>Publishes nothing.</b> Looking around is not a structural
+        /// mutation, and a candidate is not furniture until it is accepted. The
+        /// HUD calls this on a timer, so publishing here would violate
+        /// performance target section 24's "snapshots only on mutation".</para>
+        ///
+        /// <para>No new scan phase: detection is a second input method for
+        /// <see cref="ScanPhase.AddObjects"/>, which already exists.</para>
+        /// </summary>
+        public bool TryRefreshFurnitureDetection(out FurnitureDetectionRejection rejection)
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                rejection = FurnitureDetectionRejection.NoRoomFootprint;
+                return false;
+            }
+
+            return furnitureDetection.Refresh(out rejection);
+        }
+
+        /// <summary>Chooses the type the next accepted candidate becomes.</summary>
+        public bool SetDetectedFurnitureType(string type)
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                return false;
+            }
+
+            return furnitureDetection.SetType(type);
+        }
+
+        /// <summary>Cycles the highlighted candidate. Publishes nothing.</summary>
+        public bool SelectNextDetectedCandidate()
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                return false;
+            }
+
+            return furnitureDetection.SelectNextCandidate();
+        }
+
+        /// <summary>
+        /// Turns the selected candidate into a real furniture object with its
+        /// measured dimensions, and publishes.
+        ///
+        /// <para>Two gates in order: the detection must produce a valid
+        /// candidate for the chosen type, and the object must then be accepted
+        /// by the single object store, which runs the unchanged shared
+        /// <c>FurnitureValidator</c>. The surface is only marked resolved once
+        /// the object is actually in the store, so a failure leaves the
+        /// candidate available to retry with a different type.</para>
+        /// </summary>
+        public bool TryAcceptDetectedFurniture(
+            out FurnitureDetectionRejection detectionRejection,
+            out ObjectPlacementRejection placementRejection)
+        {
+            placementRejection = ObjectPlacementRejection.None;
+
+            if (Phase != ScanPhase.AddObjects)
+            {
+                detectionRejection = FurnitureDetectionRejection.NoRoomFootprint;
+                return false;
+            }
+
+            TrackableId surfaceId = default;
+            bool hasSurface = furnitureDetection.HasSelection;
+
+            if (hasSurface)
+            {
+                surfaceId = furnitureDetection.Candidates[furnitureDetection.SelectedIndex].SurfaceId;
+            }
+
+            if (!furnitureDetection.TryBuildSelected(
+                    out SceneObjectModel model, out detectionRejection))
+            {
+                return false;
+            }
+
+            if (!objectPlacement.TryAdoptDetectedObject(model, out placementRejection))
+            {
+                return false;
+            }
+
+            if (hasSurface)
+            {
+                furnitureDetection.MarkResolved(surfaceId);
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Drops the selected candidate without creating anything. Publishes
+        /// nothing: no scene state changed.
+        /// </summary>
+        public bool DismissDetectedCandidate()
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                return false;
+            }
+
+            return furnitureDetection.DismissSelected();
         }
 
         /// <summary>

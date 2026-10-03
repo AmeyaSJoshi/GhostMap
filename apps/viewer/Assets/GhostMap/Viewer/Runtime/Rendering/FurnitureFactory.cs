@@ -62,6 +62,25 @@ namespace GhostMap.Viewer.Rendering
 
         private readonly Dictionary<string, Material> _materials = new Dictionary<string, Material>();
 
+        /// <summary>
+        /// The display colour for a furniture type, falling back to
+        /// <c>generic</c> for anything unrecognized.
+        ///
+        /// <para>Exposed for <c>ADR-0006</c>'s glTF exporter, so an exported
+        /// asset carries the colour it is drawn with on screen. The exporter
+        /// must read it from here rather than keeping a copy: one colour table,
+        /// as with one part table.</para>
+        /// </summary>
+        public static Color ColorFor(string type)
+        {
+            if (!string.IsNullOrEmpty(type) && TypeColors.TryGetValue(type, out Color mapped))
+            {
+                return mapped;
+            }
+
+            return TypeColors["generic"];
+        }
+
         public static IReadOnlyList<FurniturePartSpec> BuildParts(SceneObjectModel model)
             => BuildParts(model, null);
 

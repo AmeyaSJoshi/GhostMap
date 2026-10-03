@@ -35,6 +35,7 @@ namespace GhostMap.Scanner.UI
         private readonly StringBuilder builder = new StringBuilder();
 
         private FloorLockController floorLock;
+        private WallSweepController wallSweep;
         private CornerCaptureController cornerCapture;
         private HeightCaptureController heightCapture;
         private OpeningCaptureController openingCapture;
@@ -87,12 +88,13 @@ namespace GhostMap.Scanner.UI
         private void BuildWorkflow()
         {
             floorLock = new FloorLockController(spatialProvider);
+            wallSweep = new WallSweepController(spatialProvider, floorLock);
             cornerCapture = new CornerCaptureController(spatialProvider, floorLock);
             heightCapture = new HeightCaptureController(spatialProvider, floorLock, cornerCapture);
             openingCapture = new OpeningCaptureController(spatialProvider, floorLock, cornerCapture, heightCapture);
             objectPlacement = new ObjectPlacementController(spatialProvider, floorLock);
             workflow = new ScanWorkflowController(
-                floorLock, cornerCapture, heightCapture, openingCapture, objectPlacement);
+                floorLock, wallSweep, cornerCapture, heightCapture, openingCapture, objectPlacement);
 
             hasAttempted = false;
             lastAttemptRejection = FloorLockRejection.None;

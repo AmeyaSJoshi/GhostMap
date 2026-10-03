@@ -5,6 +5,7 @@ using GhostMap.Shared.Domain;
 using GhostMap.Shared.Geometry;
 using GhostMap.Shared.Protocol;
 using GhostMap.Shared.Validation;
+using UnityEngine;
 
 namespace GhostMap.Scanner.Workflow
 {
@@ -46,10 +47,17 @@ namespace GhostMap.Scanner.Workflow
                 { ScanPhase.Boot, new[] { ScanPhase.WaitingForTracking } },
                 { ScanPhase.WaitingForTracking, new[] { ScanPhase.FindFloor } },
                 { ScanPhase.FindFloor, new[] { ScanPhase.FloorLocked } },
-                { ScanPhase.FloorLocked, new[] { ScanPhase.CaptureCorners } },
+                { ScanPhase.FloorLocked, new[] { ScanPhase.SweepWalls, ScanPhase.CaptureCorners } },
+                { ScanPhase.SweepWalls, new[] { ScanPhase.VerifyClosure, ScanPhase.CaptureCorners } },
                 { ScanPhase.CaptureCorners, new[] { ScanPhase.VerifyClosure } },
-                { ScanPhase.VerifyClosure, new[] { ScanPhase.CaptureHeight, ScanPhase.CaptureCorners } },
-                { ScanPhase.CaptureHeight, new[] { ScanPhase.AddOpenings, ScanPhase.CaptureCorners } },
+                {
+                    ScanPhase.VerifyClosure,
+                    new[] { ScanPhase.CaptureHeight, ScanPhase.CaptureCorners, ScanPhase.SweepWalls }
+                },
+                {
+                    ScanPhase.CaptureHeight,
+                    new[] { ScanPhase.AddOpenings, ScanPhase.CaptureCorners, ScanPhase.SweepWalls }
+                },
                 { ScanPhase.AddOpenings, new[] { ScanPhase.AddObjects, ScanPhase.CaptureHeight } },
                 { ScanPhase.AddObjects, new[] { ScanPhase.ReadyToFinalize, ScanPhase.AddOpenings } },
                 { ScanPhase.ReadyToFinalize, new[] { ScanPhase.Finalized } },
@@ -57,6 +65,7 @@ namespace GhostMap.Scanner.Workflow
             };
 
         private readonly FloorLockController floorLock;
+        private readonly WallSweepController wallSweep;
         private readonly CornerCaptureController corners;
         private readonly HeightCaptureController height;
         private readonly OpeningCaptureController openingCapture;
@@ -66,12 +75,14 @@ namespace GhostMap.Scanner.Workflow
 
         public ScanWorkflowController(
             FloorLockController floorLock,
+            WallSweepController wallSweep,
             CornerCaptureController corners,
             HeightCaptureController height,
             OpeningCaptureController openingCapture,
             ObjectPlacementController objectPlacement)
         {
             this.floorLock = floorLock;
+            this.wallSweep = wallSweep;
             this.corners = corners;
             this.height = height;
             this.openingCapture = openingCapture;
@@ -97,6 +108,9 @@ namespace GhostMap.Scanner.Workflow
 
         /// <summary>The locked GhostMap frame, or null before floor lock.</summary>
         public GhostCoordinateFrame Frame => floorLock.Frame;
+
+        /// <summary>ADR-0005 wall sweeping. Read-only from outside the workflow.</summary>
+        public WallSweepController WallSweep => wallSweep;
 
         /// <summary>Task S3 corner capture and closure. Read-only from outside the workflow.</summary>
         public CornerCaptureController Corners => corners;
@@ -155,6 +169,219 @@ namespace GhostMap.Scanner.Workflow
             }
 
             TransitionTo(ScanPhase.FloorLocked);
+            Publish();
+            return true;
+        }
+
+        // -------------------------------------------------------------------
+        // ADR-0005 — wall sweeping (the default capture path)
+        // -------------------------------------------------------------------
+
+        /// <summary>
+        /// Leaves <see cref="ScanPhase.FloorLocked"/> for
+        /// <see cref="ScanPhase.SweepWalls"/>.
+        ///
+        /// <para>Explicit rather than automatic on lock, for the same reason as
+        /// <see cref="BeginCornerCapture"/>: FloorLocked is a state the user
+        /// actually sees.</para>
+        /// </summary>
+        public bool BeginWallSweeping()
+        {
+            if (Phase != ScanPhase.FloorLocked)
+            {
+                return false;
+            }
+
+            TransitionTo(ScanPhase.SweepWalls);
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Starts a sweep for the next wall.
+        ///
+        /// <para>Publishes nothing: starting to aim is not a structural
+        /// mutation, and no wall exists yet.</para>
+        /// </summary>
+        public bool TryBeginWallSweep(out WallSweepRejection rejection)
+        {
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                rejection = WallSweepRejection.WrongPhase;
+                return false;
+            }
+
+            return wallSweep.TryBeginSweep(out rejection);
+        }
+
+        /// <summary>
+        /// Feeds one frame's crosshair position into the active sweep. Called
+        /// every frame while the sweep control is held.
+        ///
+        /// <para><b>Never publishes.</b> Performance target section 24 forbids
+        /// per-frame snapshot generation, and a sweep in progress has not
+        /// mutated the scene.</para>
+        /// </summary>
+        public bool TryAddWallSweepSample(out WallSweepRejection rejection)
+        {
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                rejection = WallSweepRejection.WrongPhase;
+                return false;
+            }
+
+            return wallSweep.TryAddSample(out rejection);
+        }
+
+        /// <summary>
+        /// Ends the active sweep. An accepted sweep becomes a wall, which is a
+        /// structural mutation and therefore publishes.
+        ///
+        /// <para>The fourth accepted wall does not itself advance the phase —
+        /// <see cref="TryDeriveRoomFromSweeps"/> does, because deriving the
+        /// corners can still fail validation and the user may want to re-sweep
+        /// a wall before committing.</para>
+        /// </summary>
+        public bool TryCompleteWallSweep(out WallSweepRejection rejection)
+        {
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                rejection = WallSweepRejection.WrongPhase;
+                return false;
+            }
+
+            if (!wallSweep.TryCompleteSweep(out rejection))
+            {
+                return false;
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>Abandons the active sweep. Publishes nothing: no wall changed.</summary>
+        public bool CancelWallSweep()
+        {
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                return false;
+            }
+
+            return wallSweep.CancelSweep();
+        }
+
+        /// <summary>
+        /// Removes the most recently accepted wall so the user can re-sweep it.
+        /// </summary>
+        public bool TryUndoLastWall(out WallSweepRejection rejection)
+        {
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                rejection = WallSweepRejection.WrongPhase;
+                return false;
+            }
+
+            if (!wallSweep.TryUndoLastWall(out rejection))
+            {
+                return false;
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Derives the four corners from the four swept walls, installs them
+        /// through the single corner store, and moves the scan into closure
+        /// verification.
+        ///
+        /// <para>Two gates, in order: the geometry must produce four corners
+        /// (<see cref="WallSweepController.TryDeriveCorners"/>), and those
+        /// corners must form a legal room
+        /// (<see cref="CornerCaptureController.TryAdoptDerivedCorners"/>, which
+        /// runs the unchanged shared <c>RoomValidator</c>). Failing either
+        /// leaves the phase at <see cref="ScanPhase.SweepWalls"/> with every
+        /// swept wall intact, so the user can undo and re-sweep the bad one
+        /// rather than starting the room again.</para>
+        /// </summary>
+        public bool TryDeriveRoomFromSweeps(
+            out WallSweepRejection sweepRejection,
+            out CornerCaptureRejection cornerRejection)
+        {
+            cornerRejection = CornerCaptureRejection.None;
+
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                sweepRejection = WallSweepRejection.WrongPhase;
+                return false;
+            }
+
+            if (!wallSweep.TryDeriveCorners(out Vector3[] derived, out sweepRejection))
+            {
+                return false;
+            }
+
+            if (!corners.TryAdoptDerivedCorners(derived, out cornerRejection))
+            {
+                return false;
+            }
+
+            TransitionTo(ScanPhase.VerifyClosure);
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Discards the swept walls and the footprint they produced, and
+        /// returns to sweeping. The locked frame is deliberately left alone: a
+        /// rescan re-measures the room, it does not re-anchor it.
+        ///
+        /// <para>The sweep-path counterpart of <see cref="RedoCorners"/>. Any
+        /// in-progress wall selection is cleared for the same reason: the new
+        /// footprint will derive different walls, and a stale index must not
+        /// silently resolve against one of them.</para>
+        /// </summary>
+        public bool RedoWallSweeps()
+        {
+            if (Phase != ScanPhase.VerifyClosure &&
+                Phase != ScanPhase.CaptureHeight &&
+                Phase != ScanPhase.SweepWalls)
+            {
+                return false;
+            }
+
+            wallSweep.ClearWalls();
+            corners.ClearCorners();
+            height.ResetWallSelection();
+
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                TransitionTo(ScanPhase.SweepWalls);
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Abandons sweeping for Task S3's walked capture.
+        ///
+        /// <para>The fallback <c>ADR-0005</c> retains until the swept path has
+        /// accuracy numbers from Task I2. Swept walls and any derived corners
+        /// are discarded, because the two paths must never contribute corners
+        /// to the same room.</para>
+        /// </summary>
+        public bool FallBackToWalkedCorners()
+        {
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                return false;
+            }
+
+            wallSweep.ClearWalls();
+            corners.ClearCorners();
+            height.ResetWallSelection();
+            TransitionTo(ScanPhase.CaptureCorners);
             Publish();
             return true;
         }

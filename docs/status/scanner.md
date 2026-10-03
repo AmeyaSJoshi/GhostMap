@@ -1,6 +1,17 @@
 # Scanner Status
 
 ## Current state
+- **2026-10-03 — PR #16 integrated into the UI overhaul; compiled, all suites
+  green, iOS build succeeds. Awaiting the physical iPhone test.** Branch
+  `integration/ui-pr16-device-test` (merge `c57718a`, scenes `9733e4c`).
+  The guided-scan UI from `scanner/ui-overhaul` is kept; ADR-0006 detection
+  is wired into it as a `DetectRow` in the bottom sheet (shown only while a
+  candidate exists) with its readout under Details. Tests, iOS target:
+  Scanner **524/524**, Shared **197/197**, Viewer **542/542**.
+  `ScannerBuild.BuildScanner` and unsigned `xcodebuild` (Release, iphoneos)
+  both succeeded. **Neither sweep nor detection is device-verified** —
+  everything below about them being unverified on a phone still stands.
+  See `docs/handoffs/2026-10-03-integration-ui-pr16-device-test.md`.
 - **ADR-0005 sweep wall capture is IMPLEMENTED BUT UNVERIFIED.** On branch
   `integration/sweep-and-furniture`, the user stands, turns, and
   sweeps the center-screen ray along each wall's floor junction; each sweep is

@@ -17,6 +17,10 @@
   `ValidationResult` and `WallDefinition` live in `Runtime/Domain/`.
 - **Protocol v1 is frozen.** `Runtime/Protocol/` holds `ProtocolConstants`,
   `WireMessages`, `ProtocolSerializer` and `SnapshotRevisionPolicy`.
+- **Local Viewer discovery is additive connection setup.**
+  `PeerDiscoveryProtocol` defines the UDP port-47832 request/response used by
+  the one-tap Send to Computer flow. It carries no scene data and does not
+  alter protocol-v1 TCP framing, message types, or revision arbitration.
 - `docs/contracts/protocol-v1.md` is written and matches the code.
 - `fixtures/` holds the three canonical fixtures; `tools/` holds
   `send_fixture.py` and `inspect_snapshot.py`.
@@ -85,6 +89,8 @@ Protocol (`GhostMap.Shared.Protocol`):
   `SceneSnapshotMessage`, `ScanFinalizedMessage`
 - `ProtocolSerializer` — `Serialize`, `SerializeLine`, `TryDeserialize`
 - `SnapshotRevisionPolicy` — `Evaluate`, `ShouldApply`; `SnapshotAcceptance` enum
+- `PeerDiscoveryProtocol` — UDP discovery port, request/response tokens,
+  `CreateResponse`, `TryParseResponse`; connection setup only
 
 Validation (`GhostMap.Shared.Validation`):
 - `RoomValidator` — `ValidateRoom`, `ValidateNewCorner`, `ClassifyClosure`, limit constants

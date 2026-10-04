@@ -95,6 +95,7 @@ or
 | 2026-09-18 | viewer | [V5 — object editing and measurement](2026-09-18-viewer-v5-edit-measure.md) |
 | 2026-09-19 | viewer | [V6 — persistence and polished HUD](2026-09-19-viewer-v6-persistence-hud.md) |
 | 2026-10-03 | shared | [Status docs refresh after V6](2026-10-03-shared-status-docs-refresh.md) |
+| 2026-10-03 | shared | [Local peer-discovery contract](2026-10-03-shared-peer-discovery-contract.md) |
 | 2026-10-03 | scanner | [Sweep wall capture (ADR-0005), not compiled, not device-tested](2026-10-03-scanner-sweep-wall-capture.md) |
 | 2026-10-03 | integration | [Furniture detection + glTF asset export (ADR-0006), not compiled, not device-tested](2026-10-03-integration-furniture-detect-and-export.md) |
 | 2026-10-03 | integration | [UI overhaul + PR #16 integrated; compiled, all suites green, iOS build succeeds](2026-10-03-integration-ui-pr16-device-test.md) |

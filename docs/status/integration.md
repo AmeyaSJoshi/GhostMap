@@ -1,6 +1,20 @@
 # Integration Status
 
 ## Current state
+- **Quick Send discovery is implemented but not device-verified.** PR #19's
+  scope-only ADR was merged, then `ADR-0009` added a small UDP discovery layer
+  above the existing TCP/full-snapshot path. After finalization, the Scanner
+  exposes **Send to Computer**; it broadcasts a discovery request, connects to
+  the first valid Viewer response, and the existing handshake resends the
+  complete final snapshot. The Viewer starts its responder beside the TCP
+  listener. Manual address entry remains a developer fallback.
+  - Automated discovery/protocol tests pass: Shared **202/202**, Viewer
+    **548/548**, Scanner **577/577**. The scanner iOS project generated and an
+    unsigned `xcodebuild` completed successfully.
+  - This supports Wi-Fi and a phone hotspot. It does **not** implement
+    Bluetooth/AWDL transport, pairing, authentication, or receiver
+    acknowledgement; a device test is still required before describing it as
+    working on a phone.
 - Not started, but **unblocked**. Integration tasks `I1`–`I4` require `S3` + `V2`
   at minimum, and a full demo requires `S6` + `V6`. All of these are now
   complete: Scanner `S1`–`S6` (verified on a physical iPhone) and Viewer
@@ -23,10 +37,10 @@
 - No physical iPhone has been connected to this project.
 
 ## Next safe task
-- **Unblocked.** The Scanner and Viewer workstreams have both reached their
-  gates (`S6` and `V6` complete).
-- First integration task: **I1 — Real iPhone → viewer live room**, which must
-  succeed three consecutive times before any polish work.
+- **Physical quick-send run required.** With Viewer open on a Mac, finish a
+  real iPhone scan, press **Send to Computer**, and verify that the final room
+  appears and can be edited. Repeat on ordinary Wi-Fi and the iPhone hotspot;
+  record every attempt below. Do not claim Bluetooth/AWDL support.
 
 ## Do not touch
 - `apps/scanner/**` and `apps/viewer/**` during active workstream development,

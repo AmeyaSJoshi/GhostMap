@@ -100,3 +100,4 @@ or
 | 2026-10-03 | integration | [UI overhaul + PR #16 integrated; compiled, all suites green, iOS build succeeds](2026-10-03-integration-ui-pr16-device-test.md) |
 | 2026-10-03 | scanner | [Furniture type pre-selected from ARKit plane label (ADR-0007), not device-tested](2026-10-03-scanner-furniture-type-suggestion.md) |
 | 2026-10-03 | integration | [Sweep + furniture merged into one branch, integration seam tested](2026-10-03-integration-sweep-and-furniture-merge.md) |
+| 2026-10-03 | integration | [Quick Send local discovery, awaiting device verification](2026-10-03-integration-quick-send-discovery.md) |

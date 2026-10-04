@@ -249,6 +249,27 @@ They must be harmless.
 
 ## 6. Connection lifecycle
 
+## Appendix A. Viewer discovery (connection setup)
+
+The finished-scan **Send to Computer** flow discovers a nearby Viewer before it
+opens the TCP connection above. Discovery is a tiny UDP exchange and never
+carries scene data; TCP and every protocol-v1 message remain exactly as
+specified in this document.
+
+| Property | Value |
+| --- | --- |
+| UDP port | `47832` |
+| Request payload | UTF-8 `ghostmap.discovery.v1.request` |
+| Response payload | UTF-8 `ghostmap.discovery.v1.response|<tcp-port>|<computer-name>` |
+| Response target | The request's source address and port |
+
+The Scanner broadcasts the request on the active local network and connects to
+the first well-formed response using the advertised TCP port. The Viewer only
+responds while its TCP server is running. This supports ordinary Wi-Fi and a
+phone hotspot; it is not a replacement for TCP and does not claim Bluetooth or
+AWDL transport. Manual addressing remains available for diagnosis if discovery
+cannot find a Viewer.
+
 ### Scanner
 
 1. Keep the latest `SceneSnapshot` in memory at all times.

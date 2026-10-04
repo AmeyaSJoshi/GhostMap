@@ -11,6 +11,9 @@
   - Automated discovery/protocol tests pass: Shared **202/202**, Viewer
     **548/548**, Scanner **577/577**. The scanner iOS project generated and an
     unsigned `xcodebuild` completed successfully.
+  - A final all-suite pass saw one transient failure in an existing scanner TCP
+    reconnect timing test; its immediate isolated rerun passed all 577 tests.
+    The quick-send change does not modify that TCP client or test.
   - This supports Wi-Fi and a phone hotspot. It does **not** implement
     Bluetooth/AWDL transport, pairing, authentication, or receiver
     acknowledgement; a device test is still required before describing it as

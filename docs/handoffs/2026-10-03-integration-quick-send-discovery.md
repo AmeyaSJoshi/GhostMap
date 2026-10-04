@@ -37,12 +37,20 @@
 - Shared EditMode: **202 passed, 0 failed**.
 - Viewer EditMode: **548 passed, 0 failed**.
 - Scanner EditMode: **577 passed, 0 failed**.
+- One prior full-suite scanner run had a transient failure in the pre-existing
+  `ReconnectAfterFinalizationResendsTheFinalizedSnapshot` timing test (expected
+  `Retrying`, observed `Connected` immediately after its forced socket close).
+  An immediate isolated rerun passed all 577 tests; this change does not touch
+  `ScannerNetworkClient` or that test, but the result is recorded rather than
+  hidden.
 - Scanner iOS project generation: passed.
 - Unsigned iOS Xcode Release build: `BUILD SUCCEEDED`.
 - No physical-device run yet.
 
 ## Known failures
 - No automated failures.
+- The existing reconnect timing test described above is a known intermittent
+  test-harness concern; it is not a confirmed quick-send regression.
 - UDP broadcast can be blocked by a network. It is supported on normal Wi-Fi
   and a hotspot only until a real-device test confirms both.
 - This is not Bluetooth/AWDL peer-to-peer transport; `ADR-0008` Tier 2 remains

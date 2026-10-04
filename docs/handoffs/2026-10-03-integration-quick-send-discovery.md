@@ -22,8 +22,8 @@
   developer fallback.
 
 ## Contract impact
-- Additive connection-setup contract only, documented in protocol-v1 Appendix
-  A and `PeerDiscoveryProtocol`. Scene schema, protocol-v1 messages, snapshot
+- Additive connection-setup contract only, documented in protocol-v1's Viewer
+  discovery section and `PeerDiscoveryProtocol`. Scene schema, protocol-v1 messages, snapshot
   framing, revisions, and authority rules are unchanged.
 
 ## How to test

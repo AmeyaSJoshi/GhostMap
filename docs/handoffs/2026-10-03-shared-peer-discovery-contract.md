@@ -13,7 +13,7 @@
 - Added `PeerDiscoveryProtocol` to the shared package: UDP port `47832`, one
   discovery request token, a port/name response, and safe parser/formatter
   helpers.
-- Documented the additive exchange in protocol-v1 Appendix A.
+- Documented the additive exchange in protocol-v1's Viewer discovery section.
 - Added parser/round-trip tests.
 
 ## Contract impact

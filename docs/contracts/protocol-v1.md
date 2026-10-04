@@ -249,7 +249,7 @@ They must be harmless.
 
 ## 6. Connection lifecycle
 
-## Appendix A. Viewer discovery (connection setup)
+### Viewer discovery (connection setup)
 
 The finished-scan **Send to Computer** flow discovers a nearby Viewer before it
 opens the TCP connection above. Discovery is a tiny UDP exchange and never

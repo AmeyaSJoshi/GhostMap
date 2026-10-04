@@ -1,0 +1,9 @@
+# RESEARCH SPIKE — scan recordings, model weights, outputs and envs stay local.
+.venv/
+scans/
+out/
+models/
+build/
+recorder/*.xcodeproj/
+__pycache__/
+recorder/Generated/

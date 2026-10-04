@@ -258,7 +258,13 @@ namespace GhostMap.Scanner.Editor
             ScannerUiKit.Label(connectPanel, "ConnectTitle", "Connect to your computer", 36, ScannerUiKit.TextPrimary, FontStyle.Bold);
             ScannerUiKit.Label(
                 connectPanel, "ConnectHelp",
-                "Open GhostMap on your computer, on the same Wi-Fi. Type the address it shows.", 28,
+                "Open GhostMap Viewer on your computer, then use Send to Computer after finishing your scan.", 28,
+                ScannerUiKit.TextSecondary);
+            Button sendToComputerButton = ScannerUiKit.Button(
+                connectPanel, "SendToComputerButton", "Send to Computer", ButtonStyle.Primary, out _, 104f);
+            ScannerUiKit.Label(
+                connectPanel, "ManualConnectHelp",
+                "Developer fallback: enter an address manually if discovery cannot find the Viewer.", 22,
                 ScannerUiKit.TextSecondary);
             RectTransform addressRow = ScannerUiKit.Row("AddressRow", connectPanel, 12f);
             InputField hostInput = ScannerUiKit.Field(addressRow, "HostInput", "Address, e.g. 192.168.1.20", 96f);
@@ -447,6 +453,7 @@ namespace GhostMap.Scanner.Editor
                 ("hostInput", hostInput),
                 ("portInput", portInput),
                 ("connectButton", connectButton),
+                ("sendToComputerButton", sendToComputerButton),
                 ("networkStatusText", networkStatusText),
                 ("resetButton", resetButton),
                 ("finalizeButton", finalizeButton),
@@ -658,6 +665,7 @@ namespace GhostMap.Scanner.Editor
                     "hostInput",
                     "portInput",
                     "connectButton",
+                    "sendToComputerButton",
                     "networkStatusText",
                     "resetButton",
                     "finalizeButton",

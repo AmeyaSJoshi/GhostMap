@@ -49,6 +49,7 @@ namespace GhostMap.Scanner.UI
         [SerializeField] private InputField hostInput;
         [SerializeField] private InputField portInput;
         [SerializeField] private Button connectButton;
+        [SerializeField] private Button sendToComputerButton;
         [SerializeField] private Text networkStatusText;
         [SerializeField] private Button resetButton;
         [SerializeField] private Button finalizeButton;
@@ -62,6 +63,7 @@ namespace GhostMap.Scanner.UI
         private readonly StringBuilder builder = new StringBuilder();
 
         private ScannerNetworkClient client;
+        private PeerDiscoveryClient discovery;
         private ScannerSnapshotPublisher publisher;
         private ScanWorkflowController boundWorkflow;
 
@@ -86,11 +88,17 @@ namespace GhostMap.Scanner.UI
                 SystemInfo.deviceName);
 
             publisher = new ScannerSnapshotPublisher(client);
+            discovery = new PeerDiscoveryClient();
             RebindIfNeeded();
 
             if (connectButton != null)
             {
                 connectButton.onClick.AddListener(OnConnectPressed);
+            }
+
+            if (sendToComputerButton != null)
+            {
+                sendToComputerButton.onClick.AddListener(OnSendToComputerPressed);
             }
 
             if (resetButton != null)
@@ -118,10 +126,16 @@ namespace GhostMap.Scanner.UI
             networkThreadRunning = false;
             networkThread?.Join(NetworkThreadPollIntervalMs * 5);
             client?.Dispose();
+            discovery?.Dispose();
 
             if (connectButton != null)
             {
                 connectButton.onClick.RemoveListener(OnConnectPressed);
+            }
+
+            if (sendToComputerButton != null)
+            {
+                sendToComputerButton.onClick.RemoveListener(OnSendToComputerPressed);
             }
 
             if (resetButton != null)
@@ -163,6 +177,7 @@ namespace GhostMap.Scanner.UI
 
             RebindIfNeeded();
             publisher.Tick();
+            ConnectToDiscoveredViewerIfReady();
 
             UpdateControls();
 
@@ -202,6 +217,13 @@ namespace GhostMap.Scanner.UI
             {
                 finalizeButton.gameObject.SetActive(phase == ScanPhase.ReadyToFinalize);
                 finalizeButton.interactable = phase == ScanPhase.ReadyToFinalize;
+            }
+
+            if (sendToComputerButton != null)
+            {
+                sendToComputerButton.gameObject.SetActive(phase == ScanPhase.Finalized);
+                sendToComputerButton.interactable =
+                    phase == ScanPhase.Finalized && discovery.State != PeerDiscoveryState.Searching;
             }
 
             if (resetLabel != null)
@@ -298,6 +320,30 @@ namespace GhostMap.Scanner.UI
         }
 
         /// <summary>
+        /// The primary post-finalization path. It discovers a running Viewer
+        /// on the local Wi-Fi or phone hotspot, then hands its TCP endpoint to
+        /// the existing snapshot client. No scene data travels over UDP.
+        /// </summary>
+        private void OnSendToComputerPressed()
+        {
+            if (Workflow?.Phase != ScanPhase.Finalized)
+            {
+                return;
+            }
+
+            discovery.Start();
+        }
+
+        private void ConnectToDiscoveredViewerIfReady()
+        {
+            if (discovery.TryTakeResult(out string host, out int port, out _))
+            {
+                client.RequestConnect(host, port);
+                connectPanelOpen = false;
+            }
+        }
+
+        /// <summary>
         /// Restart throws the whole scan away, so it takes a second tap within
         /// <see cref="ResetConfirmSeconds"/>. One stray touch on a phone held
         /// at arm's length must not cost a finished room.
@@ -320,6 +366,24 @@ namespace GhostMap.Scanner.UI
         private string BuildNetworkStatus()
         {
             builder.Clear();
+            if (discovery != null && discovery.State == PeerDiscoveryState.Searching)
+            {
+                builder.Append("Finding your computer…");
+                return builder.ToString();
+            }
+
+            if (discovery != null && discovery.State == PeerDiscoveryState.TimedOut)
+            {
+                builder.Append("No computer found. Check that GhostMap Viewer is open, then try again.");
+                return builder.ToString();
+            }
+
+            if (discovery != null && discovery.State == PeerDiscoveryState.Failed)
+            {
+                builder.Append("Could not search for a computer: ").Append(discovery.LastError);
+                return builder.ToString();
+            }
+
             builder.Append("Network: ").Append(client.State);
 
             if (!string.IsNullOrEmpty(client.Host))

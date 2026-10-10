@@ -63,12 +63,15 @@ the architecture overview's code map.
   a Unity package cannot run its own tests; see its README.
 - The fixtures are hand-written and unusually tidy (integer corners, catalog
   dimensions, 0/90/180 degree yaw). A snapshot captured off the wire during
-  `I1` would make a more realistic fixture.
+  `R2` would make a more realistic fixture.
 
 ## Next safe task
 
-Reactive only: handle contract-change requests through the procedure in plan
-section 27. Integration work is tracked in `docs/status/integration.md`.
+`R5`: add the optional `label` field to `SceneObjectModel` (additive schema v1
+change, ADR-0011) with contract doc, tests, `inspect_snapshot.py` and fixture
+updates. `R1` also lands shared work from `GhostMapDublinHacks`: `WallFitting`,
+`RoomGeometry.ContainsPointXZ` and the discovery contract (`PeerDiscoveryProtocol`,
+UDP 47832). Roadmap progress is tracked in `docs/status/integration.md`.
 
 ## Do not touch
 

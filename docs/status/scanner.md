@@ -18,7 +18,13 @@ Full task-by-task history (S1-S6 design notes, device logs, root-cause write-ups
 | S6 | TCP client, snapshot publishing, finalization, Reset | 22 snapshots, monotonic revisions, 3 reconnects resend the finalized room |
 
 The S6 device test ran against a standalone Python TCP listener, not the Viewer.
-No iPhone-to-Viewer run has been done yet; that is Integration `I1`.
+No iPhone-to-Viewer run has been done yet; that is roadmap task `R2`.
+
+**Direction (ADR-0012):** stand in one spot and turn, identify furniture on the
+phone with YOLO-n, Send to Computer. The stand-in-place scan, wall sweep,
+furniture surface measurement and Send to Computer discovery exist in
+`GhostMapDublinHacks` and arrive with task `R1`. YOLO-n identification is task
+`R4`. Until `R1`, this repository's scanner has only the walked-corner flow.
 
 ### Scan flow
 
@@ -43,7 +49,7 @@ a `scene.snapshot` message; finalization sends the final snapshot and
 | Reset starts a new AR session (section 10) | New session id, room id and revision 0; AR tracking kept | Re-initialising ARKit costs tracking quality for nothing |
 | Numbered top-down wall preview for height (section 8.7) | `Wall N/4` readout plus a yellow line on the selected wall | Same information, no 2D render |
 | Mark manual height in snapshot metadata (section 8.7) | Shown on the HUD only | Schema v1 has no field for it |
-| Single "Door / Window / Furniture / Finish" screen (section 19) | Per-phase bring-up HUDs that hide outside their phase | Full UI redesign belongs to `I4` |
+| One guided scan flow (section 19) | Per-phase bring-up HUDs that hide outside their phase | The guided flow arrives with `R1` (hackathon UI overhaul) and is finished in `R8` |
 | `TryGetFloorHit` returns `ARRaycastHit` (S2) | Returns scanner-owned `FloorHit` | `ARRaycastHit` cannot be built in EditMode tests |
 
 ## Last verified commit
@@ -69,7 +75,7 @@ the wire message types and `ProtocolSerializer`.
 
 ## Known issues
 
-None blocking `I1`.
+None blocking `R1`.
 
 **Build**
 - iOS build is two Unity invocations: `ScannerBuild.ConfigureXr`, then
@@ -85,7 +91,7 @@ None blocking `I1`.
 **Runtime**
 - The screen is crowded: S1 diagnostics, the S6 status block (including an
   `S6 diag:` debug line) and per-phase button rows. On some aspect ratios S5
-  controls sit near the top edge. Consolidating this is `I4` work.
+  controls sit near the top edge. Consolidating this into one guided flow is task `R8`.
 - Reset has no confirmation. A stray tap discards the scan (not the connection).
 - Once height is captured there is no way back to corners or height except
   Reset. The transition table allows `AddOpenings -> CaptureHeight` and
@@ -111,8 +117,11 @@ None blocking `I1`.
 
 ## Next safe task
 
-None in this workstream. Next is Integration `I1` (see
-`docs/status/integration.md`).
+Roadmap tasks touching the scanner, in order (plan section 18): `R1` import the
+hackathon scanner work, `R2` first device session, `R4` YOLO-n identification
+(native Core ML plugin, `IObjectDetector`, remove the ARKit-label type guesser),
+`R7` Send to Computer confirmation, `R8` one guided flow without debug text. See
+`docs/status/integration.md` for progress.
 
 ## Do not touch
 

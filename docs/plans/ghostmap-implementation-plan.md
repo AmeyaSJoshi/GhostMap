@@ -1,12 +1,12 @@
 # GhostMap Implementation Plan
 
-> **For agentic workers:** Execute this plan task-by-task. Do not skip the dependency gates or acceptance tests. Maintain the repository handoff/status files exactly as described so another worker can take over with no chat history.
+> **For agentic workers:** Execute this plan task-by-task. Do not skip the dependency gates or acceptance tests. Keep the status files and handoffs current so another worker can take over with no chat history.
 
-**Goal:** Build a reliable GhostMap MVP that uses a standard, non-LiDAR iPhone to capture one physical room and reconstruct it as a clean, editable, machine-readable 3D scene on a laptop.
+**Goal:** Stand in one spot in a room, point a standard non-LiDAR iPhone around it, and get a structured, editable 3D model of the room and its furniture. The phone measures the room, identifies the furniture on device, and with one button sends Unity-ready files to the user's computer.
 
-**Architecture:** Use two separate Unity projects in one repository: an iPhone **Scanner** project and a desktop **Viewer** project. Both depend on one shared local Unity package containing the scene schema, geometry math, validation, and network protocol. The scanner is authoritative while a room is being captured; after finalization, the viewer becomes authoritative for editing and saving.
+**Architecture:** Two Unity projects in one repository, an iPhone **Scanner** and a desktop **Viewer**, sharing one local package for the scene schema, geometry, validation and network protocol. All capture and recognition run on the phone; the computer only receives, edits and exports. Direction: ADR-0012.
 
-**Tech Stack:** Unity 6000.3.24f1, AR Foundation 6.3.x, Apple ARKit XR Plugin 6.3.x, C#, Unity Test Framework, Unity uGUI, raw TCP over the local network, newline-delimited JSON, Git/GitHub.
+**Tech Stack:** Unity 6000.3.24f1, AR Foundation 6.3.x, Apple ARKit XR Plugin 6.3.x, C#, Core ML (YOLO11n via a native iOS plugin), Unity Test Framework, uGUI, TCP plus UDP discovery on the local network, newline-delimited JSON, glTF 2.0 binary export.
 
 **Spec:** `docs/specs/ghostmap-project-spec.md`
 
@@ -15,59 +15,48 @@
 | Stage | Tasks | State |
 | --- | --- | --- |
 | A — Foundation | `F0`-`F4` | Complete |
-| B — Parallel workstreams | `S1`-`S6`, `V1`-`V6` | Complete; scanner verified on a physical iPhone |
-| C — Integration | `I1`-`I4` | **Not started. Next task: `I1A`, then `I1B` (one-button transfer)** |
+| B — Assisted-capture MVP | `S1`-`S6`, `V1`-`V6` | Complete; scanner verified on a physical iPhone |
+| C — Stand-in-place GhostMap | `R1`-`R8` (section 18) | **Not started. Next: `R1`, bring in `GhostMapDublinHacks`** |
 
-Section numbers in this plan are stable and are cited from code comments and
-handoffs. Sections whose content now lives in another canonical document are
-kept as short pointers rather than renumbered. The full original text of the
-completed task specifications (`F0`-`F3`, `S1`-`S6`, `V1`-`V6`) is in git:
+Much of stage C is already written in the owner's hackathon repository
+`GhostMapDublinHacks` (automatic room scan, wall sweep, furniture surface
+detection, `.glb` export, Send to Computer discovery). It has never run on an
+iPhone. Task `R1` brings it into this repository.
+
+Section numbers in this plan are stable and are cited from code comments.
+Sections whose content lives in another canonical document are short pointers.
+The full original text of every completed task is in git:
 `git show f5a7d30:docs/plans/ghostmap-implementation-plan.md`.
-Notes marked **As built** record where the implementation deliberately differs
-from the original text.
-
----
 
 # 0. Read This Before Changing Anything
 
 This is the execution contract for the project.
 
-The first implementation target is deliberately narrower than the long-term vision. The MVP must work reliably before any automatic object recognition, cloud depth estimation, multi-room mapping, or photorealistic reconstruction is attempted.
+## Product promise
 
-## MVP promise
+GhostMap must do this, on a standard non-LiDAR iPhone, with everything running on the phone:
 
-The MVP must do this:
+1. Launch, establish AR tracking and lock the floor.
+2. Let the user **stand in one spot and turn** while GhostMap finds the walls and derives the room's four corners and dimensions. Sweep and walked-corner capture remain as fallbacks.
+3. Capture the room height, from the ceiling plane when ARKit sees it, otherwise by aiming or typing.
+4. Capture doors and windows, automatically when ARKit labels them, otherwise by two-point aiming.
+5. **Identify the furniture on device** with a YOLO-n detector and measure each piece from the ARKit surface it sits on. The user confirms with one tap.
+6. Finalize, then **Send to Computer** with one button. No IP address or port for a normal user.
+7. On the computer, show the room in the GhostMap Viewer and let the user orbit, use dollhouse mode, select, move, resize, rotate, measure, save and reload.
+8. **Export Unity-ready files**: the scene JSON, one `.glb` per piece of furniture, and a whole-room `.glb`.
 
-1. Launch GhostMap on a standard iPhone.
-2. Establish stable AR world tracking.
-3. Let the user lock the floor.
-4. Let the user capture the four floor corners of one rectangular/near-rectangular room.
-5. Verify scan quality by re-capturing the first corner and measuring closure error.
-6. Let the user capture room height.
-7. Let the user add rectangular doors/windows to known walls.
-8. Let the user place a limited set of furniture objects with clean parametric geometry.
-9. After finalization, send the complete room to the user's computer with one action (**Send to Computer**; no IP address or port entry for a normal user, see ADR-0007). Live preview while scanning is optional.
-10. Reconstruct the room on the computer.
-11. Finalize the scan.
-12. Let the laptop user orbit the room, remove the roof, select furniture, drag it, resize it, rotate it, measure distances, save the scene, and reload it.
+## Does NOT promise
 
-## MVP does NOT promise
-
-Do not claim or implement these as required MVP functionality:
-
-- dense 3D scanning from a normal RGB camera;
-- automatic recovery of every visible surface;
-- Gaussian splatting;
-- NeRF reconstruction;
-- LiDAR-like depth;
-- fully automatic furniture dimensions;
-- arbitrary curved rooms;
-- multi-floor buildings;
-- automatic semantic recognition of every object;
-- centimeter survey-grade accuracy;
+- dense 3D scanning, LiDAR-like depth, Gaussian splatting or NeRF;
+- generative 3D models of furniture (TRELLIS and similar need a large NVIDIA GPU; ADR-0012);
+- any cloud processing, account or internet requirement;
+- photoreal or textured meshes; exported furniture is parametric geometry built from measured dimensions;
+- arbitrary curved rooms, multi-room or multi-floor capture;
+- recognition of every object; only the detector's furniture-scale classes;
+- centimetre survey-grade accuracy;
 - simultaneous editing from both devices.
 
-The project wins by producing **structured geometry that is editable**, not by pretending an ordinary camera is a depth sensor.
+The project wins by producing **structured geometry that is editable and portable into Unity**, not by pretending an ordinary camera is a depth sensor.
 
 ---
 
@@ -91,18 +80,16 @@ The first release only supports:
 
 Only add arbitrary polygons after the four-corner version passes all field tests.
 
-## 1.2 No hidden reliance on AR vertical-plane detection
+## 1.2 Use AR wall detection, never depend on it
 
-AR Foundation can detect horizontal and vertical planes, but GhostMap must not require a perfect detected wall plane.
+The primary capture path (ADR-0012) builds walls from ARKit's detected vertical planes while the user turns in place. ARKit can miss blank, glass or furnished walls, so the scanner must always offer a path that does not need them:
 
-The scanner will:
+- the floor is locked once from a detected horizontal plane;
+- if fewer than four trustworthy walls are found, the scanner says which direction to look, then offers the wall sweep (ADR-0005);
+- the walked-corner path (camera ray plus the mathematical floor plane) remains the last fallback;
+- height, door and window capture fall back to mathematically derived wall planes.
 
-- use AR plane detection to find/lock the floor;
-- use the camera ray plus a mathematical floor plane to capture room corners;
-- generate wall planes mathematically from captured corners;
-- use those generated wall planes to capture ceiling height, doors, and windows.
-
-This is significantly more reliable than waiting for ARKit to fully detect every wall.
+A scan must never stall because ARKit did not report a plane.
 
 ## 1.3 Reject bad scans instead of rendering bad scans
 
@@ -865,7 +852,7 @@ control uses them yet.
 
 # 11. Furniture MVP
 
-Do not attempt visual object reconstruction.
+Do not attempt visual object reconstruction. Furniture is identified, not scanned: a YOLO-n detector names it and an ARKit surface measures it (ADR-0011). The model never sets a dimension.
 
 Supported types:
 
@@ -881,6 +868,8 @@ generic
 ```
 
 ## 11.1 Placement workflow
+
+**Primary (task R4):** the detector proposes "Found: bed, desk, 2 chairs"; each item already has a floor position and measured size; the user taps **Add All** or removes items. The manual workflow below remains the fallback for anything the detector misses.
 
 1. User chooses type.
 2. User aims crosshair at desired object center on floor.
@@ -1123,13 +1112,13 @@ which re-validates before replacing the displayed room.
 
 **Complete.** Full original task specifications: `git show f5a7d30:docs/plans/ghostmap-implementation-plan.md`.
 
-| Task | Delivered | Commit | Handoff |
-| --- | --- | --- | --- |
-| F0 | Repository and collaboration scaffold | `9c28d7a` | `2026-09-12-foundation-f0-repo-scaffold.md` |
-| F1 | Shared package and scene schema v1 | `33d63fe` | `2026-09-12-foundation-f1-scene-schema.md` |
-| F2 | Geometry and validation | `23050c4` | `2026-09-12-foundation-f2-geometry-validation.md` |
-| F3 | Protocol v1, fixtures, tools | `db347c1` | `2026-09-12-foundation-f3-protocol-fixtures.md` |
-| F4 | Independent review of F0-F3 (one real defect fixed) | `47a6a0a` | `2026-09-12-foundation-f4-foundation-review.md` |
+| Task | Delivered | Commit |
+| --- | --- | --- |
+| F0 | Repository and collaboration scaffold | `9c28d7a` |
+| F1 | Shared package and scene schema v1 | `33d63fe` |
+| F2 | Geometry and validation | `23050c4` |
+| F3 | Protocol v1, fixtures, tools | `db347c1` |
+| F4 | Independent review of F0-F3 (one real defect fixed) | `47a6a0a` |
 
 The foundation gate passed and is tagged `shared-v1-ready`.
 
@@ -1170,249 +1159,146 @@ Current behavior and known issues: `docs/status/viewer.md`.
 
 ---
 
-# 18. Integration Tasks
+# 18. Roadmap: Stand-in-Place GhostMap
 
-Do not begin full integration until at minimum:
-
-```text
-S3 complete
-V2 complete
-```
-
-Full demo integration requires:
+Replaces the original integration tasks `I1`-`I4`; their content is folded into `R2`, `R3`, `R7` and `R8`. Record every attempt in `docs/status/integration.md`, failures included.
 
 ```text
-S6 complete
-V6 complete
+R1 -> R2 -> R3
+        \-> R4 -> R5
+        \-> R6
+        \-> R7 -> R8
 ```
 
----
-
-## Task I1: Real iPhone -> computer transfer
-
-Per `docs/decisions/ADR-0007-one-button-computer-transfer.md`, I1 has two parts
-that must stay separate:
-
-- **I1A** proves the existing transport works end to end on a real network and
-  gives a diagnostic baseline.
-- **I1B** proves the product flow: Finalize -> Send to Computer, with no manual
-  IP entry for a normal user.
-
-I1A may be done first. I1 is not complete until I1B passes. I1B begins with a
-design step that evaluates the candidate mechanisms listed in ADR-0007.
-
-### I1A: Baseline end-to-end transport verification
-
-Developer/diagnostic task. Manual IP entry is allowed here and only here.
-
-Procedure:
-
-1. laptop launches Viewer;
-2. note laptop LAN IP;
-3. iPhone launches Scanner;
-4. grant camera permission;
-5. grant local-network permission;
-6. type laptop IP;
-7. connect;
-8. lock floor;
-9. capture four corners;
-10. verify closure;
-11. capture height;
-12. observe room shell appear;
-13. add one object;
-14. confirm live appearance;
-15. finalize;
-16. disconnect/reconnect once;
-17. confirm viewer keeps last scene and scanner resends snapshot.
-
-Do not start I1B acceptance until this works three consecutive times. If I1B
-later fails, re-running I1A separates a software/protocol fault from a
-discovery/pairing fault.
-
-### I1B: One-button transfer UX
-
-Goal: "Press one button and the GhostMap appears on your computer."
-
-1. The user scans and finalizes locally; a live connection is **not** required
-   while scanning.
-2. The user taps **Send to Computer**.
-3. The phone finds the user's computer without the user entering an IP address
-   or port. First use may need one small pairing step (choose a discovered
-   computer and/or scan a pairing QR); the computer is then remembered.
-4. The complete current scene is delivered over the existing TCP / full-
-   `SceneSnapshot` transport.
-5. The Viewer reconstructs the room, and the user sees a clear success state
-   that reflects actual receipt, not just a socket write.
-6. If the remembered computer cannot be found, the user gets a plain-language
-   retry / choose-another-computer flow.
-7. Manual IP entry is hidden behind a developer/debug option.
-8. No cloud service, account, or internet connection is needed.
-9. Nothing intentionally depends on the receiver being a Mac.
-
-Live streaming during a scan stays available but is not required by I1B.
-
-Do not move to polish until I1B works three consecutive times.
-
-Record every I1A and I1B attempt, failures included, in
-`docs/status/integration.md`.
+`R3`, `R4`, `R6` and `R7` can run in parallel after `R2`.
 
 ---
 
-## Task I2: Accuracy benchmark
+## Task R1: Bring in `GhostMapDublinHacks`
 
-Create a controlled test room.
+The owner's hackathon repository is this repository at `f5a7d30` plus 31 commits. It contains:
 
-Physically measure with tape:
+| Feature | ADR | Hackathon test result |
+| --- | --- | --- |
+| Guided-scan UI overhaul and Simulator demo mode | — | passing |
+| Wall sweep capture | 0005 | passing |
+| Furniture surface detection and per-object `.glb` export | 0006 | passing |
+| Type from ARKit plane label | 0007 | passing, but superseded by 0011 |
+| Automatic room scan from ARKit planes (stand in place) | ADR-0012 | 27 tests passing |
+| Send to Computer: UDP discovery on port 47832 | 0009 | passing |
+| Footprint and perception research spikes | — | not production |
 
-- wall A;
-- wall B;
-- wall C;
-- wall D;
-- ceiling height;
-- one door width/height.
+Last recorded suites there: shared 202, viewer 548, scanner 577, all passing; unsigned iOS build succeeded. Nothing has run on an iPhone.
 
-Perform five independent GhostMap scans.
+Steps:
 
-Record table:
+1. Merge `GhostMapDublinHacks/main` into `main` on an `integration/import-dublinhacks` branch. **The owner must approve this merge explicitly**; it brings in another contributor's code.
+2. Keep its ADR numbers 0005-0009. This repository already reserves them (ADR index).
+3. Resolve documentation conflicts in favour of this repository's current docs, adding the imported features to the status pages.
+4. Move `Experiment/` research spikes under `docs/research/` or drop them; they are not production code.
+5. Regenerate both scenes, run all three suites, and record the counts.
+
+Done when: all three suites pass on `main` with the imported code and the docs describe it.
+
+---
+
+## Task R2: First device session
+
+Build to the owner's iPhone and run every imported path once, in a real room, with the Viewer on the Mac.
+
+1. Floor lock, then **Scan Room** while standing in one spot. Record how many walls ARKit found and whether the room closed.
+2. Repeat with the sweep fallback and the walked-corner fallback.
+3. Height from the ceiling plane, then the aim and typed fallbacks.
+4. Furniture surface detection on a bed, desk and table.
+5. Finalize, then **Send to Computer** on home Wi-Fi and again with the Mac on the iPhone hotspot. No typed IP.
+6. In the Viewer: dollhouse, select, move, measure, save, reload, **Export Assets**.
+7. Open one exported `.glb` in Blender and run `npx gltf-validator` on it.
+
+Done when: every step has a recorded result in `docs/status/integration.md`, failures included.
+
+---
+
+## Task R3: Accuracy benchmark
+
+Tape-measure one test room: four walls, ceiling height, one door. Do five stand-in-place scans and record:
 
 ```text
-scan
-wall A error
-wall B error
-wall C error
-wall D error
-height error
-door width error
-closure error
+scan | wall A-D error | height error | door width error | walls found automatically | fallback used
 ```
 
-Success target for hackathon MVP:
-
-- median wall absolute error <= 0.12 m;
-- max normal wall error <= 0.20 m;
-- closure accepted only <= 0.15 m;
-- height error <= 0.15 m;
-- no self-crossing rooms;
-- no viewer crashes.
-
-If target fails:
-
-1. inspect tracking-loss periods;
-2. improve scan coaching;
-3. shorten scan duration;
-4. require user to move more slowly;
-5. improve floor-lock instructions;
-6. do not "fix" bad measurements by hiding errors.
+Targets: median wall absolute error <= 0.12 m, max wall error <= 0.20 m, height error <= 0.15 m, no self-crossing rooms, no Viewer crashes. Standing in one spot means aiming at distant walls; if the targets fail, coach the user to stand nearer the room centre before changing any threshold. Never hide errors to pass.
 
 ---
 
-## Task I3: Failure-mode hardening
+## Task R4: On-device furniture identification (ADR-0011)
 
-Test intentionally:
+1. Export YOLO11n to Core ML with NMS (`yolo export model=yolo11n.pt format=coreml nms=True`); commit the `.mlpackage` and its SHA-256.
+2. Native iOS plugin (Swift, Vision + Core ML) that takes ARKit camera images about five times a second and returns class, confidence and box.
+3. `IObjectDetector` C# interface with a fake for EditMode tests, following the `ISpatialProvider` pattern.
+4. Pure C# pipeline: box bottom-centre ray to the floor plane, match to a measured ARKit surface, class-to-type mapping, multi-frame tracker (same class within 0.5 m; propose after 5 frames at >= 0.5 confidence).
+5. UI: "Found: ..." list, **Add All**, remove per item. Manual placement stays as fallback.
+6. Remove the ARKit-label type guesser (hackathon ADR-0007) and its tests.
+7. Device test: precision and recall on the R3 room's furniture; latency per frame on the owner's iPhone.
 
-### Poor lighting
-Expected:
-- capture blocked;
-- user sees tracking warning.
-
-### Fast phone motion
-Expected:
-- capture blocked while tracking degraded.
-
-### Network denied
-Expected:
-- scanner still works locally;
-- clear connection error;
-- user can retry after permission change.
-
-### Laptop server not running
-Expected:
-- retry loop;
-- no scanner crash.
-
-### Wi-Fi disconnect
-Expected:
-- scanner retains scene;
-- viewer retains last scene;
-- reconnect resends full snapshot.
-
-### Invalid opening
-Expected:
-- rejected before snapshot mutation.
-
-### Bad closure
-Expected:
-- room cannot progress to height.
-
-### App background/foreground
-Expected:
-- if AR relocalizes poorly, require tracking recovery before capture.
-
-### Viewer receives stale revision
-Expected:
-- ignored.
-
-### Viewer receives malformed JSON
-Expected:
-- log/reject;
-- keep current scene.
-
-Every reproducible software failure receives a regression test when possible.
+Done when: EditMode tests cover the pipeline, and the device test is recorded.
 
 ---
 
-## Task I4: Demo polish
+## Task R5: Keep the detector's label in the scene
 
-Do this only after reliability.
+Shared-contract change (`AGENTS.md` rule 8): add an optional `label` string to `SceneObjectModel` so a `generic` object can carry `"potted plant"` or `"refrigerator"`. Additive within schema v1: older readers ignore it. Update `scene-schema-v1.md`, shared tests, `inspect_snapshot.py`, the fixtures, and show the label in the Viewer inspector.
 
-Scanner polish:
+---
 
-- large center reticle;
-- one primary action button;
-- explicit instructions;
-- progress:
-  - Floor
-  - Corners
-  - Height
-  - Openings
-  - Objects
-  - Finish
-- haptics on successful capture if easy;
-- green/yellow/red quality status;
-- no debug spam visible in demo mode.
+## Task R6: Unity-ready export
 
-Viewer polish:
+1. Whole-room `.glb`: floor, ceiling and the wall segments from `WallSliceGenerator`, so openings are real holes.
+2. One export folder per room: `scene.json`, `room.glb`, `objects/<id>.glb` (ADR-0012).
+3. One Viewer button writes the whole folder; it opens in Finder when done.
+4. Verify: `npx gltf-validator` on every file, open in Blender, import into a fresh Unity 6 project with glTFast (`com.unity.cloud.gltfast`) and confirm scale (metres), orientation (+Y up) and that objects sit on the floor.
 
-- neutral professional environment;
-- grid optional;
-- soft lighting;
-- readable labels;
-- smooth orbit;
-- immediate dollhouse transition;
-- selected object obvious;
-- room hierarchy panel if time permits.
+---
 
-Demo should take under 2–3 minutes from start to finished room.
+## Task R7: Send to Computer, finished
+
+The hackathon quick-send finds the first Viewer on the network and sends the room. To make it a product flow (ADR-0010):
+
+1. **Delivery confirmation.** The phone must only say "Sent" after the Viewer accepted the room. That needs a Viewer-to-scanner acknowledgement, which is a protocol change: ADR, contract doc, tests.
+2. **Remembered computer** and a plain-language "can't find your computer, try again / choose another" flow.
+3. **Viewer liveness.** Use heartbeats to show "Disconnected" when the phone drops without closing the socket.
+4. Manual IP moves behind a developer setting.
+5. Device test on Wi-Fi and hotspot, three consecutive successes each.
+
+---
+
+## Task R8: Hardening and demo polish
+
+Failure modes to test deliberately:
+
+| Case | Expected |
+| --- | --- |
+| Poor light or fast motion | Capture blocked with a clear tracking message |
+| ARKit finds fewer than four walls | Scanner names the missing direction, offers sweep |
+| Network blocked or Viewer not running | Scanner keeps the scan; clear retry message |
+| Wi-Fi drop mid-send | Phone retries; Viewer keeps its last room |
+| App backgrounded | Tracking must recover before any capture |
+| Stale or malformed message at the Viewer | Ignored, current room kept |
+
+Polish: one guided flow on the phone with no debug text (remove the S1 diagnostics block and the `S6 diag:` line), large reticle, haptics on capture, progress steps Floor → Room → Height → Openings → Furniture → Send. Viewer: clean lighting, readable labels, obvious selection.
+
+Every reproducible software failure gets a regression test.
 
 ---
 
 # 19. Scanner UX Script
 
-The scanner should coach the user exactly.
-
 ## Start
 
 ```text
 GhostMap
-Turn a room into an editable 3D map.
+Turn a room into a 3D model you can use in Unity.
 
 [Start Scan]
-```
-
-## Waiting
-
-```text
-Move your phone slowly so tracking can initialize.
 ```
 
 ## Floor
@@ -1423,127 +1309,92 @@ Point at a clear area of the floor.
 [Lock Floor]
 ```
 
-## Corners
+## Room
 
 ```text
-Aim at the floor where two walls meet.
+Stand near the middle of the room.
+Slowly turn all the way around, pointing at the walls.
 
-Corner 1 of 4
-[Capture Corner]
+Walls found: 3 of 4
+Look toward the wall on your left.
 ```
 
-After capture:
+If walls cannot be found:
 
 ```text
-Corner captured.
-Move clockwise around the room.
-```
-
-## Verify
-
-```text
-Return to Corner 1 and aim at it again.
-This checks scan drift.
-
-[Verify]
-```
-
-Results:
-
-```text
-Excellent — 5 cm closure error
-```
-
-or:
-
-```text
-Tracking drift is too high — 22 cm.
-Redo the corners for a reliable map.
-
-[Redo Corners]
+Some walls are hard to see.
+[Trace the walls instead]
 ```
 
 ## Height
 
 ```text
-Select a wall, then aim at where that wall meets the ceiling.
-
-[Capture Height]
-
-Can't capture it?
-[Enter Height Manually]
+Ceiling found: 2.58 m          (or)   Point at where a wall meets the ceiling.
+[Looks right]                         [Capture]   [Type it in]
 ```
 
-## Details
+## Openings
 
 ```text
-Add room details
+Found 1 door.
+[Add a door or window]   [Next]
+```
 
-[Door]
-[Window]
-[Furniture]
-[Finish]
+## Furniture
+
+```text
+Found: bed, desk, 2 chairs
+[Add All]   (tap any item to remove it)
+[Add something it missed]
 ```
 
 ## Finish
 
 ```text
-Room ready.
+Room ready: 4.02 × 3.11 m, 2.58 m high
+1 door · 4 pieces of furniture
 
-Closure error: 7 cm
-Objects: 4
-Openings: 2
+[Send to Computer]
+```
 
-[Finalize GhostMap]
+## Sending
+
+```text
+Looking for your computer…
+Sent to MacBook ✓            (only after the Viewer confirms, R7)
 ```
 
 ---
 
 # 20. Viewer UX Script
 
-## Before connection
+## Waiting
 
 ```text
 GhostMap Viewer
-
-Listening on:
-192.168.x.x : 47831
-
-Waiting for scanner...
+Ready to receive. Open GhostMap on your phone and tap Send to Computer.
 ```
 
-## During scan
+## Live preview (optional)
 
 ```text
-LIVE SCAN
-Corners: 3 / 4
-Tracking: Good
-Revision: 5
+LIVE SCAN · Walls 3 / 4 · Revision 5
 ```
 
-Objects appear as snapshots arrive.
-
-## Finalized
+## Received
 
 ```text
-SCAN COMPLETE
+Bedroom received · 4 objects
 
-[ Dollhouse ]
-[ Measure ]
-[ Save ]
+[Dollhouse]  [Measure]  [Save]  [Export for Unity]
 ```
 
-Object click opens:
+Clicking an object opens:
 
 ```text
-Desk
+Desk  (detected: dining table)
 
-Position X
-Position Z
-Rotation
-Width
-Depth
-Height
+Position X / Z · Rotation · Width · Depth · Height
 ```
 
 ---
@@ -1593,47 +1444,34 @@ It is done only when:
 
 ---
 
-# 23. MVP Acceptance Test
+# 23. Acceptance Test
 
-Run this from a clean clone.
+Run from a clean clone, on the owner's iPhone and Mac, in a furnished room.
 
 ## Setup
 
-- install pinned Unity version;
-- open scanner project;
-- open viewer project;
-- packages resolve with shared relative package;
-- no manual source copying.
+- install the pinned Unity version;
+- open the scanner and viewer projects; packages resolve with the shared relative package;
+- build the scanner to the iPhone; launch the Viewer on the Mac;
+- no IP address is typed anywhere.
 
 ## Test
 
-1. Build Scanner to standard iPhone.
-2. Launch Viewer on laptop.
-3. Connect over same Wi-Fi.
-4. Start scan.
-5. Lock floor.
-6. Capture four corners.
-7. Verify closure <= 0.15 m.
-8. Capture room height.
-9. Add one door.
-10. Add bed.
-11. Add desk.
-12. Add chair.
-13. Observe every update on Viewer.
-14. Finalize.
-15. Enter dollhouse mode.
-16. Select desk.
-17. Drag desk.
-18. Rotate desk.
-19. Resize desk.
-20. Measure bed-to-desk distance.
-21. Save.
-22. Close Viewer.
-23. Reopen Viewer.
-24. Load saved scene.
-25. Confirm same semantic room appears.
+1. Start a scan and lock the floor.
+2. Stand in one spot and turn; the room's four walls are found, or found after the sweep fallback.
+3. Room dimensions are within the section 18 `R3` targets of a tape measure.
+4. Height is captured.
+5. One door is captured.
+6. A bed, a desk and a chair are identified on the phone and added with one tap.
+7. Finalize.
+8. Tap **Send to Computer**; the phone confirms delivery.
+9. The Viewer shows the same room with the door and the three objects in roughly the right places.
+10. Enter dollhouse mode, select the desk, drag, rotate and resize it.
+11. Measure bed-to-desk distance.
+12. Save, close the Viewer, reopen it, and load the same room.
+13. **Export for Unity**, then import `room.glb` and the object files into a fresh Unity project; the room is to scale and the furniture sits on the floor.
 
-Pass requires all 25.
+Pass requires all 13.
 
 ---
 
@@ -1664,55 +1502,31 @@ Network:
 
 # 25. Stretch Features — Strict Order
 
-Only start after full MVP acceptance test passes.
+Only start after the section 23 acceptance test passes.
 
 ## Stretch 1: Better furniture library
 
-More parametric categories and prettier models.
+Prettier parametric models per type, still built from measured dimensions.
 
-## Stretch 2: Automatic object suggestion
+## Stretch 2: More detector classes
 
-Use camera inference only to **suggest type**.
-
-User still confirms placement/dimensions.
-
-Do not let model output directly mutate room without confirmation.
+Fine-tune the YOLO-n model on indoor furniture (desk, dresser, wardrobe, shelf) so fewer objects fall back to `generic`. New ADR, licence check.
 
 ## Stretch 3: Arbitrary convex polygon rooms
 
-Change 4-corner constraint to N corners.
-
-Requires:
-
-- robust polygon validation;
-- triangulation;
-- new tests.
+More than four walls. Requires polygon validation, triangulation, a schema version decision and new tests.
 
 ## Stretch 4: Multi-room
 
-Requires explicit doorway transition and shared global frame.
+Requires an explicit doorway transition and a shared global frame. Tracking drift must be addressed first.
 
-Do not simply keep capturing indefinitely; tracking drift must be addressed.
+## Stretch 5: Photoreal furniture meshes off the phone
 
-## Stretch 5: Cloud monocular depth
-
-Treat as enhancement layer, not source of truth.
-
-Never replace structured capture with uncertain dense geometry.
+Optional and outside the phone: send furniture photos to a GPU machine running an image-to-3D model (for example TRELLIS) and swap the parametric `.glb` for the generated mesh. Needs its own ADR because it breaks "everything runs on the phone".
 
 ## Stretch 6: Spatial queries
 
-Because scene is structured, add deterministic queries first:
-
-```text
-nearest object to door
-distance between objects
-room area
-room volume
-clearance between furniture
-```
-
-Only then add natural-language translation on top.
+Deterministic first: nearest object to the door, clearance between furniture, room area and volume. Natural language only on top of those.
 
 ---
 
@@ -1733,10 +1547,10 @@ Never start by randomly adjusting renderer code.
 
 When networking fails:
 
-1. viewer listening?
-2. correct laptop LAN IP?
-3. same Wi-Fi?
-4. local-network permission granted?
+1. Viewer running and listening (TCP 47831, discovery UDP 47832)?
+2. phone and computer on the same Wi-Fi, or the computer on the phone's hotspot?
+3. local-network permission granted on the phone?
+4. does Send to Computer find the Viewer? If not, try the developer IP field to separate discovery from transport;
 5. TCP port reachable?
 6. scanner retrying?
 7. line terminated with `\n`?
@@ -1843,19 +1657,19 @@ V6
 
 Both use fixture/shared package and do not wait on each other.
 
-## Stage C — together
+## Stage C — stand-in-place GhostMap
 
 ```text
-I1
-I2
-I3
-I4
+R1 -> R2 -> R3
+        \-> R4 -> R5
+        \-> R6
+        \-> R7 -> R8
 ```
 
-During Stage C, use short-lived integration branches only.
+Section 18 defines each task. Use short-lived `integration/<task>` branches.
 
 **Progress:** Stage A complete (tag `shared-v1-ready`). Stage B complete
-(PRs #1-#12). Stage C not started.
+(PRs #1-#12). Stage C not started; next is `R1`.
 
 ---
 
@@ -1922,23 +1736,18 @@ If Unity `.meta` GUID conflicts occur:
 
 # 31. "For Sure" Verification Gate
 
-No one can honestly guarantee camera-only spatial reconstruction without testing the exact phone/environment.
+No one can guarantee camera-only reconstruction without testing the exact phone and room. Before presenting GhostMap as ready, require:
 
-Therefore GhostMap uses measurable gates instead of pretending certainty.
+- 5 stand-in-place scans of the demo room within the `R3` targets;
+- 3 scans in a second room;
+- 3 consecutive end-to-end runs (scan → Send to Computer → Viewer → export) with no restart;
+- Send to Computer tested on Wi-Fi and on the iPhone hotspot;
+- fresh-install path tested (camera and local-network permission prompts);
+- exported files imported into a fresh Unity project;
+- average scan-to-computer time recorded;
+- a saved known-good room available in the Viewer in case hardware or network fails.
 
-Before presenting the project as ready, require:
-
-- 5 successful scans of the intended demo room;
-- 3 successful scans in a second room;
-- 3 consecutive end-to-end live demos with no restart;
-- network disconnect recovery tested;
-- local-network permission fresh-install path tested;
-- closure rejection tested;
-- save/load tested;
-- average demo completion time recorded;
-- backup fixture/demo scene available in Viewer if hardware/network fails.
-
-The backup fixture is for presentation continuity, not for pretending it was scanned live.
+The backup room is for presentation continuity, not for pretending it was scanned live.
 
 ---
 
@@ -1946,36 +1755,26 @@ The backup fixture is for presentation continuity, not for pretending it was sca
 
 Before judges arrive:
 
-1. phone charged > 70%;
-2. laptop connected to power;
-3. same stable Wi-Fi;
-4. Viewer already launched;
-5. laptop LAN IP confirmed (developer fallback only; once I1B exists the demo uses Send to Computer);
-6. scanner already granted camera/local-network permissions;
-7. one practice scan completed;
-8. demo area well lit;
-9. room corners visible;
-10. no people walking through capture line;
-11. saved known-good room present;
-12. screen recording disabled if it hurts performance.
+1. phone charged > 70%, laptop on power;
+2. Viewer already running;
+3. phone already granted camera and local-network permission;
+4. Mac on the same Wi-Fi as the phone, or on the phone's hotspot;
+5. one practice scan done in the demo room;
+6. room well lit, walls visible, nobody walking through;
+7. a saved known-good room ready to load.
 
 Demo:
 
-1. explain: "We are not generating a mesh. We are converting space into structured data."
-2. start fresh room.
-3. lock floor.
-4. capture corners.
-5. show closure quality.
-6. capture height.
-7. add one door and 2–3 objects.
-8. show laptop updating live.
-9. finalize.
-10. hit Dollhouse.
-11. move desk.
-12. measure path/clearance.
-13. show semantic hierarchy/data.
+1. "We are not making a mesh. We are turning a room into structured data."
+2. Lock the floor.
+3. Stand still and turn; show the walls appearing.
+4. Show height and the door.
+5. Point at the furniture; show "Found: bed, desk, chair", tap Add All.
+6. Tap Send to Computer; the room appears on the laptop.
+7. Dollhouse, move the desk, measure.
+8. Export for Unity and drop the room into a Unity scene.
 
-Core judge line:
+Core line:
 
 > A camera normally gives software pixels. GhostMap gives software a room it can reason about.
 
@@ -1997,12 +1796,10 @@ Historical; removed. See `git show f5a7d30:docs/plans/ghostmap-implementation-pl
 
 # 35. Completion Standard
 
-GhostMap MVP is complete only when a clean clone can be turned into the following real demo:
+GhostMap is complete when a clean clone can be turned into this real demo:
 
-> A person with a standard non-Pro iPhone scans a normal bedroom using guided geometric capture. A laptop receives the structured room live, renders a recognizable 3D digital twin with door/furniture, and then allows the room to be viewed in dollhouse mode, edited, measured, saved, and reloaded.
+> A person stands in the middle of a normal room holding a standard non-Pro iPhone and turns around once. The phone finds the walls, identifies the furniture on device, and with one button sends the room to a computer, where it appears as an editable 3D model and exports as Unity-ready files.
 
-If that sequence does not work reliably, do not spend time on AI, photorealism, multi-room mapping, or additional features.
+If that sequence does not work reliably, do not spend time on stretch features.
 
-Build the boring, reliable geometry pipeline first.
-
-That pipeline is the project.
+The structured geometry pipeline is still the project; the detector and the automatic scan only make capturing it easier.

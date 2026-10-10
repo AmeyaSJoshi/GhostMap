@@ -5,7 +5,7 @@
 3. `shared/com.ghostmap.shared` is the only source of truth for domain models, geometry utilities, validation, and wire contracts.
 4. During scanning, the scanner owns scene state. After finalization, the viewer owns editable scene state.
 5. Protocol v1 sends full scene snapshots after structural changes. Do not replace it with delta/event replay without an ADR and contract tests.
-6. Do not add LiDAR, Gaussian splatting, NeRFs, cloud inference, or automatic object recognition to the MVP unless all MVP acceptance tests already pass.
+6. All capture and recognition run on the phone. Do not add LiDAR, dense depth reconstruction, Gaussian splatting, NeRFs, generative 3D models, or any cloud or off-device inference. The only learned model allowed is the on-device YOLO-n furniture detector (`docs/decisions/ADR-0011-on-device-yolo-furniture-identification.md`); it may name objects but must never set geometry. Anything beyond that needs a new ADR (see `docs/decisions/ADR-0012-stand-in-place-on-device-capture.md`).
 7. Do not edit another workstream's directory unless the task explicitly requires integration.
 8. Shared contract changes require:
    - contract documentation update,
@@ -25,7 +25,7 @@
     finalization. Normal users must not be required to type IP addresses or
     ports; manual addressing is a developer/debug fallback. Preserve the existing
     TCP/full-snapshot transport beneath automatic discovery/pairing unless an ADR
-    explicitly replaces it. See `docs/decisions/ADR-0007-one-button-computer-transfer.md`.
+    explicitly replaces it. See `docs/decisions/ADR-0010-one-button-computer-transfer.md`.
 
 ---
 
@@ -109,7 +109,8 @@ Create a new file per handoff, never overwrite an existing one:
 docs/handoffs/YYYY-MM-DD-<workstream>-<short-description>.md
 ```
 
-See `docs/handoffs/README.md` for the required template.
+See `docs/handoffs/README.md` for the required template. Handoffs from before
+2026-10-10 live in git history, not in the working tree.
 
 ### Definition of done
 

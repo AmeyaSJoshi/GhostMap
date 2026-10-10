@@ -1,16 +1,35 @@
 # Integration Status
 
-Workstream: Shared / Integration. Tasks `I1`-`I4` are defined in plan section 18.
+Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
+`R1`-`R8` in plan section 18 (direction: ADR-0012).
 
 ## Current state
 
-**Not started, unblocked.** Scanner S1-S6 (device-verified) and Viewer V1-V6
-are both complete, which is the plan's gate for full integration.
+**Roadmap not started. Next: `R1`.**
 
-- The scanner has never talked to the Viewer. Its S6 device test used a Python
-  TCP listener.
-- No accuracy benchmark has been recorded.
-- The MVP acceptance test (plan section 23) has not been run.
+| Task | What | State |
+| --- | --- | --- |
+| R1 | Bring `GhostMapDublinHacks` into this repository | Not started. Needs the owner's explicit approval to merge |
+| R2 | First device session: every path on a real iPhone with the Viewer on the Mac | Not started |
+| R3 | Accuracy benchmark against a tape measure | Not started |
+| R4 | YOLO-n furniture identification on the phone (ADR-0011) | Not started |
+| R5 | Optional `label` on `SceneObjectModel` (additive schema change) | Not started |
+| R6 | Export for Unity: whole-room `.glb` and the export folder | Not started |
+| R7 | Send to Computer: delivery confirmation, remembered computer, Viewer liveness | Not started |
+| R8 | Failure hardening and one guided scan flow | Not started |
+
+The scanner has never been connected to the Viewer. Its S6 network test used a
+Python listener.
+
+### What `R1` brings in
+
+`GhostMapDublinHacks` is this repository at `f5a7d30` plus 31 commits from
+2026-10-03: the guided-scan UI overhaul, automatic room scan from ARKit planes,
+wall sweep (ADR-0005), furniture surface detection and per-object `.glb` export
+(ADR-0006), plane-label type guessing (ADR-0007, to be removed by `R4`),
+peer-to-peer scoping (ADR-0008), UDP quick-send discovery (ADR-0009), and two
+research spikes. Last recorded suites there: shared 202, viewer 548, scanner
+577, all passing; unsigned iOS build succeeded. None of it has run on an iPhone.
 
 ## Last verified commit
 
@@ -20,29 +39,27 @@ None.
 
 None yet.
 
-## Known risks going into I1-I3
+## Known risks
 
-These come from reading the code, not from a failed run.
+From reading the code, not from a failed run:
 
-- **Viewer liveness.** The Viewer has no heartbeat timeout or socket read
-  timeout. A phone that leaves Wi-Fi without closing the socket leaves the
-  Viewer HUD on `Connected`. Relevant to `I1` step 16 and the `I3` Wi-Fi test.
-- **Finalized while disconnected.** If the scanner finalizes with no connection,
-  the reconnect sends `hello` and the finalized snapshot but no
-  `scan.finalized`. The Viewer does not need that message today.
-- **Manual IP.** Until I1B exists the phone needs the computer's LAN IP typed in.
-  Confirm iOS local-network permission before any demo.
-- **Bonjour needs plist keys.** If I1B uses Bonjour, iOS needs
-  `NSBonjourServices` as well as `NSLocalNetworkUsageDescription`, or discovery
-  fails silently.
+- **Automatic walls depend on ARKit.** How many vertical planes ARKit reports in
+  a real furnished room on the owner's iPhone is unknown. The sweep and walked
+  fallbacks exist for this.
+- **Standing in one spot means aiming far.** Floor-line error grows with
+  distance; stand near the room centre (ADR-0005's error table).
+- **Viewer liveness.** The Viewer has no heartbeat timeout, so a phone that
+  drops off Wi-Fi without closing the socket leaves it on `Connected` (`R7`).
+- **No delivery confirmation.** The hackathon Send to Computer cannot tell the
+  phone the room arrived; protocol v1 has no Viewer-to-scanner message (`R7`).
+- **UDP discovery can be blocked** by some networks. Test on Wi-Fi and on the
+  iPhone hotspot (`R2`).
+- **Detector licence.** YOLO-n is AGPL-3.0 (ADR-0011).
 
 ## Next safe task
 
-**I1A — baseline transport**, then **I1B — one-button Send to Computer**
-(plan section 18, ADR-0007). I1A uses the typed IP and must pass three
-consecutive times before I1B acceptance. I1B starts with a design step choosing
-the discovery mechanism; ADR-0007 lists the candidates, with Bonjour over the
-existing TCP the likely first choice. Record every attempt below.
+**`R1`**: merge `GhostMapDublinHacks/main` on an `integration/import-dublinhacks`
+branch once the owner approves, then run all three suites.
 
 ## Do not touch
 
@@ -51,17 +68,17 @@ scoped `integration/<task>` branch.
 
 ---
 
-## I1 run log
+## R2 device log
 
-| Date | Part | Result | Closure error | Notes |
-| --- | --- | --- | --- | --- |
-| — | — | — | — | — |
+| Date | Step | Result | Notes |
+| --- | --- | --- | --- |
+| — | — | — | — |
 
-## I2 accuracy benchmark
+## R3 accuracy benchmark
 
-Targets: median wall absolute error ≤ 0.12 m, max normal wall error ≤ 0.20 m,
-closure ≤ 0.15 m, height error ≤ 0.15 m.
+Targets: median wall absolute error ≤ 0.12 m, max wall error ≤ 0.20 m, height
+error ≤ 0.15 m.
 
-| Scan | Wall A err | Wall B err | Wall C err | Wall D err | Height err | Door width err | Closure err |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| — | — | — | — | — | — | — | — |
+| Scan | Wall A err | Wall B err | Wall C err | Wall D err | Height err | Door width err | Walls found automatically | Fallback used |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| — | — | — | — | — | — | — | — | — |

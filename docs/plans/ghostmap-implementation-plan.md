@@ -10,6 +10,22 @@
 
 **Spec:** `docs/specs/ghostmap-project-spec.md`
 
+## Where the project is
+
+| Stage | Tasks | State |
+| --- | --- | --- |
+| A — Foundation | `F0`-`F4` | Complete |
+| B — Parallel workstreams | `S1`-`S6`, `V1`-`V6` | Complete; scanner verified on a physical iPhone |
+| C — Integration | `I1`-`I4` | **Not started. Next task: `I1`** |
+
+Section numbers in this plan are stable and are cited from code comments and
+handoffs. Sections whose content now lives in another canonical document are
+kept as short pointers rather than renumbered. The full original text of the
+completed task specifications (`F0`-`F3`, `S1`-`S6`, `V1`-`V6`) is in git:
+`git show f5a7d30:docs/plans/ghostmap-implementation-plan.md`.
+Notes marked **As built** record where the implementation deliberately differs
+from the original text.
+
 ---
 
 # 0. Read This Before Changing Anything
@@ -217,119 +233,39 @@ Use an iOS post-build script so these values are reproducible and not manually r
 
 # 3. Repository Layout
 
-Create exactly this high-level structure:
+The repository has exactly this high-level structure:
 
 ```text
 GhostMap/
-├── AGENTS.md
+├── AGENTS.md                    execution contract, read first
 ├── README.md
-├── .editorconfig
-├── .gitignore
-├── .gitattributes
+├── .editorconfig  .gitattributes  .gitignore
+├── .github/pull_request_template.md
 │
 ├── docs/
-│   ├── specs/
-│   │   └── ghostmap-project-spec.md
-│   ├── plans/
-│   │   └── ghostmap-implementation-plan.md
-│   ├── architecture/
-│   │   └── overview.md
-│   ├── contracts/
-│   │   ├── protocol-v1.md
-│   │   └── scene-schema-v1.md
-│   ├── decisions/
-│   │   ├── ADR-0001-two-unity-projects.md
-│   │   ├── ADR-0002-snapshot-protocol.md
-│   │   ├── ADR-0003-scanner-authority.md
-│   │   └── ADR-0004-no-dense-depth-in-mvp.md
-│   ├── status/
-│   │   ├── integration.md
-│   │   ├── scanner.md
-│   │   ├── shared.md
-│   │   └── viewer.md
-│   └── handoffs/
-│       └── README.md
+│   ├── README.md                documentation map
+│   ├── specs/                   product spec
+│   ├── plans/                   this plan
+│   ├── architecture/            architecture overview and code map
+│   ├── contracts/               scene-schema-v1.md, protocol-v1.md
+│   ├── decisions/               ADR-0001 .. ADR-0004 and an index
+│   ├── status/                  shared.md, scanner.md, viewer.md, integration.md
+│   └── handoffs/                one file per handoff, never overwritten
 │
 ├── shared/
-│   └── com.ghostmap.shared/
-│       ├── package.json
-│       ├── Runtime/
-│       │   ├── GhostMap.Shared.asmdef
-│       │   ├── Domain/
-│       │   │   ├── Vec3Dto.cs
-│       │   │   ├── ValidationResult.cs
-│       │   │   ├── WallDefinition.cs
-│       │   │   ├── CornerModel.cs
-│       │   │   ├── OpeningModel.cs
-│       │   │   ├── SceneObjectModel.cs
-│       │   │   ├── RoomModel.cs
-│       │   │   └── SceneSnapshot.cs
-│       │   ├── Geometry/
-│       │   │   ├── GhostCoordinateFrame.cs
-│       │   │   ├── RayPlaneMath.cs
-│       │   │   ├── RoomGeometry.cs
-│       │   │   ├── WallGeometry.cs
-│       │   │   └── MeasurementMath.cs
-│       │   ├── Protocol/
-│       │   │   ├── ProtocolConstants.cs
-│       │   │   ├── WireMessages.cs
-│       │   │   └── ProtocolSerializer.cs
-│       │   └── Validation/
-│       │       ├── RoomValidator.cs
-│       │       ├── OpeningValidator.cs
-│       │       └── FurnitureValidator.cs
-│       └── Tests/
-│           └── Editor/
-│               ├── GhostMap.Shared.Tests.asmdef
-│               ├── CoordinateFrameTests.cs
-│               ├── RayPlaneMathTests.cs
-│               ├── RoomGeometryTests.cs
-│               ├── OpeningValidatorTests.cs
-│               └── ProtocolSerializerTests.cs
+│   ├── com.ghostmap.shared/     the shared Unity package
+│   │   ├── Runtime/{Domain,Geometry,Protocol,Validation}/
+│   │   └── Tests/Editor/
+│   └── TestProject/             host project that only runs the shared tests
 │
 ├── apps/
-│   ├── scanner/
-│   │   ├── Assets/
-│   │   │   └── GhostMap/
-│   │   │       └── Scanner/
-│   │   │           ├── Runtime/
-│   │   │           │   ├── Bootstrap/
-│   │   │           │   ├── AR/
-│   │   │           │   ├── Capture/
-│   │   │           │   ├── Networking/
-│   │   │           │   ├── UI/
-│   │   │           │   └── Workflow/
-│   │   │           ├── Editor/
-│   │   │           └── Tests/
-│   │   │               └── EditMode/
-│   │   ├── Packages/
-│   │   └── ProjectSettings/
-│   │
-│   └── viewer/
-│       ├── Assets/
-│       │   └── GhostMap/
-│       │       └── Viewer/
-│       │           ├── Runtime/
-│       │           │   ├── Bootstrap/
-│       │           │   ├── Networking/
-│       │           │   ├── Scene/
-│       │           │   ├── Rendering/
-│       │           │   ├── Interaction/
-│       │           │   ├── Persistence/
-│       │           │   └── UI/
-│       │           └── Tests/
-│       │               └── EditMode/
-│       ├── Packages/
-│       └── ProjectSettings/
+│   ├── scanner/                 iOS Unity project
+│   │   └── Assets/GhostMap/Scanner/{Runtime/{AR,Bootstrap,Capture,Networking,UI,Workflow},Editor,Tests/EditMode}
+│   └── viewer/                  desktop Unity project
+│       └── Assets/GhostMap/Viewer/{Runtime/{Bootstrap,Networking,Scene,Rendering,Interaction,Persistence,UI},Editor,Tests/EditMode}
 │
-├── fixtures/
-│   ├── valid-room-v1.json
-│   ├── room-with-door-window-v1.json
-│   └── malformed-room-v1.json
-│
-└── tools/
-    ├── send_fixture.py
-    └── inspect_snapshot.py
+├── fixtures/                    valid-room-v1, room-with-door-window-v1, malformed-room-v1
+└── tools/                       inspect_snapshot.py, send_fixture.py, run_unity_tests.sh
 ```
 
 The scanner and viewer manifests reference the shared package from their own `Packages/manifest.json` files with:
@@ -341,6 +277,10 @@ The scanner and viewer manifests reference the shared package from their own `Pa
 The path is relative to each project's `Packages` folder.
 
 Do not duplicate shared models inside either app.
+
+**As built:** `shared/TestProject/` was added in F1 because a Unity package
+cannot run its own tests; it contains no application code. File-level detail
+for every project is in `docs/architecture/overview.md` section 12.
 
 ---
 
@@ -577,365 +517,42 @@ Because scanner and viewer are separate Unity projects, scene/prefab conflicts s
 
 # 5. `AGENTS.md` Contract
 
-Create `AGENTS.md` with the following instructions:
-
-```markdown
-# GhostMap Repository Instructions
-
-1. Read the project spec, implementation plan, shared contract docs, and your workstream status before modifying code.
-2. Do not invent alternate scene schemas or network messages inside an app.
-3. `shared/com.ghostmap.shared` is the only source of truth for domain models, geometry utilities, validation, and wire contracts.
-4. During scanning, the scanner owns scene state. After finalization, the viewer owns editable scene state.
-5. Protocol v1 sends full scene snapshots after structural changes. Do not replace it with delta/event replay without an ADR and contract tests.
-6. Do not add LiDAR, Gaussian splatting, NeRFs, cloud inference, or automatic object recognition to the MVP unless all MVP acceptance tests already pass.
-7. Do not edit another workstream's directory unless the task explicitly requires integration.
-8. Shared contract changes require:
-   - contract documentation update,
-   - tests,
-   - dedicated commit,
-   - status/handoff update.
-9. Never modify generated Unity folders (`Library`, `Temp`, `Logs`, `obj`, build output).
-10. Do not upgrade Unity or package versions without a dedicated dependency-change PR.
-11. Every bug fix must include a regression test when the bug is testable without a physical device.
-12. Real-device behavior must never be declared fixed until verified on a real iPhone.
-13. At the end of every meaningful task:
-   - run tests,
-   - update the workstream status,
-   - create a handoff file,
-   - commit.
-```
+Moved. [`AGENTS.md`](../../AGENTS.md) at the repository root is the contract;
+its numbered rules are authoritative and were created from this section in F0.
 
 ---
 
 # 6. Shared Scene Schema v1
 
-The schema must remain boring and explicit.
+Moved. The frozen schema is [`docs/contracts/scene-schema-v1.md`](../contracts/scene-schema-v1.md),
+and the code in `shared/com.ghostmap.shared/Runtime/Domain/` is the source of truth.
 
-All distances are **meters**.
+| Former section | Now |
+| --- | --- |
+| 6.1 `Vec3Dto` | schema section 2 |
+| 6.2 `CornerModel` | schema section 3 |
+| 6.3 `OpeningModel` | schema section 4 |
+| 6.4 `SceneObjectModel` | schema section 5 |
+| 6.5 `RoomModel` (walls derived, never serialized) | schema section 6 |
+| 6.6 `SceneSnapshot` | schema section 7 |
 
-Coordinate system:
-
-- +Y = up;
-- floor = Y 0 after normalization;
-- +Z = forward from the floor-lock moment;
-- +X = right from the floor-lock moment.
-
-## 6.1 Vec3Dto
-
-```csharp
-[Serializable]
-public struct Vec3Dto
-{
-    public float x;
-    public float y;
-    public float z;
-
-    public Vec3Dto(float x, float y, float z)
-    {
-        this.x = x;
-        this.y = y;
-        this.z = z;
-    }
-
-    public Vector3 ToVector3() => new Vector3(x, y, z);
-
-    public static Vec3Dto FromVector3(Vector3 value)
-        => new Vec3Dto(value.x, value.y, value.z);
-}
-```
-
-## 6.2 CornerModel
-
-```csharp
-[Serializable]
-public sealed class CornerModel
-{
-    public string id;
-    public Vec3Dto position;
-}
-```
-
-Rules:
-
-- ordered clockwise or counter-clockwise;
-- order must not change after finalization;
-- Y must be 0 within tolerance.
-
-## 6.3 OpeningModel
-
-```csharp
-[Serializable]
-public sealed class OpeningModel
-{
-    public string id;
-    public string type; // "door" or "window"
-
-    public string wallStartCornerId;
-    public string wallEndCornerId;
-
-    public float offsetM;
-    public float widthM;
-    public float sillHeightM;
-    public float heightM;
-}
-```
-
-Definition:
-
-- `offsetM` is distance along the wall from start corner;
-- door normally has `sillHeightM = 0`;
-- window has positive sill;
-- opening must fit completely inside the wall.
-
-## 6.4 SceneObjectModel
-
-```csharp
-[Serializable]
-public sealed class SceneObjectModel
-{
-    public string id;
-    public string type; // bed, desk, chair, couch, table, dresser, tv, generic
-
-    public Vec3Dto center;
-
-    public float yawDeg;
-
-    public float widthM;
-    public float depthM;
-    public float heightM;
-}
-```
-
-MVP furniture remains axis-aligned to its own yaw around +Y.
-
-## 6.5 RoomModel
-
-```csharp
-[Serializable]
-public sealed class RoomModel
-{
-    public string id;
-    public string name;
-
-    public float heightM;
-
-    public CornerModel[] corners;
-    public OpeningModel[] openings;
-    public SceneObjectModel[] objects;
-}
-```
-
-Do **not** serialize walls separately.
-
-Walls are derived from consecutive corners. This prevents duplicated state from disagreeing.
-
-For four corners:
-
-```text
-wall 0 = corner 0 -> corner 1
-wall 1 = corner 1 -> corner 2
-wall 2 = corner 2 -> corner 3
-wall 3 = corner 3 -> corner 0
-```
-
-## 6.6 SceneSnapshot
-
-```csharp
-[Serializable]
-public sealed class SceneSnapshot
-{
-    public int schemaVersion;
-    public string sessionId;
-    public int revision;
-    public string scanPhase;
-    public bool finalized;
-    public float closureErrorM;
-    public RoomModel room;
-}
-```
-
-Rules:
-
-- `schemaVersion = 1`;
-- `revision` increments for every structural mutation;
-- viewer ignores a snapshot if its revision is lower than the latest accepted revision for the same session;
-- finalized snapshot cannot be mutated by scanner-side UI.
+Conventions that apply everywhere: meters, degrees, +Y up, floor at Y = 0, +Z
+forward and +X right from the floor-lock moment.
 
 ---
 
 # 7. Network Protocol v1
 
-Use TCP, port:
+Moved. The frozen protocol is [`docs/contracts/protocol-v1.md`](../contracts/protocol-v1.md),
+and the code in `shared/com.ghostmap.shared/Runtime/Protocol/` is the source of truth.
 
-```text
-47831
-```
-
-Transport:
-
-```text
-TCP + UTF-8 + one JSON object per line
-```
-
-Every serialized message ends with:
-
-```text
-\n
-```
-
-Maximum accepted line length:
-
-```text
-262144 bytes
-```
-
-If exceeded, reject the connection/message.
-
-## 7.1 Message header
-
-```csharp
-[Serializable]
-public class WireMessageHeader
-{
-    public int protocolVersion;
-    public string type;
-    public string sessionId;
-    public long sequence;
-    public long unixTimeMs;
-}
-```
-
-`protocolVersion = 1`.
-
-## 7.2 Required message types
-
-Only these are required for MVP:
-
-```text
-hello
-heartbeat
-phone.pose
-scene.snapshot
-scan.finalized
-```
-
-### hello
-
-```csharp
-[Serializable]
-public sealed class HelloMessage : WireMessageHeader
-{
-    public string appVersion;
-    public string deviceName;
-}
-```
-
-### heartbeat
-
-```csharp
-[Serializable]
-public sealed class HeartbeatMessage : WireMessageHeader
-{
-}
-```
-
-### phone.pose
-
-Debug/display only.
-
-```csharp
-[Serializable]
-public sealed class PhonePoseMessage : WireMessageHeader
-{
-    public Vec3Dto position;
-    public float yawDeg;
-    public string trackingState;
-    public string notTrackingReason;
-}
-```
-
-Send at no more than 5 Hz.
-
-Do not build the room from these poses.
-
-### scene.snapshot
-
-```csharp
-[Serializable]
-public sealed class SceneSnapshotMessage : WireMessageHeader
-{
-    public SceneSnapshot snapshot;
-}
-```
-
-Send immediately after:
-
-- floor lock;
-- corner add/remove;
-- room height update;
-- opening add/remove/edit;
-- furniture add/remove/edit;
-- scan finalization.
-
-### scan.finalized
-
-```csharp
-[Serializable]
-public sealed class ScanFinalizedMessage : WireMessageHeader
-{
-    public int finalRevision;
-}
-```
-
-The scanner must also send the final snapshot immediately before this message.
-
-## 7.3 Serialization
-
-Use `JsonUtility`.
-
-Deserialization algorithm:
-
-1. parse JSON into `WireMessageHeader`;
-2. validate `protocolVersion`;
-3. switch on `type`;
-4. parse again into the concrete message class;
-5. validate fields;
-6. dispatch.
-
-Signature:
-
-```csharp
-public static class ProtocolSerializer
-{
-    public static string Serialize(object message);
-
-    public static bool TryDeserialize(
-        string json,
-        out object message,
-        out string error);
-}
-```
-
-Do not use reflection-heavy polymorphic serialization.
-
-## 7.4 Reconnection
-
-Scanner behavior:
-
-1. keep latest `SceneSnapshot` in memory;
-2. if connection drops, show disconnected state;
-3. retry every 2 seconds while app is foregrounded;
-4. after reconnect:
-   - send hello;
-   - send current scene snapshot immediately;
-   - resume heartbeats.
-
-Viewer behavior:
-
-- accept one active scanner connection;
-- when a new connection arrives, replace old disconnected session;
-- never erase displayed scene simply because network disconnects;
-- show "Disconnected — displaying last snapshot."
+| Former section | Now |
+| --- | --- |
+| Transport (TCP 47831, UTF-8 NDJSON, 262144-byte lines) | protocol section 1 |
+| 7.1 Message header | protocol section 2 |
+| 7.2 Required message types | protocol section 3 |
+| 7.3 Serialization | protocol section 4 |
+| 7.4 Reconnection | protocol section 6 |
 
 ---
 
@@ -1111,6 +728,10 @@ Fallback:
 
 A failed automatic height capture must never block the demo.
 
+**As built:** wall selection is a `Wall N/4` readout plus a highlighted line on
+the selected wall rather than a top-down preview, and a manual height is marked
+on the scanner HUD only. Schema v1 has no field to carry it in the snapshot.
+
 ---
 
 # 9. Room Validation
@@ -1233,6 +854,12 @@ AddObjects -> AddOpenings
 ```
 
 Reset starts a new AR session and new session ID.
+
+**As built:** Reset creates a new session ID, room ID and revision 0 but keeps
+the running AR session, because re-initialising ARKit costs tracking quality for
+no benefit. The back transitions `AddOpenings -> CaptureHeight` and
+`AddObjects -> AddOpenings` are legal in the transition table, but no scanner
+control uses them yet.
 
 ---
 
@@ -1484,907 +1111,62 @@ Load:
 
 Never load invalid scene silently.
 
+**As built:** V6 saves to one fixed slot,
+`Application.persistentDataPath/ghostmap-scene.json`, and each Save overwrites
+it. Save and Load are refused unless the scene is finalized and Viewer-owned
+(ADR-0003). Loading goes through `ViewerEditableScene.LoadExternalSnapshot`,
+which re-validates before replacing the displayed room.
+
 ---
 
 # 15. Foundation Tasks
 
-These tasks must be merged before Scanner and Viewer development split.
+**Complete.** Full original task specifications: `git show f5a7d30:docs/plans/ghostmap-implementation-plan.md`.
 
----
+| Task | Delivered | Commit | Handoff |
+| --- | --- | --- | --- |
+| F0 | Repository and collaboration scaffold | `9c28d7a` | `2026-09-12-foundation-f0-repo-scaffold.md` |
+| F1 | Shared package and scene schema v1 | `33d63fe` | `2026-09-12-foundation-f1-scene-schema.md` |
+| F2 | Geometry and validation | `23050c4` | `2026-09-12-foundation-f2-geometry-validation.md` |
+| F3 | Protocol v1, fixtures, tools | `db347c1` | `2026-09-12-foundation-f3-protocol-fixtures.md` |
+| F4 | Independent review of F0-F3 (one real defect fixed) | `47a6a0a` | `2026-09-12-foundation-f4-foundation-review.md` |
 
-## Task F0: Repository + collaboration scaffold
-
-**Files:**
-- Create all top-level docs/config files described in sections 3–5.
-- Create empty Unity project directories for scanner/viewer.
-- Create `docs/status/*.md`.
-- Create `docs/handoffs/README.md`.
-
-**Produces:**
-- collaboration rules;
-- directory ownership;
-- frozen architecture docs.
-
-### Steps
-
-- [ ] Create repository layout.
-- [ ] Add Unity `.gitignore`.
-- [ ] Add `.editorconfig` with UTF-8, LF, 4-space C# indentation.
-- [ ] Add `.gitattributes`.
-- [ ] Create `AGENTS.md` exactly from this plan.
-- [ ] Put the approved project spec at `docs/specs/ghostmap-project-spec.md`.
-- [ ] Put this plan at `docs/plans/ghostmap-implementation-plan.md`.
-- [ ] Write four ADRs matching architecture decisions.
-- [ ] Create workstream status files.
-- [ ] Commit.
-
-Commit:
-
-```bash
-git add .
-git commit -m "chore(repo): scaffold GhostMap monorepo and collaboration docs"
-```
-
-Acceptance:
-
-- clone contains no generated Unity folders;
-- another developer can identify ownership and workflow from docs only.
-
----
-
-## Task F1: Create shared local package and data schema
-
-**Files:**
-- `shared/com.ghostmap.shared/package.json`
-- `shared/com.ghostmap.shared/Runtime/GhostMap.Shared.asmdef`
-- all `Runtime/Domain/*.cs`
-- `docs/contracts/scene-schema-v1.md`
-
-**Produces:**
-- exact scene data types.
-
-### Tests first
-
-Create tests that instantiate a complete scene snapshot and verify:
-
-- four corners preserved;
-- one door preserved;
-- one object preserved;
-- schemaVersion/revision preserved.
-
-- [ ] Write failing serialization/data tests.
-- [ ] Open a tiny test Unity project or one app project and confirm compile.
-- [ ] Implement DTOs.
-- [ ] Run EditMode tests.
-- [ ] Document scene schema.
-- [ ] Commit.
-
-Commit:
-
-```bash
-git commit -m "feat(shared): define scene schema v1"
-```
-
----
-
-## Task F2: Geometry + validation package
-
-**Files:**
-- `Runtime/Geometry/*.cs`
-- `Runtime/Validation/*.cs`
-- shared EditMode tests.
-
-**Required public interfaces:**
-
-```csharp
-public sealed class GhostCoordinateFrame
-{
-    public GhostCoordinateFrame(
-        Vector3 worldOrigin,
-        Vector3 worldRight,
-        Vector3 worldUp,
-        Vector3 worldForward);
-
-    public Vector3 WorldToGhost(Vector3 world);
-    public Vector3 GhostToWorld(Vector3 ghost);
-
-    public Vector3 WorldDirectionToGhost(Vector3 direction);
-    public Vector3 GhostDirectionToWorld(Vector3 direction);
-
-    public Ray WorldRayToGhost(Ray worldRay);
-    public Ray GhostRayToWorld(Ray ghostRay);
-}
-```
-
-```csharp
-public static class RayPlaneMath
-{
-    public static bool TryIntersectHorizontalPlane(
-        Ray ray,
-        float planeY,
-        out Vector3 point);
-
-    public static bool TryIntersectPlane(
-        Ray ray,
-        Plane plane,
-        out Vector3 point);
-}
-```
-
-```csharp
-public static class RoomGeometry
-{
-    public static float PolygonAreaXZ(
-        IReadOnlyList<Vector3> corners);
-
-    public static bool HasSelfIntersectionXZ(
-        IReadOnlyList<Vector3> corners);
-
-    public static IReadOnlyList<WallDefinition>
-        BuildWalls(RoomModel room);
-}
-```
-
-```csharp
-public static class RoomValidator
-{
-    public static ValidationResult ValidateRoom(
-        RoomModel room);
-
-    public static ValidationResult ValidateNewCorner(
-        IReadOnlyList<CornerModel> existing,
-        Vector3 candidate);
-}
-```
-
-```csharp
-public static class OpeningValidator
-{
-    public static ValidationResult Validate(
-        OpeningModel opening,
-        RoomModel room);
-}
-```
-
-Define these shared support types as part of F2:
-
-```csharp
-public readonly struct ValidationResult
-{
-    public bool IsValid { get; }
-    public string Error { get; }
-
-    public ValidationResult(bool isValid, string error)
-    {
-        IsValid = isValid;
-        Error = error;
-    }
-
-    public static ValidationResult Valid()
-        => new ValidationResult(true, string.Empty);
-
-    public static ValidationResult Invalid(string error)
-        => new ValidationResult(false, error);
-}
-```
-
-```csharp
-public readonly struct WallDefinition
-{
-    public string StartCornerId { get; }
-    public string EndCornerId { get; }
-    public Vector3 Start { get; }
-    public Vector3 End { get; }
-    public Vector3 Tangent { get; }
-    public float LengthM { get; }
-
-    public WallDefinition(
-        string startCornerId,
-        string endCornerId,
-        Vector3 start,
-        Vector3 end);
-}
-```
-
-### Required tests
-
-- coordinate frame round-trip error < `1e-4`;
-- horizontal ray intersection;
-- reject parallel ray;
-- rectangle area;
-- reject bow-tie/self-crossing polygon;
-- wall lengths;
-- reject too-short wall;
-- accept valid door;
-- reject door extending outside wall;
-- accept valid window;
-- reject opening above ceiling.
-
-Commit:
-
-```bash
-git commit -m "feat(shared): add capture geometry and validation"
-```
-
----
-
-## Task F3: Protocol v1 + fixtures
-
-**Files:**
-- `Runtime/Protocol/*.cs`
-- `fixtures/*.json`
-- `tools/send_fixture.py`
-- `tools/inspect_snapshot.py`
-- `docs/contracts/protocol-v1.md`
-
-**Produces:**
-- stable scanner/viewer boundary.
-
-### Tests
-
-- serialize/deserialize each message type;
-- reject unknown protocol version;
-- reject unknown message type;
-- snapshot round trip;
-- stale revision logic helper;
-- fixture file parses and validates.
-
-### Fixture room
-
-`fixtures/valid-room-v1.json` must describe approximately:
-
-```text
-4.0 m x 3.0 m room
-2.5 m height
-1 door
-bed
-desk
-chair
-```
-
-`room-with-door-window-v1.json` adds window.
-
-`malformed-room-v1.json` intentionally violates one rule.
-
-Commit:
-
-```bash
-git commit -m "feat(shared): freeze protocol v1 and sample fixtures"
-```
-
-**Foundation gate:**
-
-Do not start app integration until:
-
-- shared tests pass;
-- fixture parses;
-- protocol docs match code;
-- both developers pull this commit.
+The foundation gate passed and is tagged `shared-v1-ready`.
 
 ---
 
 # 16. Parallel Scanner Workstream
 
-Tasks S1–S6 may proceed while Viewer tasks V1–V6 proceed.
-
----
-
-## Task S1: Scanner Unity project + physical-device AR smoke test
-
-**Files:**
-- scanner `Packages/manifest.json`
-- scanner ProjectSettings
-- `Assets/GhostMap/Scanner/Runtime/Bootstrap/ScannerBootstrap.cs`
-- scanner scene
-- iOS post-build script
-- `docs/status/scanner.md`
-
-**Required scene objects:**
-
-```text
-AR Session
-XR Origin
-  AR Camera
-Canvas
-ScannerBootstrap
-```
-
-Attach:
-
-- ARPlaneManager;
-- ARRaycastManager;
-- camera background support.
-
-Set plane detection horizontal + vertical, even though floor is the only required detected plane.
-
-### Physical-device test
-
-On real iPhone:
-
-- camera feed displays;
-- AR session reaches tracking;
-- plane manager reports floor candidate;
-- screen displays:
-  - session state;
-  - notTrackingReason;
-  - camera pose.
-
-Do not proceed based only on Editor behavior.
-
-Commit:
-
-```bash
-git commit -m "feat(scanner): establish AR Foundation device tracking"
-```
-
----
-
-## Task S2: Floor lock + Ghost coordinate frame
-
-**Files:**
-- `AR/ArSpatialProvider.cs`
-- `Capture/FloorLockController.cs`
-- `Workflow/ScanWorkflowController.cs`
-- tests.
-
-**ArSpatialProvider responsibilities:**
-
-- expose AR camera;
-- expose `ARSession.state`;
-- expose `ARSession.notTrackingReason`;
-- perform center-screen AR raycast against `PlaneWithinPolygon`;
-- return hit plane/alignment;
-- create screen ray.
-
-**Public API:**
-
-```csharp
-public bool TryGetFloorHit(
-    Vector2 screenPoint,
-    out ARRaycastHit hit);
-
-public Ray GetScreenRay(
-    Vector2 screenPoint);
-
-public bool IsTrackingGood { get; }
-```
-
-**Floor lock behavior:**
-
-- crosshair center;
-- user points at visible floor;
-- raycast must hit horizontal plane;
-- if tracking poor, button disabled;
-- store floor hit;
-- store camera forward;
-- create `GhostCoordinateFrame`;
-- transition to `FloorLocked`;
-- increment scene revision;
-- snapshot has empty room with height 0.
-
-### Tests
-
-Mock spatial provider:
-
-- good horizontal hit -> lock succeeds;
-- vertical hit -> rejected;
-- poor tracking -> rejected;
-- forward vector projection creates normalized frame.
-
-Commit:
-
-```bash
-git commit -m "feat(scanner): lock floor and establish GhostMap coordinates"
-```
-
----
-
-## Task S3: Four-corner capture + closure verification
-
-**Files:**
-- `Capture/CornerCaptureController.cs`
-- `UI/CornerCaptureHud.cs`
-- tests.
-
-**Capture algorithm:**
-
-- get center-screen camera ray;
-- intersect with stored AR-world floor Y;
-- transform to Ghost coordinates;
-- force y=0;
-- validate;
-- assign GUID ID;
-- append;
-- revision++;
-- send/update local snapshot.
-
-UI shows:
-
-```text
-Corner 1/4
-Corner 2/4
-Corner 3/4
-Corner 4/4
-```
-
-After fourth:
-
-```text
-Verify first corner
-```
-
-On verification:
-
-- capture floor point again;
-- compute closure error;
-- if > 0.15 m reject and return to corner capture;
-- otherwise proceed.
-
-Add Undo Corner.
-
-### EditMode tests
-
-- valid rectangle accepted;
-- candidate too close rejected;
-- self-crossing corner sequence rejected after four;
-- closure 0.05 accepted;
-- closure 0.12 accepted with yellow quality;
-- closure 0.20 rejected;
-- undo decrements count/revision correctly.
-
-### Physical test
-
-Scan a taped rectangle or known bedroom.
-
-Confirm AR markers appear visually on captured corner locations.
-
-Commit:
-
-```bash
-git commit -m "feat(scanner): add validated corner capture and closure check"
-```
-
----
-
-## Task S4: Height capture
-
-**Files:**
-- `Capture/HeightCaptureController.cs`
-- UI controls;
-- tests.
-
-Workflow:
-
-1. display numbered walls in a simple top-down mini preview;
-2. user selects wall;
-3. user aims at wall/ceiling boundary;
-4. get camera ray;
-5. convert the AR-world camera ray using `GhostCoordinateFrame.WorldRayToGhost`;
-6. intersect that Ghost-space ray with the selected Ghost-space wall plane;
-7. set `room.heightM = intersection.y`;
-8. validate 2.0–4.0;
-9. revision++;
-10. proceed.
-
-Fallback:
-
-- manual numeric height field;
-- range 2.0–4.0;
-- explicit "Use manual height" button.
-
-Tests:
-
-- known ray hits wall at 2.5 m;
-- parallel ray rejected;
-- 1.5 m rejected;
-- 5 m rejected;
-- manual 2.6 accepted.
-
-Commit:
-
-```bash
-git commit -m "feat(scanner): capture room height with manual fallback"
-```
-
----
-
-## Task S5: Doors, windows, furniture
-
-**Files:**
-- `Capture/OpeningCaptureController.cs`
-- `Capture/ObjectPlacementController.cs`
-- `UI/ObjectPlacementHud.cs`
-- tests.
-
-### Doors/windows
-
-User:
-
-1. chooses door/window;
-2. chooses wall;
-3. captures lower-left;
-4. captures upper-right.
-
-Both points come from the center-screen AR-world camera ray converted with `GhostCoordinateFrame.WorldRayToGhost`, then intersected with the selected generated Ghost-space wall plane.
-
-Convert the resulting Ghost-space point to wall-local `u/v`.
-
-Door:
-
-```text
-offset = min(u1,u2)
-width = abs(u2-u1)
-sill = 0
-height = max(v1,v2)
-```
-
-Window:
-
-```text
-offset = min(u1,u2)
-width = abs(u2-u1)
-sill = min(v1,v2)
-height = abs(v2-v1)
-```
-
-Validate.
-
-### Furniture
-
-- choose type;
-- floor-plane center placement;
-- default dimensions;
-- dimension/yaw sliders;
-- confirm.
-
-Tests:
-
-- wall local coordinate math;
-- valid door;
-- invalid outside-wall door;
-- valid window;
-- default furniture dimensions;
-- negative dimension rejected.
-
-Commit:
-
-```bash
-git commit -m "feat(scanner): capture openings and parametric furniture"
-```
-
----
-
-## Task S6: Scanner TCP client + complete scanner UI
-
-**Files:**
-- `Networking/ScannerNetworkClient.cs`
-- `Networking/ScannerSnapshotPublisher.cs`
-- `UI/ScannerHudController.cs`
-- iOS plist post-build script;
-- tests.
-
-Connection screen:
-
-```text
-Laptop IP: [             ]
-Port:      [47831]
-[Connect]
-```
-
-Show:
-
-```text
-Connected
-Disconnected
-Retrying
-```
-
-Implementation requirements:
-
-- `TcpClient`;
-- background read/write loop;
-- queued writes;
-- no Unity API calls from network background thread;
-- snapshot sent after every structural revision;
-- heartbeat every 2 sec;
-- pose at <= 5 Hz;
-- retry every 2 sec after disconnect;
-- snapshot resend after reconnect.
-
-UI must expose:
-
-- reset;
-- undo;
-- current phase;
-- tracking quality;
-- network status;
-- closure error;
-- finalize.
-
-Scanner task is complete when it can produce valid JSON snapshots even if viewer is replaced by a simple TCP test receiver.
-
-Commit:
-
-```bash
-git commit -m "feat(scanner): stream reliable snapshot protocol over local TCP"
-```
+**Complete, every task verified on a physical iPhone.** Full original task
+specifications: `git show f5a7d30:docs/plans/ghostmap-implementation-plan.md`.
+
+| Task | Delivered | Commit | PR |
+| --- | --- | --- | --- |
+| S1 | Unity project and AR smoke test | `80b5a48` | #1 |
+| S2 | Floor lock and Ghost coordinate frame | `b0fe6f0` | #2 |
+| S3 | Four-corner capture and closure verification | `1e04d02` | #3 |
+| S4 | Height capture with manual fallback | `1b8a6ce` | #4 |
+| S5 | Doors, windows, furniture | `7274cfe` | #5 |
+| S6 | TCP client, finalization, Reset | `f087aaa` | #6 |
+
+Current behavior and known issues: `docs/status/scanner.md`.
 
 ---
 
 # 17. Parallel Viewer Workstream
 
----
-
-## Task V1: Viewer project + TCP server + fixture ingestion
-
-**Files:**
-- `Bootstrap/ViewerBootstrap.cs`
-- `Networking/ViewerTcpServer.cs`
-- `Scene/ViewerSceneStore.cs`
-- tests.
-
-Server:
-
-- listens port 47831;
-- accepts one scanner;
-- reads lines;
-- rejects >262144 bytes;
-- deserializes;
-- queues main-thread dispatch;
-- logs protocol errors clearly.
-
-`ViewerSceneStore`:
-
-```csharp
-public sealed class ViewerSceneStore
-{
-    public SceneSnapshot Current { get; }
-
-    public bool TryApplyScannerSnapshot(
-        SceneSnapshot snapshot,
-        out string error);
-
-    public event Action<SceneSnapshot> Changed;
-}
-```
-
-Behavior:
-
-- accept new session;
-- for a new session ID, accept its first valid snapshot;
-- for the same session ID, accept only `snapshot.revision > Current.revision`;
-- treat equal revision as a harmless duplicate and ignore it;
-- ignore lower/stale revisions;
-- validate room before apply;
-- never clear scene on disconnect.
-
-Provide developer button:
-
-```text
-Load fixture
-```
-
-so viewer development never waits on scanner.
-
-Commit:
-
-```bash
-git commit -m "feat(viewer): receive and store protocol v1 snapshots"
-```
-
----
-
-## Task V2: Floor, ceiling, walls
-
-**Files:**
-- `Rendering/RoomRenderer.cs`
-- `Rendering/FloorCeilingRenderer.cs`
-- `Rendering/WallRenderer.cs`
-- tests.
-
-`RoomRenderer` listens to SceneStore change and rebuilds.
-
-For MVP, full scene rebuild on each snapshot is acceptable.
-
-Requirements:
-
-- floor mesh;
-- ceiling mesh;
-- four walls;
-- colliders;
-- clean hierarchy:
-
-```text
-RenderedRoom
-├── Floor
-├── Ceiling
-├── Walls
-│   ├── Wall_0
-│   ├── Wall_1
-│   ├── Wall_2
-│   └── Wall_3
-└── Objects
-```
-
-Use deterministic names containing IDs.
-
-Tests:
-
-- fixture yields 4 walls;
-- wall transform length matches model;
-- floor vertices match corners;
-- ceiling y matches height.
-
-Commit:
-
-```bash
-git commit -m "feat(viewer): render structured room shell"
-```
-
----
-
-## Task V3: Wall openings
-
-**Files:**
-- `Rendering/WallSliceGenerator.cs`
-- `Rendering/WallRenderer.cs`
-- tests.
-
-Implement grid-cut wall segmentation from section 12.3.
-
-Pure function:
-
-```csharp
-public static IReadOnlyList<WallSlice>
-    BuildSlices(
-        float wallLength,
-        float wallHeight,
-        IReadOnlyList<OpeningModel> openings);
-```
-
-Test:
-
-- wall no openings -> one slice;
-- one door -> no geometry in door rectangle;
-- one window -> bottom/top/side geometry exists;
-- door + window non-overlap works;
-- invalid overlap rejected before rendering.
-
-Visual test fixture must visibly contain a doorway and window hole.
-
-Commit:
-
-```bash
-git commit -m "feat(viewer): render doors and windows as wall openings"
-```
-
----
-
-## Task V4: Parametric furniture + camera
-
-**Files:**
-- `Rendering/FurnitureRenderer.cs`
-- `Rendering/FurnitureFactory.cs`
-- `Interaction/OrbitCameraController.cs`
-- tests where practical.
-
-Factory API:
-
-```csharp
-public GameObject Create(
-    SceneObjectModel model,
-    Transform parent);
-```
-
-Every created root:
-
-- named with type + ID;
-- has object metadata component;
-- has one selection collider;
-- visually recognizable.
-
-Implement orbit camera and frame-room function.
-
-Add dollhouse button:
-
-- hide ceiling;
-- move camera to angled overhead view;
-- frame room.
-
-Commit:
-
-```bash
-git commit -m "feat(viewer): add parametric furniture and dollhouse camera"
-```
-
----
-
-## Task V5: Object editing + measurement
-
-**Files:**
-- `Interaction/ObjectSelectionController.cs`
-- `Interaction/ObjectEditController.cs`
-- `Interaction/MeasurementController.cs`
-- `UI/InspectorPanelController.cs`
-- tests.
-
-Only allow scene editing if:
-
-```text
-snapshot.finalized == true
-```
-
-Selection:
-
-- click object;
-- highlight;
-- populate inspector.
-
-Drag:
-
-- project cursor ray to floor;
-- update X/Z.
-
-Inspector:
-
-- yaw;
-- width;
-- depth;
-- height.
-
-Every edit:
-
-- validate;
-- increment viewer-owned revision;
-- update snapshot;
-- rerender only object if easy, otherwise rebuild scene.
-
-Measurement:
-
-- two Physics.Raycast hits;
-- line;
-- distance label.
-
-Commit:
-
-```bash
-git commit -m "feat(viewer): edit furniture and measure reconstructed spaces"
-```
-
----
-
-## Task V6: Persistence + polished viewer HUD
-
-**Files:**
-- `Persistence/ScenePersistence.cs`
-- `UI/ViewerHudController.cs`
-- tests.
-
-UI:
-
-- connection status;
-- session ID shortened;
-- revision;
-- scan phase;
-- save;
-- load;
-- dollhouse;
-- reset camera;
-- measure mode;
-- object inspector.
-
-Persistence tests:
-
-- save fixture;
-- load fixture;
-- equality of semantic data;
-- invalid file rejected.
-
-Commit:
-
-```bash
-git commit -m "feat(viewer): save reload and control GhostMap scenes"
-```
+**Complete.** Full original task specifications: `git show f5a7d30:docs/plans/ghostmap-implementation-plan.md`.
+
+| Task | Delivered | Commit | PR |
+| --- | --- | --- | --- |
+| V1 | Project, TCP server, fixture ingestion | `0cee857` | #7 |
+| V2 | Floor, ceiling, walls | `197d4bd` | #8 |
+| V3 | Wall openings | `79d49c0` | #9 |
+| V4 | Parametric furniture and dollhouse camera | `4ed9c67` | #10 |
+| V5 | Selection, editing, measurement | `660ad61` | #11 |
+| V6 | Persistence and HUD | `b9fa1f5` | #12 |
+
+Current behavior and known issues: `docs/status/viewer.md`.
 
 ---
 
@@ -3036,6 +1818,9 @@ I4
 
 During Stage C, use short-lived integration branches only.
 
+**Progress:** Stage A complete (tag `shared-v1-ready`). Stage B complete
+(PRs #1-#12). Stage C not started.
+
 ---
 
 # 29. First Commands in Any New Work Session
@@ -3162,75 +1947,15 @@ Core judge line:
 
 # 33. Final Architecture Summary
 
-```text
-STANDARD IPHONE
-┌───────────────────────────────┐
-│ AR Foundation / ARKit         │
-│                               │
-│ camera pose                   │
-│ floor detection               │
-│ screen rays                   │
-│                               │
-│ Assisted Capture              │
-│ floor                         │
-│ 4 corners                     │
-│ closure verification          │
-│ height                        │
-│ openings                      │
-│ furniture                     │
-│                               │
-│ SceneSnapshot rev N           │
-└───────────────┬───────────────┘
-                │
-                │ TCP / NDJSON
-                │ full snapshots
-                ▼
-LAPTOP VIEWER
-┌───────────────────────────────┐
-│ Protocol Receiver             │
-│        ↓                      │
-│ SceneStore                    │
-│        ↓                      │
-│ Validator                     │
-│        ↓                      │
-│ Semantic Renderer             │
-│                               │
-│ floor / ceiling               │
-│ segmented walls               │
-│ doors / windows               │
-│ parametric furniture          │
-│        ↓                      │
-│ Edit / Measure / Save         │
-└───────────────────────────────┘
-
-SHARED PACKAGE
-┌───────────────────────────────┐
-│ schema                        │
-│ protocol                      │
-│ coordinate transforms         │
-│ ray-plane math                │
-│ room geometry                 │
-│ validation                    │
-│ measurement math              │
-└───────────────────────────────┘
-```
+Moved. The architecture diagram and module summary live in
+[`docs/architecture/overview.md`](../architecture/overview.md), which also maps
+every runtime class to its project and folder.
 
 ---
 
-
 # 34. Plan Self-Review Result
 
-This plan has been checked against the approved GhostMap spec with these decisions made explicit:
-
-- **Spec coverage:** AR tracking, floor capture, corners, room height, doors, windows, furniture, networking, Unity reconstruction, dollhouse view, editing, measurement, persistence, testing, and parallel Git collaboration all have implementation tasks.
-- **Contract consistency:** scanner and viewer share exactly one schema and protocol package; walls are derived rather than duplicated.
-- **Coordinate consistency:** all post-floor-lock geometry is normalized into GhostMap coordinates and later wall captures use Ghost-space rays and Ghost-space wall planes.
-- **Ownership consistency:** scanner is authoritative during scanning; viewer becomes authoritative only after finalization.
-- **Networking consistency:** protocol v1 is full-snapshot based; stale/equal revisions are explicitly ignored.
-- **Reliability scope:** single four-corner room is the required MVP. More general geometry is a stretch goal.
-- **Undefined shared types:** `ValidationResult` and `WallDefinition` are explicitly defined in the foundation work.
-- **No hidden depth assumption:** only the first floor acquisition uses AR plane raycast. Subsequent geometry uses camera rays plus known mathematical planes.
-- **Parallel safety:** scanner and viewer work in separate Unity projects and only share versioned contracts through the local shared package.
+Historical; removed. See `git show f5a7d30:docs/plans/ghostmap-implementation-plan.md`.
 
 ---
 

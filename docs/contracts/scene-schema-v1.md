@@ -130,7 +130,11 @@ public sealed class OpeningModel
   `offsetM >= 0` and `offsetM + widthM <= wallLength`.
 - `sillHeightM + heightM` must not exceed `room.heightM`.
 - Openings must not overlap each other.
-- Validated ranges (enforced in F2): width `0.30`–`4.0` m.
+- Validated ranges (`OpeningValidator`): width `0.30`–`4.0` m, height at least
+  `0.30` m, sill not negative. Room height must already be captured (non-zero)
+  before any opening validates. Wall-extent comparisons allow `1e-4` m of
+  floating-point tolerance.
+- A door's sill is not forced to `0` by validation; the scanner sets it.
 
 ---
 
@@ -165,7 +169,10 @@ public sealed class SceneObjectModel
 
 - MVP furniture is axis-aligned to its own yaw around +Y. There is **no pitch or
   roll**.
-- All dimensions must be positive and within sane bounds (enforced in F2).
+- `type` must be one of the eight values above.
+- `center` and `yawDeg` must be finite.
+- `widthM`, `depthM` and `heightM` must each be finite and within
+  `0.05`–`5.0` m (`FurnitureValidator.MinDimensionM` / `MaxDimensionM`).
 
 **Default dimensions** (starting points only — the user may correct them):
 
@@ -202,6 +209,14 @@ public sealed class RoomModel
 | Field | Meaning |
 | --- | --- |
 | `heightM` | Floor-to-ceiling height. Valid range `2.0`–`4.0`. `0` before height capture. |
+
+`RoomValidator.ValidateRoom` validates a room **as far as it has been
+captured**: zero corners, a partial corner chain or an uncaptured height are
+legal mid-scan. Once four corners exist it enforces the full footprint rules
+(no self-intersection, area ≥ 2.0 m², walls 0.5–20 m, interior angles
+35°–145°). Every corner must have a unique non-empty id and lie within
+`0.05` m of `y = 0`. It does **not** check openings or objects; callers run
+`OpeningValidator` and `FurnitureValidator` for those.
 
 ### Walls are derived, never serialized
 

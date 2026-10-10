@@ -39,7 +39,9 @@ numbered rules win.
 | Architecture overview | `docs/architecture/overview.md` |
 | Scene schema v1 | `docs/contracts/scene-schema-v1.md` |
 | Protocol v1 | `docs/contracts/protocol-v1.md` |
-| Decisions | `docs/decisions/ADR-*.md` |
+| Decisions | `docs/decisions/README.md` (index of `ADR-*.md`) |
+| Workstream status | `docs/status/*.md` |
+| Documentation map | `docs/README.md` |
 
 ### Start of any work session
 
@@ -52,6 +54,15 @@ git fetch origin
 
 Then read `AGENTS.md`, `docs/status/shared.md`, your own workstream status file,
 both contract documents, and the latest relevant handoff.
+
+### Running tests
+
+```bash
+./tools/run_unity_tests.sh            # shared, viewer and scanner EditMode suites
+./tools/run_unity_tests.sh viewer     # one suite
+```
+
+See `tools/README.md` for the Python tools.
 
 ### Directory ownership
 

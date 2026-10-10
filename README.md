@@ -2,102 +2,88 @@
 
 > A camera normally gives software pixels. GhostMap gives software a room it can reason about.
 
-GhostMap turns one physical room into a structured, editable, machine-readable 3D
-scene using a **standard non-LiDAR iPhone** and a laptop.
+GhostMap turns one physical room into a structured, editable, machine-readable
+3D scene using a **standard non-LiDAR iPhone** and a computer.
 
-It does not produce a photorealistic mesh. It produces **semantic geometry**:
-ordered floor corners, derived walls, rectangular openings, and parametric
-furniture — all as plain data that can be edited, measured, saved, and reloaded.
+It does not produce a mesh. It produces **semantic geometry**: ordered floor
+corners, derived walls, rectangular doors and windows, and parametric
+furniture. All of it is plain data that can be edited, measured, saved and
+reloaded.
 
----
+## How it works
 
-## Repository shape
+The iPhone locks the floor once using AR plane detection and builds a
+coordinate frame from that moment. Every later capture intersects the
+centre-screen camera ray with a plane GhostMap already knows: the floor for
+corners and furniture, a wall computed from the corners for height, doors and
+windows. No wall detection, no depth sensing.
 
-```text
-GhostMap/
-├── AGENTS.md          # execution contract — read this first
-├── docs/              # spec, plan, architecture, contracts, ADRs, status, handoffs
-├── shared/            # com.ghostmap.shared — the only source of truth for contracts
-├── apps/scanner/      # Unity iPhone capture app (AR Foundation + ARKit)
-├── apps/viewer/       # Unity desktop reconstruction/editing app
-├── fixtures/          # canonical scene JSON used to develop the viewer without a phone
-└── tools/             # Python helpers for replaying and inspecting snapshots
-```
+After each change the phone sends the **entire scene** as one line of JSON over
+TCP. The viewer validates it and rebuilds the room. The phone owns the scene
+until the scan is finalized; then the viewer owns an editable copy it can save.
 
-## Architecture in one paragraph
+Detail: [`docs/architecture/overview.md`](docs/architecture/overview.md).
 
-Two separate Unity projects share one local Unity package. The scanner locks the
-floor once using AR plane detection, builds a `GhostCoordinateFrame` from that
-moment, and captures everything afterwards by intersecting camera rays with
-**mathematically derived** planes rather than waiting for ARKit to detect real
-walls. After each structural change it sends the **entire current scene
-snapshot** over TCP as one line of JSON. The viewer stores the newest snapshot,
-validates it, and rebuilds the room. The scanner is authoritative until the scan
-is finalized; after that the viewer owns the editable copy.
-
-Full detail: [`docs/architecture/overview.md`](docs/architecture/overview.md).
-
-## Environment
-
-| Component | Version |
-| --- | --- |
-| Unity Editor | `6000.3.24f1` (pinned — do not upgrade mid-project) |
-| AR Foundation | `6.3.1` |
-| Apple ARKit XR Plugin | `6.3.1` |
-| Language | C# |
-| Tests | Unity Test Framework (EditMode) |
-| Transport | Raw TCP, port `47831`, newline-delimited UTF-8 JSON |
-
-The scanner must be built and tested on a **physical iPhone**. Editor-only
-behavior never counts as verification for AR, device, or network work.
-
-## Getting started
-
-```bash
-git clone <this-repo>
-cd GhostMap
-```
-
-1. Install Unity `6000.3.24f1` via Unity Hub.
-2. Open `apps/viewer` — it resolves `com.ghostmap.shared` by relative path.
-3. Open `apps/scanner` — same shared package, plus AR Foundation and ARKit.
-4. Read `AGENTS.md`, then your workstream status file in `docs/status/`.
-
-No manual source copying is required or permitted. Both projects reference the
-shared package from their own `Packages/manifest.json`:
-
-```json
-"com.ghostmap.shared": "file:../../../shared/com.ghostmap.shared"
-```
-
-## Workstreams
-
-| Workstream | Owns | Status file |
-| --- | --- | --- |
-| Scanner | `apps/scanner/**` | `docs/status/scanner.md` |
-| Viewer | `apps/viewer/**` | `docs/status/viewer.md` |
-| Shared / Integration | `shared/**`, `fixtures/**`, `tools/**`, contracts, ADRs | `docs/status/shared.md`, `docs/status/integration.md` |
-
-## Project status
+## Status
 
 | Stage | State |
 | --- | --- |
-| Foundation `F0`–`F4` | Complete |
-| Scanner `S1`–`S6` | Complete, verified on a physical iPhone |
-| Viewer `V1`–`V6` | Complete (V6 merged in PR #12) |
-| Integration `I1`–`I4` | Not started. **Next: `I1` — real iPhone → Viewer live room** |
+| Foundation `F0`-`F4` | Complete |
+| Scanner `S1`-`S6` | Complete, each verified on a physical iPhone |
+| Viewer `V1`-`V6` | Complete |
+| Integration `I1`-`I4` | **Not started. Next: `I1`, real iPhone → Viewer** |
 
-Foundation, Scanner and Viewer workstreams are all done; only Integration
-remains before the MVP acceptance test.
+The scanner has not yet been connected to the Viewer; its network test used a
+standalone listener. Current behavior and known issues per area are in
+[`docs/status/`](docs/status/).
 
-## MVP scope
+## Repository
 
-The MVP is deliberately narrow: **one room, four ordered corners, flat floor,
-flat ceiling, rectangular non-overlapping openings, parametric furniture.**
+```text
+GhostMap/
+├── AGENTS.md          working rules for every contributor: read first
+├── docs/              spec, plan, architecture, contracts, ADRs, status, handoffs
+├── shared/            com.ghostmap.shared, the one source of truth for contracts
+├── apps/scanner/      iPhone capture app (AR Foundation + ARKit)
+├── apps/viewer/       desktop reconstruction and editing app
+├── fixtures/          canonical scene files for working without a phone
+└── tools/             test runner, snapshot inspector, fixture sender
+```
 
-LiDAR, dense depth, Gaussian splatting, NeRFs, automatic object recognition, and
-multi-room mapping are explicitly **out of scope** until the full MVP acceptance
-test in the implementation plan passes.
+Each folder has a README. [`docs/README.md`](docs/README.md) says which
+document answers which question.
+
+## Getting started
+
+| Component | Version |
+| --- | --- |
+| Unity Editor | `6000.3.24f1`, pinned; do not upgrade mid-project |
+| AR Foundation / Apple ARKit XR Plugin | `6.3.1` |
+| Tests | Unity Test Framework `1.6.0`, EditMode |
+| Transport | TCP port `47831`, newline-delimited UTF-8 JSON |
+
+1. Install Unity `6000.3.24f1` through Unity Hub (add iOS Build Support for the
+   scanner).
+2. Open `apps/viewer` and press Play on `Viewer.unity`; it listens on port
+   47831. Without a phone, use **Load Fixture** or
+   `python3 tools/send_fixture.py --host 127.0.0.1`.
+3. Build the scanner to an iPhone: see [`apps/scanner/README.md`](apps/scanner/README.md).
+4. Run the tests: `./tools/run_unity_tests.sh`.
+
+Both projects resolve the shared package by relative path
+(`"com.ghostmap.shared": "file:../../../shared/com.ghostmap.shared"`); never
+copy shared code into an app.
+
+The scanner must be tested on a **physical iPhone**. Editor behavior never
+counts as verification for AR, device or network work.
+
+## Scope
+
+The MVP is deliberately narrow: **one room, four corners, flat floor and
+ceiling, rectangular non-overlapping openings, eight parametric furniture
+types.** LiDAR, dense depth, Gaussian splatting, NeRFs, automatic object
+recognition and multi-room mapping stay out until the MVP acceptance test in
+plan section 23 passes.
 
 ## License
 

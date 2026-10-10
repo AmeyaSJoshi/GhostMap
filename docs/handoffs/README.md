@@ -95,3 +95,4 @@ or
 | 2026-09-18 | viewer | [V5 — object editing and measurement](2026-09-18-viewer-v5-edit-measure.md) |
 | 2026-09-19 | viewer | [V6 — persistence and polished HUD](2026-09-19-viewer-v6-persistence-hud.md) |
 | 2026-10-03 | shared | [Status docs refresh after V6](2026-10-03-shared-status-docs-refresh.md) |
+| 2026-10-10 | shared | [Repository cleanup](2026-10-10-shared-repo-cleanup.md) |

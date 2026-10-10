@@ -61,13 +61,13 @@ From `com.ghostmap.shared`: `SceneSnapshot`, `RoomModel`, `OpeningModel`,
 
 ## Known issues
 
-None blocking `I1`.
+None blocking `R1`.
 
 **Behavior**
 - **No liveness detection.** The server sets no read timeout and ignores
   heartbeats, so a phone that drops off Wi-Fi without closing the socket leaves
   the HUD on `Connected`. "Disconnected — displaying last snapshot." appears
-  only after a clean close. Expect `I3`'s Wi-Fi-drop test to hit this.
+  only after a clean close. Fixed in roadmap task `R7`.
 - The Viewer cannot add, delete or hide objects, and has no undo. Walls and
   openings are not editable.
 - Dollhouse hides only the ceiling; the near wall can hide furniture against it.
@@ -93,8 +93,11 @@ None blocking `I1`.
 
 ## Next safe task
 
-None in this workstream. Next is Integration `I1` (see
-`docs/status/integration.md`).
+Roadmap tasks touching the Viewer, in order (plan section 18): `R1` import the
+hackathon discovery responder and per-object `.glb` export, `R5` show the
+detector label, `R6` whole-room `.glb` and the Export for Unity folder, `R7`
+delivery acknowledgement and liveness. See
+`docs/status/integration.md` for progress.
 
 ## Do not touch
 

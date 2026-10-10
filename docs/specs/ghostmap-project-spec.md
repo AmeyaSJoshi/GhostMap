@@ -4,13 +4,9 @@
 
 This is the **product** specification: what GhostMap is for and what it must do.
 How it is built is in [`docs/architecture/overview.md`](../architecture/overview.md),
-the wire and data formats are in [`docs/contracts/`](../contracts/), and the task
-breakdown is in [`docs/plans/ghostmap-implementation-plan.md`](../plans/ghostmap-implementation-plan.md).
-
-Revised 2026-10-10. The original spec also contained early UML, CRC cards, a
-class list and an event-message list (`CORNER_ADDED`, `OBJECT_UPDATED`, ... over
-WebSocket). Those were superseded before implementation by ADR-0001 to ADR-0004
-and have been removed from this document; they remain in git history.
+the wire and data formats are in [`docs/contracts/`](../contracts/), the
+direction is set by [ADR-0012](../decisions/ADR-0012-stand-in-place-on-device-capture.md),
+and the task order is in [`docs/plans/ghostmap-implementation-plan.md`](../plans/ghostmap-implementation-plan.md).
 
 ---
 
@@ -19,16 +15,15 @@ and have been removed from this document; they remain in git history.
 | | |
 | --- | --- |
 | **Product** | GhostMap |
-| **Type** | Mobile spatial-capture app plus desktop 3D viewer and editor |
-| **Hardware** | A standard, non-Pro (non-LiDAR) iPhone and a computer running the Unity viewer |
-| **Goal** | Turn one real room into a structured, editable 3D model using only an ordinary iPhone |
+| **Type** | iPhone capture app plus a desktop 3D viewer, editor and exporter |
+| **Hardware** | A standard, non-Pro (non-LiDAR) iPhone and a computer running the Unity viewer (macOS today) |
+| **Goal** | Stand in one spot, point the phone around a room, and get an editable 3D model of the room and its furniture that can be used in Unity |
 | **Pitch** | GhostMap turns a physical room into an editable, machine-readable 3D world using only your phone. |
 
 GhostMap does not produce a photorealistic scan or a mesh. It represents the room
 as meaningful objects: floor, ceiling, walls, doors, windows and furniture. Each
-object carries structured data (position, rotation, width, depth, height, type,
-and which wall it belongs to) that people and programs can edit, measure, save
-and reload.
+object carries structured data (position, rotation, width, depth, height, type)
+that people and programs can edit, measure, save, reload and export.
 
 ## 2. Problem
 
@@ -36,103 +31,104 @@ Cameras capture images but do not understand the structure of a room. Existing
 room-scanning apps usually need LiDAR, produce meshes that are hard to edit,
 focus on interior design, and do not expose the room as structured data.
 
-GhostMap builds a lightweight digital twin from ARKit world tracking, a single
-floor-plane detection, user-assisted aiming, and procedural reconstruction.
+GhostMap builds a lightweight digital twin on an ordinary iPhone from ARKit
+tracking and plane detection, a small on-device object detector, and its own
+geometry, then hands it to the user's computer as Unity-ready files.
 
 ## 3. Primary user workflow
 
 ```text
-Scan the room -> Finalize -> Send to Computer -> the room appears in the GhostMap Viewer
+Lock the floor
+  -> stand in one spot and turn          walls, size and height found
+  -> point at the furniture              phone identifies it, one tap to add
+  -> Finalize
+  -> Send to Computer                    no IP address, no setup
+  -> the room appears in the GhostMap Viewer
+  -> Export for Unity                    scene.json, room.glb, one .glb per object
 ```
 
-GhostMap finds the user's computer on the local network by itself. A normal
-user never types an IP address or port. After a first-use pairing step the
-computer is remembered. No cloud service, account or internet connection is
-involved. See ADR-0007.
+Everything up to Send to Computer runs on the phone. No cloud service, account
+or internet connection is involved. When automatic detection misses something,
+the user can always fall back to aiming at walls, corners and furniture by hand.
 
 ## 4. Target users
 
 Students, developers, architects, interior designers, robotics and accessibility
-researchers, emergency-response teams, AR/VR developers, and anyone building
-digital twins.
+researchers, emergency-response teams, AR/VR and game developers, and anyone
+building digital twins.
 
 ## 5. User stories
 
-- As a user, I want to scan a room with my normal iPhone.
-- As a user, I want to mark room corners so the system knows the room's shape.
-- As a user, I want walls generated automatically from those corners.
-- As a user, I want to add doors, windows and furniture.
+- As a user, I want to stand in one place and point my phone around the room to capture it.
+- As a user, I want GhostMap to work out the walls and room size without walking to every corner.
+- As a user, I want the phone to recognise my furniture so I do not have to name each piece.
+- As a user, I want to add doors and windows.
 - As a user, I want to send the finished room to my computer with one button.
-- As a user, I want to select, move, resize and rotate objects.
-- As a user, I want to measure distances.
+- As a user, I want to select, move, resize and rotate objects, and measure distances.
 - As a user, I want to remove the ceiling and see a dollhouse view.
-- As a user, I want to save and reopen the reconstructed room.
+- As a user, I want to save and reopen a room.
+- As a Unity developer, I want the room and each piece of furniture as 3D files I can drop into my own project.
 - As a developer, I want structured spatial data instead of only a mesh.
 
-## 6. MVP scope
+## 6. Scope
 
-One room, four ordered floor corners, flat floor, flat ceiling (2.0 to 4.0 m),
-rectangular non-overlapping openings, and parametric furniture in eight types:
-bed, desk, chair, couch, table, dresser, tv, generic.
+**In scope:** one room with four walls, flat floor and ceiling (2.0 to 4.0 m),
+rectangular non-overlapping openings, and furniture identified by the on-device
+detector or placed by hand. GhostMap types: bed, desk, chair, couch, table,
+dresser, tv, generic.
 
-**MVP example.** The user scans a bedroom, records four corners and the ceiling
-height, and GhostMap generates four walls, a floor and a ceiling. The user adds a
-door, a bed, a desk and a chair. The computer shows the same room. The user
-removes the ceiling, moves the desk, and measures between the desk and the bed.
-
-**Out of scope until the MVP acceptance test passes** (ADR-0004, `AGENTS.md`
-rule 6): automatic furniture recognition or dimensions, monocular depth, LiDAR,
-Gaussian splatting, NeRF, photorealistic reconstruction or texturing,
-multi-room or whole-building capture, curved rooms, people tracking, AI spatial
-queries, simultaneous editing from two devices.
+**Out of scope** (ADR-0012, `AGENTS.md` rule 6): LiDAR, dense depth
+reconstruction, Gaussian splatting, NeRF, generative 3D models such as TRELLIS,
+any cloud processing, photoreal or textured meshes, curved rooms, multi-room or
+whole-building capture, people tracking, simultaneous editing from two devices.
 
 ## 7. Functional requirements
 
-Status as of 2026-10-10. "Built" means implemented and covered by automated
-tests; scanner items were also verified on a physical iPhone. Nothing has yet
-been verified end to end from iPhone to viewer (Integration `I1`).
+"Built" means implemented and covered by automated tests. "Hackathon" means it
+exists in `GhostMapDublinHacks` and arrives in this repository with plan task
+`R1`. Nothing has been verified end to end from iPhone to computer yet.
 
 | ID | Requirement | Status |
 | --- | --- | --- |
-| FR-01 | **Start scan.** Create a scan session; ARKit establishes world tracking. | Built (S1, S2) |
-| FR-02 | **Device tracking.** Track the phone's position and orientation; block captures while tracking is degraded. | Built. Pose is not streamed to the viewer (`phone.pose` unused) |
-| FR-03 | **Floor detection.** Detect a horizontal floor plane and lock it as the vertical reference. | Built (S2) |
-| FR-04 | **Corner marking.** Aim a crosshair at a corner and capture it as a 3D floor point. | Built (S3) |
-| FR-05 | **Room footprint.** Connect the corners into a validated floor polygon and check scan drift by re-aiming at the first corner. | Built (S3), exactly four corners |
-| FR-06 | **Room height.** Aim at a wall/ceiling junction, or type the height. | Built (S4) |
-| FR-07 | **Walls.** One wall between each pair of neighbouring corners. | Built. Walls are derived, never stored |
-| FR-08 | **Ceiling.** Generated from the footprint and height. | Built (V2) |
-| FR-09 | **Doors.** Pick a wall, mark two opposite corners; store width, height, offset and parent wall. | Built (S5, V3) |
-| FR-10 | **Windows.** As doors, plus height above the floor. | Built (S5, V3) |
-| FR-11 | **Furniture.** Choose a category, place it on the floor, adjust its size and yaw. | Built (S5). Uses per-type default dimensions the user adjusts; the user does not mark object boundaries |
-| FR-12 | **Live preview (optional).** The computer shows the room updating while the phone scans. Not required to use GhostMap. | Built (S6, V1), but needs the computer's IP typed in. Untested end to end |
-| FR-13 | **Object editing.** Select, move, rotate, resize; delete and hide. | Select, move, rotate, resize built (V5). Delete and hide not built |
-| FR-14 | **Measurement.** Pick two points and show the distance. | Built (V5): 3D and horizontal distance between clicked surface points |
-| FR-15 | **Dollhouse mode.** Hide the ceiling and orbit from above. | Built (V4) |
-| FR-16 | **Save scene.** | Built (V6), single save slot |
-| FR-17 | **Load scene.** | Built (V6) |
-| FR-18 | **Export** as JSON, glTF/GLB or Unity scene data. | Not built. The saved JSON snapshot is the only format |
-| FR-19 | **Send to Computer.** After finalizing, one button finds the user's computer and delivers the complete room; no IP or port entry; the computer is remembered; clear success or plain-language retry. | Designed (ADR-0007), not built. Integration `I1B` |
-| FR-20 | **Remove walls and view a floor plan.** | Not built |
+| FR-01 | **Start scan.** ARKit world tracking; captures blocked while tracking is degraded. | Built, device-verified |
+| FR-02 | **Floor lock.** Lock a detected horizontal floor as the reference plane. | Built, device-verified |
+| FR-03 | **Stand-in-place room capture.** While the user turns in one spot, detected wall planes become four walls and the room's corners and dimensions are derived. Says which way to look when a wall is missing. | Hackathon (automatic room scan) |
+| FR-04 | **Fallback room capture.** Sweep each wall's floor line, or walk to each corner. | Sweep: hackathon. Walked corners: built, device-verified |
+| FR-05 | **Validated footprint.** Reject self-crossing, too-small or implausible rooms; closure check on the manual paths. | Built, device-verified |
+| FR-06 | **Room height.** From the ceiling plane when seen; otherwise aim at the wall/ceiling line or type it. | Ceiling plane: hackathon. Aim and type: built, device-verified |
+| FR-07 | **Walls and ceiling.** Derived from the footprint and height. | Built |
+| FR-08 | **Doors and windows.** Automatically from labelled planes; otherwise mark two corners on a wall. | Automatic: hackathon. Manual: built, device-verified |
+| FR-09 | **Furniture identification on the phone.** A YOLO-n detector names furniture in the camera image; each item is matched to its measured surface for size and position; one tap adds them all. | Not built (plan task `R4`, ADR-0011) |
+| FR-10 | **Furniture measurement.** Width, depth, height and yaw from the ARKit surface the object sits on; adjustable. | Hackathon (surface detection) |
+| FR-11 | **Manual furniture fallback.** Pick a type, aim at its floor position, adjust size and yaw. | Built, device-verified |
+| FR-12 | **Send to Computer.** After finalizing, one button finds the user's computer and delivers the room; no IP or port; the phone reports success only after the computer confirms; the computer is remembered. | Discovery and send: hackathon. Confirmation and remembering: not built (`R7`) |
+| FR-13 | **Live preview (optional).** The computer shows the room while the phone scans. | Built, needs a typed IP today |
+| FR-14 | **Viewer.** Orbit, dollhouse mode, select, move, rotate, resize, measure 3D and horizontal distance. | Built |
+| FR-15 | **Save and load** a room on the computer. | Built (single save slot) |
+| FR-16 | **Export for Unity.** One folder per room: `scene.json`, a whole-room `.glb` with openings, one `.glb` per object; imports into Unity with glTFast. | Per-object `.glb`: hackathon. Whole room and folder: not built (`R6`) |
+| FR-17 | **Detector label kept.** A `generic` object keeps the detector's class name, such as "potted plant". | Not built (`R5`, additive schema change) |
+| FR-18 | Delete and hide objects; remove walls; floor-plan view. | Not built, not scheduled |
 
 ## 8. Non-functional requirements
 
 | Area | Requirement |
 | --- | --- |
-| Accuracy | Room dimensions within about 5 to 15 cm in controlled indoor tests. Measured gates: closure ≤ 0.15 m, median wall error ≤ 0.12 m, height error ≤ 0.15 m (Integration `I2`) |
-| Performance | Viewer reflects a change within about one second on a local network (plan target 500 ms) |
-| Usability | A first-time user can scan a simple bedroom without technical knowledge |
-| Compatibility | Any ARKit-capable non-Pro iPhone |
+| Accuracy | Median wall error ≤ 0.12 m, max ≤ 0.20 m, height error ≤ 0.15 m against a tape measure (plan task `R3`) |
+| On device | Capture and recognition run entirely on the phone. Nothing leaves it except the finished room sent to the user's own computer |
+| Speed | Detector runs about five times a second without dropping the camera below a smooth frame rate; Send to Computer completes within a few seconds on a local network |
+| Usability | A first-time user can scan a furnished bedroom by standing in it and turning, with no technical knowledge |
+| Compatibility | Any ARKit-capable non-Pro iPhone; macOS computer (Windows intended, not claimed) |
 | Reliability | Losing the network never destroys scan data on either side |
-| Modularity | Capture, networking, reconstruction and editing are separate modules |
-| Privacy | No facial recognition, no identity data, no cloud dependency |
+| Portability | Exported files open in Unity (glTFast) and Blender, in metres, +Y up |
+| Privacy | No faces, no identity data, no cloud; camera images never leave the phone |
+| Licensing | The YOLO-n detector is AGPL-3.0 (ADR-0011) |
 
 ## 9. Assumptions
 
 The room is rectangular or near-rectangular with vertical walls and a
-horizontal floor. The user moves slowly, the room has enough visual texture for
-ARKit, the phone and computer share a local network, and the user corrects
-mistakes by hand.
+horizontal floor. The user can stand somewhere with a view of all four walls,
+moves slowly, and the room has enough visual texture for ARKit. Phone and
+computer share a network, or the computer joins the phone's hotspot.
 
 ## 10. Data model
 
@@ -145,33 +141,32 @@ Room
 ├── openings[]     door | window, on wall (startCornerId -> endCornerId)
 │                  offsetM, widthM, sillHeightM, heightM
 └── objects[]      type, center, yawDeg, widthM, depthM, heightM
+                   (+ optional label from the detector, task R5)
 ```
 
 Exact field definitions, units and rules: [`docs/contracts/scene-schema-v1.md`](../contracts/scene-schema-v1.md).
 
-## 11. MVP acceptance criteria
+## 11. Acceptance criteria
 
-The MVP is complete when, without LiDAR:
+GhostMap is complete when, on a non-Pro iPhone and without LiDAR:
 
-- a non-Pro iPhone starts an AR scan;
-- the user marks four room corners and the footprint is recognisable;
-- the user sets the room height;
-- the viewer generates floor, walls and ceiling;
-- the user adds at least one door and three furniture objects;
-- objects appear approximately where they are in reality;
-- the user can remove the ceiling, select, move and resize an object, and
-  measure between two objects;
-- the scene can be saved.
+- the user stands in one spot, turns, and gets a recognisable four-wall room within the accuracy targets;
+- height and at least one door are captured;
+- a bed, a desk and a chair are identified on the phone and added with one tap;
+- Send to Computer delivers the room with no IP typed, and the phone confirms it;
+- the computer shows the room; the user can remove the ceiling, select, move, rotate and resize an object, and measure between two objects;
+- the room saves and reloads;
+- the exported files import into a fresh Unity project at the right scale.
 
-The step-by-step acceptance test is plan section 23.
+The step-by-step test is plan section 23.
 
 ## 12. Demo sequence
 
-Start with an empty viewer. Open GhostMap on the iPhone, lock the floor, mark
-four corners and the height, and watch the room appear on the computer. Add a
-door, a bed, a desk and a chair. Finish scanning, switch to dollhouse mode,
-rotate the room, click the desk, move it, measure the space between desk and
-bed, and show the structured scene data. Close with:
+Open the Viewer on the laptop. On the phone, lock the floor, stand in the middle
+of the room and turn: the walls appear. Show the height and the door. Point at
+the furniture: "Found: bed, desk, chair", Add All. Finalize, tap Send to
+Computer, and the room appears on the laptop. Switch to dollhouse mode, move the
+desk, measure, then export and drop the room into a Unity scene. Close with:
 
 > A camera sees pixels. GhostMap understands spaces.
 
@@ -182,9 +177,9 @@ The demo-day checklist is plan section 32.
 ```text
 Physical environment
         ↓
-   Normal iPhone
+   Normal iPhone           stand, turn, point
         ↓
-Spatial understanding
+Spatial understanding      walls, height, openings, named furniture
         ↓
   Structured scene
         ↓
@@ -192,10 +187,10 @@ Spatial understanding
 ↓       ↓         ↓
 Humans  Robots    Software
 ↓       ↓         ↓
-AR/VR   Navigation Simulation
+AR/VR   Navigation Unity, simulation
 ```
 
-GhostMap is not just a room scanner. It converts the physical world into
-structured spatial information that people, programs, robots and simulations
-can use. Spatial queries, pathfinding, object suggestion, multi-room capture
-and export are the natural next layers; their order is fixed by plan section 25.
+GhostMap converts the physical world into structured spatial information that
+people, programs, robots and game engines can use. More detector classes,
+spatial queries, multi-room capture and optional photoreal furniture are the
+next layers; their order is fixed by plan section 25.

@@ -2,30 +2,30 @@
 
 > A camera normally gives software pixels. GhostMap gives software a room it can reason about.
 
-GhostMap turns one physical room into a structured, editable, machine-readable
-3D scene using a **standard non-LiDAR iPhone** and a computer.
+Stand in the middle of a room, point a **standard non-LiDAR iPhone** around it,
+and GhostMap turns the room into a structured, editable 3D model: walls, height,
+doors and windows, and the furniture, identified on the phone. One button sends
+it to your computer, where you can edit it and export it as files for Unity.
 
-It does not produce a mesh. It produces **semantic geometry**: ordered floor
-corners, derived walls, rectangular doors and windows, and parametric
-furniture. All of it is plain data that can be edited, measured, saved and
-reloaded.
+It does not produce a scanned mesh. It produces **semantic geometry**: four
+ordered floor corners, derived walls, rectangular openings and parametric
+furniture, all as plain data.
 
 ## How it works
 
-The iPhone locks the floor once using AR plane detection and builds a
-coordinate frame from that moment. Every later capture intersects the
-centre-screen camera ray with a plane GhostMap already knows: the floor for
-corners and furniture, a wall computed from the corners for height, doors and
-windows. No wall detection, no depth sensing.
+1. **Floor.** ARKit finds the floor once; GhostMap builds its own coordinate
+   frame from it.
+2. **Room.** While you turn in place, ARKit's detected wall planes are merged
+   into four walls and the corners are computed where they meet. If walls are
+   missing you sweep along them instead, or walk to the corners.
+3. **Furniture.** A small detector (YOLO-n) running on the phone names what it
+   sees; each item is measured from the ARKit surface it sits on.
+4. **Send.** After you finalize, **Send to Computer** finds the GhostMap Viewer on
+   your network and sends the whole scene. Nothing goes to the cloud.
+5. **Use it.** The Viewer (a Unity app) shows the room for editing and measuring
+   and exports `scene.json`, `room.glb` and one `.glb` per piece of furniture.
 
-After each change the phone sends the **entire scene** as one line of JSON over
-TCP. The viewer validates it and rebuilds the room. The phone owns the scene
-until the scan is finalized; then the viewer owns an editable copy it can save.
-
-The intended product flow is **Scan → Finalize → Send to Computer**, with the
-phone finding the computer by itself (ADR-0007). That discovery step is
-designed but not built; today the computer's IP is typed into the phone.
-
+Direction: [ADR-0012](docs/decisions/ADR-0012-stand-in-place-on-device-capture.md).
 Detail: [`docs/architecture/overview.md`](docs/architecture/overview.md).
 
 ## Status
@@ -33,13 +33,19 @@ Detail: [`docs/architecture/overview.md`](docs/architecture/overview.md).
 | Stage | State |
 | --- | --- |
 | Foundation `F0`-`F4` | Complete |
-| Scanner `S1`-`S6` | Complete, each verified on a physical iPhone |
-| Viewer `V1`-`V6` | Complete |
-| Integration `I1`-`I4` | **Not started. Next: `I1A` (iPhone → Viewer over typed IP), then `I1B` (one-button Send to Computer)** |
+| Assisted-capture MVP: Scanner `S1`-`S6`, Viewer `V1`-`V6` | Complete; scanner verified on a physical iPhone |
+| Stand-in-place GhostMap `R1`-`R8` | **Not started. Next: `R1`** |
 
-The scanner has not yet been connected to the Viewer; its network test used a
-standalone listener. Current behavior and known issues per area are in
-[`docs/status/`](docs/status/).
+What is where today:
+
+| Piece | Where it is |
+| --- | --- |
+| Walked-corner capture, manual height/openings/furniture, TCP streaming, the whole Viewer | This repository, tested |
+| Stand-in-place room scan, wall sweep, furniture surface measurement, per-object `.glb` export, Send to Computer discovery | The hackathon repository `GhostMapDublinHacks`, tested there, never run on an iPhone. Task `R1` brings it here |
+| YOLO-n identification, whole-room `.glb`, delivery confirmation | Not built (`R4`-`R7`) |
+
+The roadmap is plan section 18; progress is tracked in
+[`docs/status/integration.md`](docs/status/integration.md).
 
 ## Repository
 
@@ -49,7 +55,7 @@ GhostMap/
 ├── docs/              spec, plan, architecture, contracts, ADRs, status, handoffs
 ├── shared/            com.ghostmap.shared, the one source of truth for contracts
 ├── apps/scanner/      iPhone capture app (AR Foundation + ARKit)
-├── apps/viewer/       desktop reconstruction and editing app
+├── apps/viewer/       desktop viewer, editor and exporter
 ├── fixtures/          canonical scene files for working without a phone
 └── tools/             test runner, snapshot inspector, fixture sender
 ```
@@ -74,21 +80,16 @@ document answers which question.
 3. Build the scanner to an iPhone: see [`apps/scanner/README.md`](apps/scanner/README.md).
 4. Run the tests: `./tools/run_unity_tests.sh`.
 
-Both projects resolve the shared package by relative path
-(`"com.ghostmap.shared": "file:../../../shared/com.ghostmap.shared"`); never
-copy shared code into an app.
-
 The scanner must be tested on a **physical iPhone**. Editor behavior never
 counts as verification for AR, device or network work.
 
-## Scope
+## Rules that shape the design
 
-The MVP is deliberately narrow: **one room, four corners, flat floor and
-ceiling, rectangular non-overlapping openings, eight parametric furniture
-types.** LiDAR, dense depth, Gaussian splatting, NeRFs, automatic object
-recognition and multi-room mapping stay out until the MVP acceptance test in
-plan section 23 passes.
+- Everything is captured and recognised **on the phone**. No LiDAR, no cloud, no
+  generative 3D models (`AGENTS.md` rule 6).
+- The scene stays structured data; walls are always derived from four corners.
+- One room, four walls, flat floor and ceiling.
 
 ## License
 
-Not yet determined.
+Not yet determined. The planned YOLO-n detector is AGPL-3.0 (ADR-0011).

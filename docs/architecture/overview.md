@@ -1,7 +1,8 @@
 # GhostMap Architecture Overview
 
-Status: **frozen for MVP**. Changing sections 1-11 requires an ADR in
-`docs/decisions/` per the procedure in the implementation plan. Sections 12-13
+Status: **frozen for MVP**, amended by ADR-0012 (stand-in-place, on-device
+capture). Changing sections 1-11 requires an ADR in `docs/decisions/` per the
+procedure in the implementation plan. Sections 12-13
 describe the code as built and are updated whenever the code changes.
 
 ---
@@ -87,15 +88,27 @@ interaction controllers read only `ViewerEditableScene`.
 
 ---
 
-## 4. Capture model — why this works without LiDAR
+## 4. Capture model
 
-This is the central architectural decision. See
+See `docs/decisions/ADR-0012-stand-in-place-on-device-capture.md`, which amends
 `docs/decisions/ADR-0004-no-dense-depth-in-mvp.md`.
 
-AR plane detection is used **exactly once**: to find and lock the floor.
+The user locks the floor, then stands in one spot and turns. ARKit's plane
+detection and a small on-device detector propose the room and its contents;
+GhostMap's own geometry and validators decide what is accepted. Every automatic
+step has a manual fallback that does not depend on ARKit detecting anything.
 
-Everything captured afterwards uses a camera ray intersected with a plane that
-GhostMap already knows mathematically:
+| What | Primary | Fallback | Where it is built |
+| --- | --- | --- | --- |
+| Floor | ARKit horizontal plane, locked once | — | here, device-verified |
+| Walls and corners | ARKit vertical planes clustered into four walls; corners where they meet | Sweep the floor line (ADR-0005), then walk to corners | primary and sweep: `GhostMapDublinHacks`; walked: here |
+| Height | ARKit ceiling plane | Aim at the wall/ceiling line; type it | primary: `GhostMapDublinHacks`; fallbacks: here |
+| Doors and windows | ARKit door/window planes | Two points on a derived wall plane | primary: `GhostMapDublinHacks`; fallback: here |
+| Furniture identity | YOLO-n on device (ADR-0011) | User picks a type | not built |
+| Furniture size and position | Matched ARKit horizontal surface (ADR-0006) | Floor-ray placement plus per-type defaults | primary: `GhostMapDublinHacks`; fallback: here |
+
+The fallback math is a camera ray intersected with a plane GhostMap already
+knows:
 
 | Capture | Ray | Plane |
 | --- | --- | --- |
@@ -112,9 +125,7 @@ normal  = normalize(cross(up, tangent))
 plane   = plane through A with that normal
 ```
 
-GhostMap therefore never waits for ARKit to fully detect a vertical wall. This is
-substantially more reliable on a non-Pro iPhone than plane-detection-dependent
-capture.
+The detector only names objects. It never sets a corner, a wall or a dimension.
 
 ---
 
@@ -181,12 +192,12 @@ room is never reconstructed from pose messages.
 ### 6.1 Connection setup sits above the transport
 
 How the phone finds the computer is separate from what it sends. Per
-`docs/decisions/ADR-0007-one-button-computer-transfer.md`, the product flow is
+`docs/decisions/ADR-0010-one-button-computer-transfer.md`, the product flow is
 one-button **Send to Computer** after finalization, and a normal user never
 types an IP address or port.
 
 ```text
-Discovery / pairing / Send UX      connection setup, user-facing   (not built)
+Discovery / pairing / Send UX      connection setup, user-facing
               |
         TCP connection
               |
@@ -195,9 +206,13 @@ protocol-v1 full SceneSnapshot messages
 Viewer scene store / editable scene / rendered room
 ```
 
-Everything below the first line is unchanged by discovery. Today the scanner's
-Laptop IP field is the only way to connect; it becomes a developer fallback once
-`I1B` is built. Live streaming while scanning stays supported but is optional.
+Everything below the first line is unchanged by discovery. The first
+implementation is `GhostMapDublinHacks`' ADR-0009: the Viewer answers UDP
+discovery requests on port `47832`, and the phone connects to the first Viewer
+that answers. It arrives here with plan task `R1`; delivery confirmation and a
+remembered computer are task `R7`. Until then the scanner's Laptop IP field is
+the only way to connect on `main`. Live streaming while scanning stays
+supported but is optional.
 
 ---
 
@@ -280,13 +295,30 @@ Each furniture root carries exactly one collider covering its full bounding box.
 
 ---
 
-## 11. Out of MVP scope
+### 10.1 Export for Unity
 
-Explicitly not implemented until the full MVP acceptance test passes:
+The Viewer writes one folder per room (ADR-0012):
+
+```text
+ghostmap-export/<room-name>/
+├── scene.json          the SceneSnapshot, schema v1
+├── room.glb            floor, ceiling and wall segments with openings     (task R6)
+└── objects/<id>.glb    one per furniture object, from FurnitureFactory      (ADR-0006, arrives with R1)
+```
+
+Files are glTF 2.0 binary in metres with +Y up. Unity imports them with the
+glTFast package; Blender opens them directly.
+
+---
+
+## 11. Out of scope
+
+Not implemented, per ADR-0012 and `AGENTS.md` rule 6:
 
 dense RGB scanning · Gaussian splatting · NeRF reconstruction · LiDAR-like depth ·
-fully automatic furniture dimensions · arbitrary curved rooms · multi-floor
-buildings · automatic semantic recognition · survey-grade accuracy · simultaneous
+generative 3D models (TRELLIS and similar) · any cloud or off-device processing ·
+learned models other than the on-device YOLO-n detector · arbitrary curved rooms ·
+multi-room and multi-floor capture · survey-grade accuracy · simultaneous
 two-device editing.
 
 ---

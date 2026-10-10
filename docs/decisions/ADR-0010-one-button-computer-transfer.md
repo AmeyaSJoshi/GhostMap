@@ -1,8 +1,10 @@
-# ADR-0007: One-button, automatic computer transfer is the primary UX
+# ADR-0010: One-button, automatic computer transfer is the primary UX
 
-> Written as ADR-0005 on branch `docs/one-button-computer-transfer` (`790baa0`)
-> and renumbered on merge, because ADR-0005 and ADR-0006 are reserved for sweep
-> wall capture and furniture detection.
+> Written as ADR-0005 on branch `docs/one-button-computer-transfer` (`790baa0`).
+> Renumbered to 0010 because `GhostMapDublinHacks` already uses 0005-0009, and
+> that work is being brought into this repository (plan section 18, task R1).
+> Its ADR-0009 (local quick-send discovery) is the first implementation of this
+> decision.
 
 - **Status:** Accepted
 - **Date:** 2026-10-03

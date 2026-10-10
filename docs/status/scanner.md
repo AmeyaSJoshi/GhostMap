@@ -2,7 +2,7 @@
 
 Workstream: Scanner. Owns `apps/scanner/**` and this file.
 Full task-by-task history (S1-S6 design notes, device logs, root-cause write-ups):
-[`docs/archive/status-history/scanner-through-2026-10-03.md`](../archive/status-history/scanner-through-2026-10-03.md).
+`git show f5a7d30:docs/status/scanner.md`.
 
 ## Current state
 

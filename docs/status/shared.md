@@ -3,7 +3,7 @@
 Workstream: Shared / Integration. Owns `shared/**`, `fixtures/**`, `tools/**`,
 `docs/contracts/**`, `docs/decisions/**`, this file and `integration.md`.
 Full history (F0-F4 detail and the F4 review findings):
-[`docs/archive/status-history/shared-through-2026-10-03.md`](../archive/status-history/shared-through-2026-10-03.md).
+`git show f5a7d30:docs/status/shared.md`.
 
 ## Current state
 

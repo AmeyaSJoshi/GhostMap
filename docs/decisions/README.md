@@ -18,8 +18,3 @@ Follow plan section 27: name it `ADR-XXXX-<change>.md` with the next free
 number, and cover Context, Decision, Compatibility (breaking or additive),
 Scanner impact, Viewer impact and Tests. A schema or protocol change also needs
 the contract doc, tests and status updates required by `AGENTS.md` rule 8.
-
-Proposals that were drafted on branches but never merged (sweep capture,
-furniture detection, drag-and-drop editing, peer-to-peer transport, one-button
-transfer) are listed in [`docs/archive/README.md`](../archive/README.md). Their
-numbers were never assigned on `main`.

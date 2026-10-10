@@ -20,9 +20,9 @@
 
 Section numbers in this plan are stable and are cited from code comments and
 handoffs. Sections whose content now lives in another canonical document are
-kept as short pointers rather than renumbered. The completed task
-specifications (`F0`-`F3`, `S1`-`S6`, `V1`-`V6`) are preserved verbatim in
-[`docs/archive/plan-completed-tasks.md`](../archive/plan-completed-tasks.md).
+kept as short pointers rather than renumbered. The full original text of the
+completed task specifications (`F0`-`F3`, `S1`-`S6`, `V1`-`V6`) is in git:
+`git show f5a7d30:docs/plans/ghostmap-implementation-plan.md`.
 Notes marked **As built** record where the implementation deliberately differs
 from the original text.
 
@@ -250,8 +250,7 @@ GhostMap/
 │   ├── contracts/               scene-schema-v1.md, protocol-v1.md
 │   ├── decisions/               ADR-0001 .. ADR-0004 and an index
 │   ├── status/                  shared.md, scanner.md, viewer.md, integration.md
-│   ├── handoffs/                one file per handoff, never overwritten
-│   └── archive/                 superseded long-form history, kept for reference
+│   └── handoffs/                one file per handoff, never overwritten
 │
 ├── shared/
 │   ├── com.ghostmap.shared/     the shared Unity package
@@ -1122,8 +1121,7 @@ which re-validates before replacing the displayed room.
 
 # 15. Foundation Tasks
 
-**Complete.** The full task specifications are archived verbatim in
-[`archive/plan-completed-tasks.md`](../archive/plan-completed-tasks.md).
+**Complete.** Full original task specifications: `git show f5a7d30:docs/plans/ghostmap-implementation-plan.md`.
 
 | Task | Delivered | Commit | Handoff |
 | --- | --- | --- | --- |
@@ -1139,8 +1137,8 @@ The foundation gate passed and is tagged `shared-v1-ready`.
 
 # 16. Parallel Scanner Workstream
 
-**Complete, every task verified on a physical iPhone.** The full task
-specifications are archived verbatim in [`archive/plan-completed-tasks.md`](../archive/plan-completed-tasks.md).
+**Complete, every task verified on a physical iPhone.** Full original task
+specifications: `git show f5a7d30:docs/plans/ghostmap-implementation-plan.md`.
 
 | Task | Delivered | Commit | PR |
 | --- | --- | --- | --- |
@@ -1157,8 +1155,7 @@ Current behavior and known issues: `docs/status/scanner.md`.
 
 # 17. Parallel Viewer Workstream
 
-**Complete.** The full task specifications are archived verbatim in
-[`archive/plan-completed-tasks.md`](../archive/plan-completed-tasks.md).
+**Complete.** Full original task specifications: `git show f5a7d30:docs/plans/ghostmap-implementation-plan.md`.
 
 | Task | Delivered | Commit | PR |
 | --- | --- | --- | --- |
@@ -1958,8 +1955,7 @@ every runtime class to its project and folder.
 
 # 34. Plan Self-Review Result
 
-Historical. The pre-implementation self-review is archived in
-[`archive/plan-completed-tasks.md`](../archive/plan-completed-tasks.md).
+Historical; removed. See `git show f5a7d30:docs/plans/ghostmap-implementation-plan.md`.
 
 ---
 

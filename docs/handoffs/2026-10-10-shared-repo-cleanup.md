@@ -17,12 +17,11 @@ single job. No C#, scene, package or project-settings file changed.
 - **Status files** rewritten as short current-state pages with every stale
   line fixed ("there is no reset", "the Viewer has not been started", "no
   physical iPhone has been connected", a missing V6 commit sha). The full
-  originals moved verbatim to `docs/archive/status-history/`.
+  originals are in git at `f5a7d30`.
 - **Plan**: every section number kept (code comments cite them). Sections that
   duplicated `AGENTS.md`, the contracts or the architecture (5, 6, 7, 33) are
   now pointers; the completed task specs (15, 16, 17) and the self-review (34)
-  moved verbatim to `docs/archive/plan-completed-tasks.md` with a summary table
-  left in place; **As built** notes added where the code deliberately differs
+  are replaced by summary tables (full text at `f5a7d30`); **As built** notes added where the code deliberately differs
   (3, 8.7, 10, 14). A status table sits at the top.
 - **Spec** reduced to the product: removed the pre-implementation UML, CRC
   cards, class list and WebSocket event-message list that ADR-0001 to 0004
@@ -34,17 +33,21 @@ single job. No C#, scene, package or project-settings file changed.
   validation). The protocol doc gained a non-normative implementation-status
   table. No contract changed.
 - **New**: `docs/README.md` (documentation map), `docs/decisions/README.md`
-  (ADR index), `docs/archive/README.md`, READMEs for `apps/scanner`,
+  (ADR index), READMEs for `apps/scanner`,
   `apps/viewer`, `shared`, `fixtures`, `tools`, `.github/pull_request_template.md`
   (plan section 4.6), and `tools/run_unity_tests.sh` (adapted from the deleted
   `integration/sweep-and-furniture` branch; the scanner suite keeps
   `-buildTarget iOS`).
 - `AGENTS.md`: numbered rules untouched; quick reference gained the docs map,
-  archive and test-runner pointers.
+  test-runner pointers.
 - Removed seven leftover `.gitkeep` files from populated `Assets` folders.
-- **Branches**: all 20 non-`main` branches on `origin` deleted. The 13 merged
-  ones were fully contained in `main`. The 7 unmerged ones are preserved as
-  `archive/<branch>` tags and described in `docs/archive/README.md`.
+- **Branches**: all 20 non-`main` branches on `origin` are to be deleted. 13
+  are fully merged into `main`. The 7 unmerged ones (sweep wall capture,
+  furniture detection and glTF export, their merge, and four docs-only
+  proposals) were dropped at the owner's request; their tips remain reachable
+  by sha (`fe3265f`, `eeb4e7f`, `7a06dd5`, `f000bef`, `a64070b`, `2b87407`,
+  `790baa0`) for as long as GitHub keeps unreferenced commits. This session
+  could not delete remote branches, so the owner runs the deletion.
 
 ## Contract impact
 None. Contract docs gained descriptions of existing behavior only.

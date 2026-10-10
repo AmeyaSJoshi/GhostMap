@@ -43,8 +43,6 @@ numbered rules win.
 | Workstream status | `docs/status/*.md` |
 | Documentation map | `docs/README.md` |
 
-`docs/archive/` holds superseded history. It is never normative.
-
 ### Start of any work session
 
 ```bash
@@ -72,7 +70,7 @@ See `tools/README.md` for the Python tools.
 | --- | --- |
 | Scanner | `apps/scanner/**`, `docs/status/scanner.md` |
 | Viewer | `apps/viewer/**`, `docs/status/viewer.md` |
-| Shared / Integration | `shared/**`, `fixtures/**`, `docs/contracts/**`, `docs/decisions/**`, `docs/archive/**`, `docs/status/shared.md`, `docs/status/integration.md`, `tools/**` |
+| Shared / Integration | `shared/**`, `fixtures/**`, `docs/contracts/**`, `docs/decisions/**`, `docs/status/shared.md`, `docs/status/integration.md`, `tools/**` |
 
 ### Branch naming
 

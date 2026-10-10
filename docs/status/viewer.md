@@ -2,7 +2,7 @@
 
 Workstream: Viewer. Owns `apps/viewer/**` and this file.
 Full task-by-task history (V1-V6 design notes, visual captures, test breakdowns):
-[`docs/archive/status-history/viewer-through-2026-10-03.md`](../archive/status-history/viewer-through-2026-10-03.md).
+`git show f5a7d30:docs/status/viewer.md`.
 
 ## Current state
 

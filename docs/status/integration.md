@@ -30,14 +30,19 @@ These come from reading the code, not from a failed run.
 - **Finalized while disconnected.** If the scanner finalizes with no connection,
   the reconnect sends `hello` and the finalized snapshot but no
   `scan.finalized`. The Viewer does not need that message today.
-- **Manual IP.** The phone needs the laptop's LAN IP typed in. Practise this and
-  confirm iOS local-network permission before demo day.
+- **Manual IP.** Until I1B exists the phone needs the computer's LAN IP typed in.
+  Confirm iOS local-network permission before any demo.
+- **Bonjour needs plist keys.** If I1B uses Bonjour, iOS needs
+  `NSBonjourServices` as well as `NSLocalNetworkUsageDescription`, or discovery
+  fails silently.
 
 ## Next safe task
 
-**I1 — real iPhone to Viewer live room.** Follow plan section 18. Record every
-attempt below, failures included. It must pass three consecutive times before
-any polish work.
+**I1A — baseline transport**, then **I1B — one-button Send to Computer**
+(plan section 18, ADR-0007). I1A uses the typed IP and must pass three
+consecutive times before I1B acceptance. I1B starts with a design step choosing
+the discovery mechanism; ADR-0007 lists the candidates, with Bonjour over the
+existing TCP the likely first choice. Record every attempt below.
 
 ## Do not touch
 
@@ -48,9 +53,9 @@ scoped `integration/<task>` branch.
 
 ## I1 run log
 
-| Date | Result | Closure error | Notes |
-| --- | --- | --- | --- |
-| — | — | — | — |
+| Date | Part | Result | Closure error | Notes |
+| --- | --- | --- | --- | --- |
+| — | — | — | — | — |
 
 ## I2 accuracy benchmark
 

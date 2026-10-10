@@ -16,7 +16,7 @@
 | --- | --- | --- |
 | A — Foundation | `F0`-`F4` | Complete |
 | B — Parallel workstreams | `S1`-`S6`, `V1`-`V6` | Complete; scanner verified on a physical iPhone |
-| C — Integration | `I1`-`I4` | **Not started. Next task: `I1`** |
+| C — Integration | `I1`-`I4` | **Not started. Next task: `I1A`, then `I1B` (one-button transfer)** |
 
 Section numbers in this plan are stable and are cited from code comments and
 handoffs. Sections whose content now lives in another canonical document are
@@ -46,8 +46,8 @@ The MVP must do this:
 6. Let the user capture room height.
 7. Let the user add rectangular doors/windows to known walls.
 8. Let the user place a limited set of furniture objects with clean parametric geometry.
-9. Stream the current structured room snapshot to the laptop.
-10. Reconstruct the room live on the laptop.
+9. After finalization, send the complete room to the user's computer with one action (**Send to Computer**; no IP address or port entry for a normal user, see ADR-0007). Live preview while scanning is optional.
+10. Reconstruct the room on the computer.
 11. Finalize the scan.
 12. Let the laptop user orbit the room, remove the roof, select furniture, drag it, resize it, rotate it, measure distances, save the scene, and reload it.
 
@@ -1188,9 +1188,22 @@ V6 complete
 
 ---
 
-## Task I1: Real iPhone -> viewer live room
+## Task I1: Real iPhone -> computer transfer
 
-Use the actual local network.
+Per `docs/decisions/ADR-0007-one-button-computer-transfer.md`, I1 has two parts
+that must stay separate:
+
+- **I1A** proves the existing transport works end to end on a real network and
+  gives a diagnostic baseline.
+- **I1B** proves the product flow: Finalize -> Send to Computer, with no manual
+  IP entry for a normal user.
+
+I1A may be done first. I1 is not complete until I1B passes. I1B begins with a
+design step that evaluates the candidate mechanisms listed in ADR-0007.
+
+### I1A: Baseline end-to-end transport verification
+
+Developer/diagnostic task. Manual IP entry is allowed here and only here.
 
 Procedure:
 
@@ -1212,13 +1225,36 @@ Procedure:
 16. disconnect/reconnect once;
 17. confirm viewer keeps last scene and scanner resends snapshot.
 
-Do not move to polish until this works three consecutive times.
+Do not start I1B acceptance until this works three consecutive times. If I1B
+later fails, re-running I1A separates a software/protocol fault from a
+discovery/pairing fault.
 
-Record failures in:
+### I1B: One-button transfer UX
 
-```text
-docs/status/integration.md
-```
+Goal: "Press one button and the GhostMap appears on your computer."
+
+1. The user scans and finalizes locally; a live connection is **not** required
+   while scanning.
+2. The user taps **Send to Computer**.
+3. The phone finds the user's computer without the user entering an IP address
+   or port. First use may need one small pairing step (choose a discovered
+   computer and/or scan a pairing QR); the computer is then remembered.
+4. The complete current scene is delivered over the existing TCP / full-
+   `SceneSnapshot` transport.
+5. The Viewer reconstructs the room, and the user sees a clear success state
+   that reflects actual receipt, not just a socket write.
+6. If the remembered computer cannot be found, the user gets a plain-language
+   retry / choose-another-computer flow.
+7. Manual IP entry is hidden behind a developer/debug option.
+8. No cloud service, account, or internet connection is needed.
+9. Nothing intentionally depends on the receiver being a Mac.
+
+Live streaming during a scan stays available but is not required by I1B.
+
+Do not move to polish until I1B works three consecutive times.
+
+Record every I1A and I1B attempt, failures included, in
+`docs/status/integration.md`.
 
 ---
 
@@ -1914,7 +1950,7 @@ Before judges arrive:
 2. laptop connected to power;
 3. same stable Wi-Fi;
 4. Viewer already launched;
-5. laptop LAN IP confirmed;
+5. laptop LAN IP confirmed (developer fallback only; once I1B exists the demo uses Send to Computer);
 6. scanner already granted camera/local-network permissions;
 7. one practice scan completed;
 8. demo area well lit;

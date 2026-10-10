@@ -39,26 +39,37 @@ focus on interior design, and do not expose the room as structured data.
 GhostMap builds a lightweight digital twin from ARKit world tracking, a single
 floor-plane detection, user-assisted aiming, and procedural reconstruction.
 
-## 3. Target users
+## 3. Primary user workflow
+
+```text
+Scan the room -> Finalize -> Send to Computer -> the room appears in the GhostMap Viewer
+```
+
+GhostMap finds the user's computer on the local network by itself. A normal
+user never types an IP address or port. After a first-use pairing step the
+computer is remembered. No cloud service, account or internet connection is
+involved. See ADR-0007.
+
+## 4. Target users
 
 Students, developers, architects, interior designers, robotics and accessibility
 researchers, emergency-response teams, AR/VR developers, and anyone building
 digital twins.
 
-## 4. User stories
+## 5. User stories
 
 - As a user, I want to scan a room with my normal iPhone.
 - As a user, I want to mark room corners so the system knows the room's shape.
 - As a user, I want walls generated automatically from those corners.
 - As a user, I want to add doors, windows and furniture.
-- As a user, I want to see the room appear on my computer.
+- As a user, I want to send the finished room to my computer with one button.
 - As a user, I want to select, move, resize and rotate objects.
 - As a user, I want to measure distances.
 - As a user, I want to remove the ceiling and see a dollhouse view.
 - As a user, I want to save and reopen the reconstructed room.
 - As a developer, I want structured spatial data instead of only a mesh.
 
-## 5. MVP scope
+## 6. MVP scope
 
 One room, four ordered floor corners, flat floor, flat ceiling (2.0 to 4.0 m),
 rectangular non-overlapping openings, and parametric furniture in eight types:
@@ -75,7 +86,7 @@ Gaussian splatting, NeRF, photorealistic reconstruction or texturing,
 multi-room or whole-building capture, curved rooms, people tracking, AI spatial
 queries, simultaneous editing from two devices.
 
-## 6. Functional requirements
+## 7. Functional requirements
 
 Status as of 2026-10-10. "Built" means implemented and covered by automated
 tests; scanner items were also verified on a physical iPhone. Nothing has yet
@@ -94,16 +105,17 @@ been verified end to end from iPhone to viewer (Integration `I1`).
 | FR-09 | **Doors.** Pick a wall, mark two opposite corners; store width, height, offset and parent wall. | Built (S5, V3) |
 | FR-10 | **Windows.** As doors, plus height above the floor. | Built (S5, V3) |
 | FR-11 | **Furniture.** Choose a category, place it on the floor, adjust its size and yaw. | Built (S5). Uses per-type default dimensions the user adjusts; the user does not mark object boundaries |
-| FR-12 | **Live preview.** The computer shows the room updating while the phone scans. | Built (S6, V1). Untested end to end |
+| FR-12 | **Live preview (optional).** The computer shows the room updating while the phone scans. Not required to use GhostMap. | Built (S6, V1), but needs the computer's IP typed in. Untested end to end |
 | FR-13 | **Object editing.** Select, move, rotate, resize; delete and hide. | Select, move, rotate, resize built (V5). Delete and hide not built |
 | FR-14 | **Measurement.** Pick two points and show the distance. | Built (V5): 3D and horizontal distance between clicked surface points |
 | FR-15 | **Dollhouse mode.** Hide the ceiling and orbit from above. | Built (V4) |
 | FR-16 | **Save scene.** | Built (V6), single save slot |
 | FR-17 | **Load scene.** | Built (V6) |
 | FR-18 | **Export** as JSON, glTF/GLB or Unity scene data. | Not built. The saved JSON snapshot is the only format |
-| FR-19 | **Remove walls and view a floor plan.** | Not built |
+| FR-19 | **Send to Computer.** After finalizing, one button finds the user's computer and delivers the complete room; no IP or port entry; the computer is remembered; clear success or plain-language retry. | Designed (ADR-0007), not built. Integration `I1B` |
+| FR-20 | **Remove walls and view a floor plan.** | Not built |
 
-## 7. Non-functional requirements
+## 8. Non-functional requirements
 
 | Area | Requirement |
 | --- | --- |
@@ -115,14 +127,14 @@ been verified end to end from iPhone to viewer (Integration `I1`).
 | Modularity | Capture, networking, reconstruction and editing are separate modules |
 | Privacy | No facial recognition, no identity data, no cloud dependency |
 
-## 8. Assumptions
+## 9. Assumptions
 
 The room is rectangular or near-rectangular with vertical walls and a
 horizontal floor. The user moves slowly, the room has enough visual texture for
 ARKit, the phone and computer share a local network, and the user corrects
 mistakes by hand.
 
-## 9. Data model
+## 10. Data model
 
 The scene is one `SceneSnapshot` holding one `RoomModel`:
 
@@ -137,7 +149,7 @@ Room
 
 Exact field definitions, units and rules: [`docs/contracts/scene-schema-v1.md`](../contracts/scene-schema-v1.md).
 
-## 10. MVP acceptance criteria
+## 11. MVP acceptance criteria
 
 The MVP is complete when, without LiDAR:
 
@@ -153,7 +165,7 @@ The MVP is complete when, without LiDAR:
 
 The step-by-step acceptance test is plan section 23.
 
-## 11. Demo sequence
+## 12. Demo sequence
 
 Start with an empty viewer. Open GhostMap on the iPhone, lock the floor, mark
 four corners and the height, and watch the room appear on the computer. Add a
@@ -165,7 +177,7 @@ bed, and show the structured scene data. Close with:
 
 The demo-day checklist is plan section 32.
 
-## 12. Vision
+## 13. Vision
 
 ```text
 Physical environment

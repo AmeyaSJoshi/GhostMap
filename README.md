@@ -22,6 +22,10 @@ After each change the phone sends the **entire scene** as one line of JSON over
 TCP. The viewer validates it and rebuilds the room. The phone owns the scene
 until the scan is finalized; then the viewer owns an editable copy it can save.
 
+The intended product flow is **Scan → Finalize → Send to Computer**, with the
+phone finding the computer by itself (ADR-0007). That discovery step is
+designed but not built; today the computer's IP is typed into the phone.
+
 Detail: [`docs/architecture/overview.md`](docs/architecture/overview.md).
 
 ## Status
@@ -31,7 +35,7 @@ Detail: [`docs/architecture/overview.md`](docs/architecture/overview.md).
 | Foundation `F0`-`F4` | Complete |
 | Scanner `S1`-`S6` | Complete, each verified on a physical iPhone |
 | Viewer `V1`-`V6` | Complete |
-| Integration `I1`-`I4` | **Not started. Next: `I1`, real iPhone → Viewer** |
+| Integration `I1`-`I4` | **Not started. Next: `I1A` (iPhone → Viewer over typed IP), then `I1B` (one-button Send to Computer)** |
 
 The scanner has not yet been connected to the Viewer; its network test used a
 standalone listener. Current behavior and known issues per area are in

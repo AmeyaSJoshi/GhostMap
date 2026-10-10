@@ -178,6 +178,27 @@ Required MVP message types: `hello`, `heartbeat`, `phone.pose`, `scene.snapshot`
 `scan.finalized`. `phone.pose` is debug/display only and capped at 5 Hz — the
 room is never reconstructed from pose messages.
 
+### 6.1 Connection setup sits above the transport
+
+How the phone finds the computer is separate from what it sends. Per
+`docs/decisions/ADR-0007-one-button-computer-transfer.md`, the product flow is
+one-button **Send to Computer** after finalization, and a normal user never
+types an IP address or port.
+
+```text
+Discovery / pairing / Send UX      connection setup, user-facing   (not built)
+              |
+        TCP connection
+              |
+protocol-v1 full SceneSnapshot messages
+              |
+Viewer scene store / editable scene / rendered room
+```
+
+Everything below the first line is unchanged by discovery. Today the scanner's
+Laptop IP field is the only way to connect; it becomes a developer fallback once
+`I1B` is built. Live streaming while scanning stays supported but is optional.
+
 ---
 
 ## 7. Authority

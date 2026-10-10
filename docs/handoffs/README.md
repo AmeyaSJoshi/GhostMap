@@ -69,32 +69,20 @@ or
 - ...
 ```
 
-## Index
+## Current handoff
 
 | Date | Workstream | File |
 | --- | --- | --- |
-| 2026-09-12 | foundation | [F0 — repo scaffold](2026-09-12-foundation-f0-repo-scaffold.md) |
-| 2026-09-12 | foundation | [F1 — scene schema v1](2026-09-12-foundation-f1-scene-schema.md) |
-| 2026-09-12 | foundation | [F2 — geometry and validation](2026-09-12-foundation-f2-geometry-validation.md) |
-| 2026-09-12 | foundation | [F3 — protocol v1 and fixtures](2026-09-12-foundation-f3-protocol-fixtures.md) |
-| 2026-09-12 | foundation | [F4 — foundation review](2026-09-12-foundation-f4-foundation-review.md) |
-| 2026-09-12 | scanner | [S1 — ARKit loader root cause](2026-09-12-scanner-s1-arkit-loader-root-cause.md) |
-| 2026-09-12 | scanner | [S1 — camera pose not driven by tracking](2026-09-12-scanner-s1-camera-pose-not-driven.md) |
-| 2026-09-12 | scanner | [S1 — complete, verified on device](2026-09-12-scanner-s1-complete.md) |
-| 2026-09-12 | scanner | [S2 — floor lock and GhostMap coordinate frame](2026-09-12-scanner-s2-floor-lock-coordinate-frame.md) |
-| 2026-09-12 | scanner | [S3 — corner capture and closure verification](2026-09-12-scanner-s3-corner-capture-closure.md) |
-| 2026-09-12 | scanner | [S4 — height capture](2026-09-12-scanner-s4-height-capture.md) |
-| 2026-09-13 | scanner | [S5 — openings and furniture](2026-09-13-scanner-s5-openings-furniture.md) |
-| 2026-09-13 | scanner | [S6 — networking and finalization](2026-09-13-scanner-s6-networking-finalization.md) |
-| 2026-09-13 | scanner | [S6 — Finalize button UI investigation](2026-09-13-scanner-s6-finalize-ui-investigation.md) |
-| 2026-09-13 | scanner | [S6 — close, physical-device verified](2026-09-13-scanner-s6-close-device-verified.md) |
-| 2026-09-14 | viewer | [V1 — desktop network foundation](2026-09-14-viewer-v1-desktop-network-foundation.md) |
-| 2026-09-15 | viewer | [V2 — floor, ceiling, walls](2026-09-15-viewer-v2-room-geometry.md) |
-| 2026-09-16 | viewer | [V3 — wall openings](2026-09-16-viewer-v3-wall-openings.md) |
-| 2026-09-17 | viewer | [V4 — furniture and orbit/dollhouse camera](2026-09-17-viewer-v4-objects-camera.md) |
-| 2026-09-18 | viewer | [V5 — object editing and measurement](2026-09-18-viewer-v5-edit-measure.md) |
-| 2026-09-19 | viewer | [V6 — persistence and polished HUD](2026-09-19-viewer-v6-persistence-hud.md) |
-| 2026-10-03 | shared | [Status docs refresh after V6](2026-10-03-shared-status-docs-refresh.md) |
-| 2026-10-03 | docs | [One-button computer transfer (now ADR-0007)](2026-10-03-docs-one-button-computer-transfer.md) |
-| 2026-10-10 | shared | [Repository cleanup](2026-10-10-shared-repo-cleanup.md) |
-| 2026-10-10 | shared | [Feature triage: keep sweep, detection, one-button transfer](2026-10-10-shared-feature-triage.md) |
+| 2026-10-10 | shared | [Project direction: stand-in-place, on-device GhostMap](2026-10-10-shared-project-direction.md) |
+
+Add a row for every new handoff.
+
+## Earlier handoffs
+
+The 25 handoffs from F0 through the 2026-10-10 cleanup were removed from the
+working tree when the project direction changed. They are in git:
+
+```bash
+git ls-tree --name-only 1ff72c9 docs/handoffs/
+git show 1ff72c9:docs/handoffs/<file>
+```

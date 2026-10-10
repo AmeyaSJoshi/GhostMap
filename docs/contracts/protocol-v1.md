@@ -372,3 +372,21 @@ Additionally verified outside Unity: `send_fixture.py` transmitted the reference
 fixture over real TCP to a listener on port 47831, which received exactly three
 newline-delimited messages, parsed each as protocol v1, and confirmed the
 trailing terminator and the stripping of documentation-only keys.
+
+---
+
+## 12. Implementation status (non-normative)
+
+How the two apps currently use this contract. This section changes with the
+code; the sections above do not.
+
+| Behavior | Scanner | Viewer |
+| --- | --- | --- |
+| `hello` | Sent on every connect | Records device name and app version for the HUD |
+| `heartbeat` | Sent every 2 s while connected | Ignored; no liveness timeout |
+| `phone.pose` | **Not sent** | Would be ignored |
+| `scene.snapshot` | Sent per revision and on every reconnect | Revision-arbitrated, validated, applied |
+| `scan.finalized` | Sent right after the final snapshot. Not resent on reconnect, so a scan finalized while offline never sends it | Ignored; ownership switches on `snapshot.finalized` |
+| Reconnect | Every 2 s; queue cleared, then `hello` + current snapshot | New connection replaces the old one |
+| Disconnect display | Network status line | "Disconnected — displaying last snapshot." after a clean socket close only |
+

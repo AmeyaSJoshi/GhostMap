@@ -1,7 +1,8 @@
 # GhostMap Architecture Overview
 
-Status: **frozen for MVP**. Changing anything in this document requires an ADR in
-`docs/decisions/` per the procedure in the implementation plan.
+Status: **frozen for MVP**. Changing sections 1-11 requires an ADR in
+`docs/decisions/` per the procedure in the implementation plan. Sections 12-13
+describe the code as built and are updated whenever the code changes.
 
 ---
 
@@ -77,6 +78,12 @@ Owns reconstruction and, after finalization, editing. Responsible for the TCP
 server, the scene store with revision arbitration, semantic rendering
 (floor/ceiling/segmented walls/parametric furniture), orbit + dollhouse camera,
 selection/drag/resize/rotate, measurement, and persistence.
+
+Scene state flows through two layers. `ViewerSceneStore` holds the newest
+accepted scanner snapshot. `ViewerEditableScene` passes it through unchanged
+until a snapshot arrives with `finalized == true`; from then on it holds the
+Viewer-owned copy that edits, Save and Load act on. Renderers, camera and
+interaction controllers read only `ViewerEditableScene`.
 
 ---
 
@@ -260,3 +267,82 @@ dense RGB scanning · Gaussian splatting · NeRF reconstruction · LiDAR-like de
 fully automatic furniture dimensions · arbitrary curved rooms · multi-floor
 buildings · automatic semantic recognition · survey-grade accuracy · simultaneous
 two-device editing.
+
+---
+
+## 12. Code map
+
+Every runtime type, by project and folder. Tests mirror these names with a
+`Tests` suffix under each project's `Tests/` folder.
+
+### 12.1 `shared/com.ghostmap.shared/Runtime`
+
+| Folder | Types | Role |
+| --- | --- | --- |
+| `Domain` | `Vec3Dto`, `CornerModel`, `OpeningModel`, `SceneObjectModel`, `RoomModel`, `SceneSnapshot` | Wire and save format (scene schema v1) |
+| `Domain` | `ValidationResult`, `WallDefinition` | Validation result; a derived wall |
+| `Geometry` | `GhostCoordinateFrame` | AR world ↔ Ghost space |
+| `Geometry` | `RayPlaneMath` | Ray / floor-plane and ray / wall-plane intersection |
+| `Geometry` | `RoomGeometry`, `WallGeometry` | Area, self-intersection, interior angles, wall derivation, wall-local `u`/`v` |
+| `Geometry` | `MeasurementMath` | Distance, horizontal distance, area, volume, perimeter |
+| `Validation` | `RoomValidator`, `OpeningValidator`, `FurnitureValidator`, `ClosureQuality` | Every limit in section 9 |
+| `Protocol` | `ProtocolConstants`, `WireMessages`, `ProtocolSerializer`, `SnapshotRevisionPolicy` | Protocol v1 |
+
+### 12.2 `apps/scanner/Assets/GhostMap/Scanner`
+
+| Folder | Types | Role |
+| --- | --- | --- |
+| `Runtime/AR` | `ISpatialProvider`, `FloorHit`, `ArSpatialProvider` | The only seam onto AR Foundation; faked in tests |
+| `Runtime/Workflow` | `ScanPhase`, `ScanWorkflowController` | Phase machine, session id, revision, current snapshot |
+| `Runtime/Capture` | `FloorLockController`, `CornerCaptureController`, `HeightCaptureController`, `OpeningCaptureController`, `ObjectPlacementController` | One plain-C# controller per capture step |
+| `Runtime/Networking` | `ISnapshotSink`, `ScannerSnapshotPublisher`, `ScannerNetworkClient` | Revision changes → messages → TCP |
+| `Runtime/UI` | `FloorLockHud` | Composition root: builds every controller and the workflow; Reset rebuilds them |
+| `Runtime/UI` | `CornerCaptureHud`, `HeightCaptureHud`, `OpeningCaptureHud`, `ObjectPlacementHud` | Per-phase buttons, readouts, world-space markers |
+| `Runtime/UI` | `ScannerHudController` | Connect, network status, Reset, Finalize; owns the network thread |
+| `Runtime/Bootstrap` | `ScannerBootstrap` | S1 tracking diagnostics readout |
+| `Editor` | `ScannerSceneBuilder` | Generates `Scanner.unity` (menu **GhostMap > Build Scanner Scene**) and verifies its wiring |
+| `Editor` | `ScannerBuild`, `ScannerXrSettings`, `ScannerInputSettings`, `ScannerIosPostBuild` | Two-step iOS build: **Configure Scanner XR (iOS)**, then **Build Scanner (iOS)** into `apps/scanner/Builds/iOS` |
+
+### 12.3 `apps/viewer/Assets/GhostMap/Viewer`
+
+| Folder | Types | Role |
+| --- | --- | --- |
+| `Runtime/Networking` | `ViewerTcpServer`, `LineReader` | Accept one scanner, frame lines, deserialize on background threads |
+| `Runtime/Bootstrap` | `ViewerSession` | Drains the server queue on the main thread and dispatches messages |
+| `Runtime/Bootstrap` | `ViewerBootstrap` | Composition root: wires session, scenes, renderer, camera, interaction |
+| `Runtime/Scene` | `IViewerSceneSource`, `ViewerSceneStore`, `ViewerEditableScene`, `SceneSnapshotValidator`, `FixtureLoader` | Scene ownership layers (section 3.3) and validation |
+| `Runtime/Rendering` | `RoomRenderer`, `FloorCeilingRenderer`, `WallRenderer`, `WallSliceGenerator` | Room shell and opening segmentation (section 10) |
+| `Runtime/Rendering` | `FurnitureRenderer`, `FurnitureFactory`, `SceneObjectBinding`, `RoomBounds` | Parametric furniture, object identity on colliders, framing bounds |
+| `Runtime/Interaction` | `OrbitCameraRig`, `OrbitCameraController` | Camera maths (pure) and its input wrapper |
+| `Runtime/Interaction` | `ObjectSelectionController`, `SelectionOutlineBuilder`, `ObjectEditController`, `MeasurementController` | Select, highlight, edit, measure |
+| `Runtime/Interaction` | `ViewerInteractionRouter` | The single per-frame mouse reader; routes clicks and drags |
+| `Runtime/Persistence` | `ScenePersistence` | Atomic save and validated load of a `SceneSnapshot` |
+| `Runtime/UI` | `ViewerHudController`, `InspectorPanelController` | Status, buttons, inspector fields |
+| `Editor` | `ViewerSceneBuilder` | Generates `Viewer.unity` (menu **GhostMap > Build Viewer Scene**) |
+
+Both `.unity` scenes are generated by their builders. After changing a builder,
+regenerate and commit the scene rather than editing the scene by hand.
+
+## 13. Runtime model
+
+**Scanner.** Everything runs on the Unity main thread except
+`ScannerNetworkClient.PumpOnce`, which a background thread calls every 100 ms.
+That thread touches only the socket and a locked outgoing queue, never a Unity
+API. Each frame `ScannerHudController.Update` calls
+`ScannerSnapshotPublisher.Tick`, which enqueues a `scene.snapshot` when the
+workflow's revision changed. On every (re)connect the client clears its queue
+and sends `hello` plus the current snapshot.
+
+**Viewer.** `ViewerTcpServer` runs an accept thread and one read thread per
+connection; they only parse lines and enqueue messages. `ViewerBootstrap.Update`
+drains the queue on the main thread, so all scene, rendering and UI work stays
+single-threaded. Every accepted snapshot or local edit rebuilds the whole
+`RenderedRoom`.
+
+**Known gaps against sections 6-7** (tracked in `docs/status/`):
+
+- the scanner does not send `phone.pose`;
+- the Viewer ignores `heartbeat` and has no read timeout, so a silently dropped
+  connection is not shown as disconnected;
+- the Viewer ignores `scan.finalized` and keys ownership on
+  `snapshot.finalized`.

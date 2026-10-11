@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using GhostMap.Shared.Domain;
+using GhostMap.Shared.Export;
 using GhostMap.Viewer.Rendering;
 using GhostMap.Viewer.Scene;
 using NUnit.Framework;

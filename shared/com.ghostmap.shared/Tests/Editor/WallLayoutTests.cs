@@ -1,18 +1,18 @@
 using System.Collections.Generic;
 using GhostMap.Shared.Domain;
-using GhostMap.Viewer.Rendering;
+using GhostMap.Shared.Export;
 using NUnit.Framework;
 using UnityEngine;
 
-namespace GhostMap.Viewer.Tests.EditMode
+namespace GhostMap.Shared.Tests
 {
     /// <summary>
-    /// Task V2's <see cref="WallRenderer"/>: one solid cuboid per consecutive
+    /// Task V2's wall layout (<see cref="WallLayout"/>, the Viewer's WallRenderer until task R6): one solid cuboid per consecutive
     /// corner pair, derived from the shared package's own
     /// <c>RoomGeometry.BuildWalls</c> and never a reimplementation of wall
     /// derivation.
     /// </summary>
-    public sealed class WallRendererTests
+    public sealed class WallLayoutTests
     {
         private static RoomModel BuildRectangularRoom(float heightM = 2.5f)
         {
@@ -38,7 +38,7 @@ namespace GhostMap.Viewer.Tests.EditMode
         {
             RoomModel room = BuildRectangularRoom();
 
-            IReadOnlyList<WallRenderSpec> walls = WallRenderer.BuildWalls(room);
+            IReadOnlyList<WallRenderSpec> walls = WallLayout.BuildWalls(room);
 
             Assert.AreEqual(4, walls.Count);
         }
@@ -48,7 +48,7 @@ namespace GhostMap.Viewer.Tests.EditMode
         {
             RoomModel room = BuildRectangularRoom();
 
-            IReadOnlyList<WallRenderSpec> walls = WallRenderer.BuildWalls(room);
+            IReadOnlyList<WallRenderSpec> walls = WallLayout.BuildWalls(room);
 
             Assert.AreEqual("c0", walls[0].StartCornerId);
             Assert.AreEqual("c1", walls[0].EndCornerId);
@@ -65,7 +65,7 @@ namespace GhostMap.Viewer.Tests.EditMode
         {
             RoomModel room = BuildRectangularRoom();
 
-            IReadOnlyList<WallRenderSpec> walls = WallRenderer.BuildWalls(room);
+            IReadOnlyList<WallRenderSpec> walls = WallLayout.BuildWalls(room);
 
             var pairs = new HashSet<(string, string)>();
             foreach (WallRenderSpec wall in walls)
@@ -82,7 +82,7 @@ namespace GhostMap.Viewer.Tests.EditMode
         {
             RoomModel room = BuildRectangularRoom();
 
-            IReadOnlyList<WallRenderSpec> walls = WallRenderer.BuildWalls(room);
+            IReadOnlyList<WallRenderSpec> walls = WallLayout.BuildWalls(room);
 
             var seen = new HashSet<(string, string)>();
             foreach (WallRenderSpec wall in walls)
@@ -96,7 +96,7 @@ namespace GhostMap.Viewer.Tests.EditMode
         {
             RoomModel room = BuildRectangularRoom();
 
-            IReadOnlyList<WallRenderSpec> walls = WallRenderer.BuildWalls(room);
+            IReadOnlyList<WallRenderSpec> walls = WallLayout.BuildWalls(room);
 
             Assert.AreEqual(4f, walls[0].LengthM, 1e-5f);
             Assert.AreEqual(3f, walls[1].LengthM, 1e-5f);
@@ -110,7 +110,7 @@ namespace GhostMap.Viewer.Tests.EditMode
         {
             RoomModel room = BuildRectangularRoom(heightM: 2.5f);
 
-            IReadOnlyList<WallRenderSpec> walls = WallRenderer.BuildWalls(room);
+            IReadOnlyList<WallRenderSpec> walls = WallLayout.BuildWalls(room);
 
             foreach (WallRenderSpec wall in walls)
             {
@@ -123,7 +123,7 @@ namespace GhostMap.Viewer.Tests.EditMode
         {
             RoomModel room = BuildRectangularRoom(heightM: 2.5f);
 
-            IReadOnlyList<WallRenderSpec> walls = WallRenderer.BuildWalls(room);
+            IReadOnlyList<WallRenderSpec> walls = WallLayout.BuildWalls(room);
 
             // Wall 0: c0 (0,0,0) -> c1 (4,0,0). Midpoint (2, 1.25, 0).
             Assert.AreEqual(2f, walls[0].Position.x, 1e-5f);
@@ -136,7 +136,7 @@ namespace GhostMap.Viewer.Tests.EditMode
         {
             RoomModel room = BuildRectangularRoom();
 
-            IReadOnlyList<WallRenderSpec> walls = WallRenderer.BuildWalls(room);
+            IReadOnlyList<WallRenderSpec> walls = WallLayout.BuildWalls(room);
 
             // Wall 0 runs from c0 to c1 along +X.
             Vector3 rotatedRight0 = walls[0].Rotation * Vector3.right;
@@ -180,7 +180,7 @@ namespace GhostMap.Viewer.Tests.EditMode
                 objects = new SceneObjectModel[0]
             };
 
-            IReadOnlyList<WallRenderSpec> walls = WallRenderer.BuildWalls(room);
+            IReadOnlyList<WallRenderSpec> walls = WallLayout.BuildWalls(room);
 
             Assert.AreEqual(4, walls.Count);
             Assert.AreEqual(4f, walls[0].LengthM, 1e-4f);
@@ -197,7 +197,7 @@ namespace GhostMap.Viewer.Tests.EditMode
         {
             RoomModel room = BuildRectangularRoom(heightM: 0f);
 
-            IReadOnlyList<WallRenderSpec> walls = WallRenderer.BuildWalls(room);
+            IReadOnlyList<WallRenderSpec> walls = WallLayout.BuildWalls(room);
 
             Assert.AreEqual(0, walls.Count);
         }
@@ -208,7 +208,7 @@ namespace GhostMap.Viewer.Tests.EditMode
             RoomModel room = BuildRectangularRoom();
             room.corners = new[] { room.corners[0] };
 
-            IReadOnlyList<WallRenderSpec> walls = WallRenderer.BuildWalls(room);
+            IReadOnlyList<WallRenderSpec> walls = WallLayout.BuildWalls(room);
 
             Assert.AreEqual(0, walls.Count);
         }
@@ -216,7 +216,7 @@ namespace GhostMap.Viewer.Tests.EditMode
         [Test]
         public void NullRoomYieldsNoWalls()
         {
-            IReadOnlyList<WallRenderSpec> walls = WallRenderer.BuildWalls(null);
+            IReadOnlyList<WallRenderSpec> walls = WallLayout.BuildWalls(null);
 
             Assert.AreEqual(0, walls.Count);
         }

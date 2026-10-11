@@ -2,14 +2,14 @@ using System.Collections.Generic;
 using System.Linq;
 using GhostMap.Shared.Domain;
 using GhostMap.Shared.Validation;
-using GhostMap.Viewer.Rendering;
+using GhostMap.Shared.Export;
 using NUnit.Framework;
 using UnityEngine;
 
-namespace GhostMap.Viewer.Tests.EditMode
+namespace GhostMap.Shared.Tests
 {
     /// <summary>
-    /// Task V4's <see cref="FurnitureFactory"/> part geometry: deterministic,
+    /// Task V4's part geometry (<see cref="FurnitureParts"/>, in the Viewer's FurnitureFactory until task R6): deterministic,
     /// primitive-composed objects per implementation plan section 12.4.
     ///
     /// Parts are described in the object's own local frame — origin at the
@@ -17,7 +17,7 @@ namespace GhostMap.Viewer.Tests.EditMode
     /// world placement are applied exactly once, on the object root, and can
     /// be tested separately in <see cref="FurnitureRendererTests"/>.
     /// </summary>
-    public sealed class FurnitureFactoryTests
+    public sealed class FurniturePartsTests
     {
         private const float Tolerance = 1e-4f;
 
@@ -57,7 +57,7 @@ namespace GhostMap.Viewer.Tests.EditMode
         {
             foreach (string type in FurnitureValidator.SupportedTypes)
             {
-                IReadOnlyList<FurniturePartSpec> parts = FurnitureFactory.BuildParts(Object(type));
+                IReadOnlyList<FurniturePartSpec> parts = FurnitureParts.BuildParts(Object(type));
 
                 Assert.Greater(parts.Count, 0, $"Type '{type}' produced no geometry.");
             }
@@ -75,7 +75,7 @@ namespace GhostMap.Viewer.Tests.EditMode
 
             foreach (string type in FurnitureValidator.SupportedTypes)
             {
-                Bounds bounds = LocalBounds(FurnitureFactory.BuildParts(Object(type, w, d, h)));
+                Bounds bounds = LocalBounds(FurnitureParts.BuildParts(Object(type, w, d, h)));
 
                 Assert.AreEqual(-w * 0.5f, bounds.min.x, Tolerance, $"{type} min x");
                 Assert.AreEqual(w * 0.5f, bounds.max.x, Tolerance, $"{type} max x");
@@ -95,7 +95,7 @@ namespace GhostMap.Viewer.Tests.EditMode
 
             foreach (string type in FurnitureValidator.SupportedTypes)
             {
-                foreach (FurniturePartSpec part in FurnitureFactory.BuildParts(Object(type, w, d, h)))
+                foreach (FurniturePartSpec part in FurnitureParts.BuildParts(Object(type, w, d, h)))
                 {
                     Vector3 min = part.LocalCenter - part.LocalSize * 0.5f;
                     Vector3 max = part.LocalCenter + part.LocalSize * 0.5f;
@@ -115,7 +115,7 @@ namespace GhostMap.Viewer.Tests.EditMode
         {
             foreach (string type in FurnitureValidator.SupportedTypes)
             {
-                foreach (FurniturePartSpec part in FurnitureFactory.BuildParts(Object(type)))
+                foreach (FurniturePartSpec part in FurnitureParts.BuildParts(Object(type)))
                 {
                     Assert.Greater(part.LocalSize.x, 0f, $"{type}/{part.Name}");
                     Assert.Greater(part.LocalSize.y, 0f, $"{type}/{part.Name}");
@@ -127,8 +127,8 @@ namespace GhostMap.Viewer.Tests.EditMode
         [Test]
         public void PartsScaleWithTheDeclaredDimensions()
         {
-            Bounds small = LocalBounds(FurnitureFactory.BuildParts(Object("bed", 1f, 1f, 1f)));
-            Bounds large = LocalBounds(FurnitureFactory.BuildParts(Object("bed", 2f, 3f, 1.5f)));
+            Bounds small = LocalBounds(FurnitureParts.BuildParts(Object("bed", 1f, 1f, 1f)));
+            Bounds large = LocalBounds(FurnitureParts.BuildParts(Object("bed", 2f, 3f, 1.5f)));
 
             Assert.AreEqual(1f, small.size.x, Tolerance);
             Assert.AreEqual(2f, large.size.x, Tolerance);
@@ -140,7 +140,7 @@ namespace GhostMap.Viewer.Tests.EditMode
         public void GenericIsASingleBoxMatchingWidthDepthHeight()
         {
             IReadOnlyList<FurniturePartSpec> parts =
-                FurnitureFactory.BuildParts(Object("generic", 1.3f, 0.7f, 1.9f));
+                FurnitureParts.BuildParts(Object("generic", 1.3f, 0.7f, 1.9f));
 
             Assert.AreEqual(1, parts.Count);
             Assert.AreEqual(new Vector3(1.3f, 1.9f, 0.7f), parts[0].LocalSize);
@@ -154,7 +154,7 @@ namespace GhostMap.Viewer.Tests.EditMode
             // the objects visually distinguishable rather than "anonymous boxes".
             void AssertHasParts(string type, params string[] expected)
             {
-                string[] names = FurnitureFactory.BuildParts(Object(type))
+                string[] names = FurnitureParts.BuildParts(Object(type))
                     .Select(p => p.Name)
                     .ToArray();
 
@@ -178,8 +178,8 @@ namespace GhostMap.Viewer.Tests.EditMode
         [Test]
         public void DeskAndTableAreDistinguishableFromEachOther()
         {
-            string[] desk = FurnitureFactory.BuildParts(Object("desk")).Select(p => p.Name).ToArray();
-            string[] table = FurnitureFactory.BuildParts(Object("table")).Select(p => p.Name).ToArray();
+            string[] desk = FurnitureParts.BuildParts(Object("desk")).Select(p => p.Name).ToArray();
+            string[] table = FurnitureParts.BuildParts(Object("table")).Select(p => p.Name).ToArray();
 
             CollectionAssert.AreNotEqual(desk, table,
                 "A desk and a table must not render as the same object.");
@@ -190,7 +190,7 @@ namespace GhostMap.Viewer.Tests.EditMode
         {
             foreach (string type in new[] { "desk", "chair", "table" })
             {
-                int legs = FurnitureFactory.BuildParts(Object(type))
+                int legs = FurnitureParts.BuildParts(Object(type))
                     .Count(p => p.Name.StartsWith("Leg"));
 
                 Assert.AreEqual(4, legs, $"'{type}' should have four legs.");
@@ -202,8 +202,8 @@ namespace GhostMap.Viewer.Tests.EditMode
         {
             foreach (string type in FurnitureValidator.SupportedTypes)
             {
-                IReadOnlyList<FurniturePartSpec> first = FurnitureFactory.BuildParts(Object(type));
-                IReadOnlyList<FurniturePartSpec> second = FurnitureFactory.BuildParts(Object(type));
+                IReadOnlyList<FurniturePartSpec> first = FurnitureParts.BuildParts(Object(type));
+                IReadOnlyList<FurniturePartSpec> second = FurnitureParts.BuildParts(Object(type));
 
                 Assert.AreEqual(first.Count, second.Count, type);
 
@@ -222,7 +222,7 @@ namespace GhostMap.Viewer.Tests.EditMode
             var diagnostics = new List<string>();
 
             IReadOnlyList<FurniturePartSpec> parts =
-                FurnitureFactory.BuildParts(Object("spaceship"), diagnostics);
+                FurnitureParts.BuildParts(Object("spaceship"), diagnostics);
 
             Assert.AreEqual(0, parts.Count, "An unsupported type must not be invented into geometry.");
             Assert.AreEqual(1, diagnostics.Count);
@@ -233,7 +233,7 @@ namespace GhostMap.Viewer.Tests.EditMode
         {
             var diagnostics = new List<string>();
 
-            Assert.AreEqual(0, FurnitureFactory.BuildParts(null, diagnostics).Count);
+            Assert.AreEqual(0, FurnitureParts.BuildParts(null, diagnostics).Count);
             Assert.AreEqual(1, diagnostics.Count);
         }
 
@@ -242,9 +242,9 @@ namespace GhostMap.Viewer.Tests.EditMode
         {
             var diagnostics = new List<string>();
 
-            Assert.AreEqual(0, FurnitureFactory.BuildParts(Object("bed", widthM: float.NaN), diagnostics).Count);
-            Assert.AreEqual(0, FurnitureFactory.BuildParts(Object("bed", depthM: 0f), diagnostics).Count);
-            Assert.AreEqual(0, FurnitureFactory.BuildParts(Object("bed", heightM: -1f), diagnostics).Count);
+            Assert.AreEqual(0, FurnitureParts.BuildParts(Object("bed", widthM: float.NaN), diagnostics).Count);
+            Assert.AreEqual(0, FurnitureParts.BuildParts(Object("bed", depthM: 0f), diagnostics).Count);
+            Assert.AreEqual(0, FurnitureParts.BuildParts(Object("bed", heightM: -1f), diagnostics).Count);
             Assert.AreEqual(3, diagnostics.Count);
         }
 
@@ -254,7 +254,7 @@ namespace GhostMap.Viewer.Tests.EditMode
             SceneObjectModel model = Object("couch", 2.1f, 0.9f, 0.85f);
             model.yawDeg = 42f;
 
-            FurnitureFactory.BuildParts(model);
+            FurnitureParts.BuildParts(model);
 
             Assert.AreEqual(2.1f, model.widthM, Tolerance);
             Assert.AreEqual(0.9f, model.depthM, Tolerance);

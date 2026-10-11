@@ -19,6 +19,37 @@ Facts that change how you work in a cloud session:
 - Generated scenes (`*.unity`) are rebuilt from their scene builders in Unity,
   never hand-edited. If you change a builder, say so in your handoff.
 
+## Where Unity fits, and why
+
+The browser viewer (`room.html`, ADR-0013) replaces only the **desktop Unity
+Viewer**. Unity stays in two places:
+
+1. **The iPhone app is a Unity app** (`apps/scanner`, AR Foundation + ARKit).
+   Capture, the YOLO-n detector (`R4`), the export bundle (`R6`) and Send to
+   Computer (`R7`) are all built inside it. The shared C# package
+   (`shared/com.ghostmap.shared`) is part of it.
+2. **Unity is where the owner uses the result.** They drag `room.glb` and
+   `objects/*.glb` into a Unity project. `room.html` is for looking and
+   measuring without opening Unity.
+
+```text
+iPhone app (Unity)  ->  zip via AirDrop  ->  room.html in a browser (look, measure)
+                                         ->  .glb files into Unity (build with it)
+```
+
+**Why the phone app is Unity:** chosen at the start (ADR-0001), when the plan
+had a desktop Unity Viewer too, so both apps could share one C# package. With
+the Viewer retiring, that reason is gone. Native Swift would fit the remaining
+work better: Core ML/Vision for YOLO-n and the share sheet are built in, and it
+builds on any Mac with no Unity licence. Against that, all capture code and its
+577 tests exist in Unity, built but never run on an iPhone.
+
+**Owner's decision (2026-10-11): stay on Unity for now; revisit after `R2`.**
+If the stand-in-place scan works on the device in `R2`, stay. If it does not,
+capture code gets rewritten anyway, and that is the cheapest point to consider
+native Swift. Do not start a rewrite, or argue for one mid-task: switching
+needs a new ADR and a rewritten roadmap, and only the owner decides.
+
 ## Before you finish: update every document your work touched
 
 Do this at the end of **every** task, however small, before your final commit.

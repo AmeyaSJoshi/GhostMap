@@ -62,9 +62,13 @@ shared 202, viewer 548, scanner 577.
 
 ## Open decisions for the owner
 
-1. **Unity licence secrets** for CI (`docs/ci.md`). Until they exist, no Unity
+1. **Unity or native Swift for the phone app: decided "Unity for now",
+   revisit after `R2`** (owner, 2026-10-11). Reasoning in `CLAUDE.md`, "Where
+   Unity fits, and why". When `R2` is recorded, put the question back to the
+   owner with the result.
+2. **Unity licence secrets** for CI (`docs/ci.md`). Until they exist, no Unity
    test result can be recorded.
-2. **Should furniture arrive in Unity already placed?** Each `objects/<id>.glb`
+3. **Should furniture arrive in Unity already placed?** Each `objects/<id>.glb`
    is written at the origin with no node transform (checked in
    `GlbExporter.Build`), so dragged into Unity every piece lands at the room's
    origin; its position and yaw are only in `scene.json`. `room.html` places
@@ -72,7 +76,7 @@ shared 202, viewer 548, scanner 577.
    `R6` must change, for example by also writing a `room-with-furniture.glb` or
    giving each object node its translation and rotation. Decide before `R6`
    starts.
-3. **20 stale remote branches.** Agent sessions cannot delete branches. From a
+4. **20 stale remote branches.** Agent sessions cannot delete branches. From a
    clone:
 
    ```bash

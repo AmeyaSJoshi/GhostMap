@@ -1,7 +1,8 @@
 # Runs every automated check on each push and pull request.
 #
-#   tools  - Python checks that need no Unity (always runs).
-#   unity  - the three EditMode suites (shared, viewer, scanner) in GameCI's
+#   tools       - Python checks that need no Unity (always runs).
+#   web-viewer  - room.html viewer: Node tests, build, committed template fresh.
+#   unity       - the three EditMode suites (shared, viewer, scanner) in GameCI's
 #            Unity 6000.3.24f1 Linux image. Needs three repository secrets,
 #            set once by the owner; see docs/ci.md.
 #
@@ -44,6 +45,31 @@ jobs:
 
       - name: Test runner script parses
         run: bash -n tools/run_unity_tests.sh
+
+  web-viewer:
+    name: Web viewer (room.html)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web-viewer
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web-viewer/package-lock.json
+
+      - run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      - name: Committed template matches a fresh build
+        run: |
+          npm run build
+          git diff --exit-code -- dist/
 
   unity:
     name: Unity EditMode (${{ matrix.suite }})

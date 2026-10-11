@@ -341,6 +341,11 @@ namespace GhostMap.Scanner.Tests.EditMode
             provider.DetectedSurfaces.Add(DeskTop(workflow.Frame, 7001, 2f, 1.5f));
             Assert.IsTrue(workflow.TryRefreshFurnitureDetection(out _));
             Assert.IsTrue(workflow.FurnitureDetection.HasSelection);
+            FurnitureDetectionController detection = workflow.FurnitureDetection;
+            detection.SetIdentifiedTypes(new System.Collections.Generic.Dictionary<TrackableId, string>
+            {
+                { detection.Candidates[0].SurfaceId, "desk" }
+            });
 
             ScanGuideStep step = ScanGuide.Describe(workflow, Tracking);
 
@@ -351,6 +356,54 @@ namespace GhostMap.Scanner.Tests.EditMode
             Assert.IsNull(step.AimHint, "a detected surface needs no aiming");
             StringAssert.Contains("Found a surface", step.Message);
             StringAssert.Contains("top 0.74 m", step.Message);
+        }
+
+        [Test]
+        public void Step6_WithAnUnidentifiedSurface_AsksWhatItIs()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = SweptRoomAtAddObjects(provider);
+            provider.DetectedSurfaces.Add(DeskTop(workflow.Frame, 7005, 2f, 1.5f));
+            Assert.IsTrue(workflow.TryRefreshFurnitureDetection(out _));
+
+            ScanGuideStep step = ScanGuide.Describe(workflow, Tracking);
+
+            StringAssert.Contains("Found something", step.Instruction);
+            StringAssert.Contains("Is:", step.Instruction);
+        }
+
+        [Test]
+        public void Step6_WithIdentifiedFurniture_NamesItAndOffersAddAll()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = SweptRoomAtAddObjects(provider);
+            GhostCoordinateFrame frame = workflow.Frame;
+
+            // Screen point (100 x, 100 z) looks at floor point (x, z).
+            provider.ScreenRayAt = point =>
+            {
+                Vector3 target = frame.GhostToWorld(new Vector3(point.x / 100f, 0f, point.y / 100f));
+                Vector3 eye = frame.GhostToWorld(new Vector3(point.x / 100f, 1.5f, point.y / 100f - 1f));
+                return new Ray(eye, (target - eye).normalized);
+            };
+
+            var detections = new System.Collections.Generic.List<ObjectDetection>
+            {
+                new ObjectDetection("bed", 0.9f, new Rect(70f, 40f, 60f, 80f)),
+                new ObjectDetection("chair", 0.9f, new Rect(270f, 100f, 60f, 80f)),
+                new ObjectDetection("chair", 0.9f, new Rect(270f, 220f, 60f, 80f))
+            };
+
+            for (int i = 0; i < FurnitureIdentificationController.MinHits; i++)
+            {
+                Assert.IsTrue(workflow.UpdateFurnitureIdentification(detections, 0.1f * i));
+            }
+
+            ScanGuideStep step = ScanGuide.Describe(workflow, Tracking);
+
+            Assert.AreEqual(6, step.Number);
+            StringAssert.Contains("Found: bed, 2 chairs. Tap Add All.", step.Instruction);
+            Assert.IsNull(step.AimHint);
         }
 
         [Test]

@@ -632,7 +632,10 @@ namespace GhostMap.Scanner.Tests.EditMode
             Assert.AreEqual(0, workflow.TryAcceptAllDetectedFurniture());
 
             Assert.AreEqual(1, workflow.Objects.ObjectCount);
-            Assert.AreEqual("desk", workflow.Objects.Objects[0].type);
+
+            // Task R4: ARKit's "table" label no longer names it; only the
+            // camera-image detector does, and none ran here.
+            Assert.AreEqual("generic", workflow.Objects.Objects[0].type);
             Assert.AreEqual(1, workflow.Snapshot.room.objects.Length);
         }
 

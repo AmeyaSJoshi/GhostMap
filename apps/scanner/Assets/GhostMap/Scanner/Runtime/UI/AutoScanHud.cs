@@ -162,7 +162,9 @@ namespace GhostMap.Scanner.UI
 
             if (addAllButton != null)
             {
-                bool offer = phase == ScanPhase.AddObjects && workflow.FurnitureDetection.CandidateCount > 0;
+                bool offer = phase == ScanPhase.AddObjects
+                    && (workflow.FurnitureDetection.CandidateCount > 0
+                        || (workflow.FurnitureIdentification != null && workflow.FurnitureIdentification.Proposals.Count > 0));
                 addAllButton.gameObject.SetActive(offer);
             }
         }

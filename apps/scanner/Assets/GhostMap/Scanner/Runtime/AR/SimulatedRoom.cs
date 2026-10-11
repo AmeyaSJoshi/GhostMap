@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -43,6 +44,24 @@ namespace GhostMap.Scanner.AR
         private static readonly Vector3 EyePosition = new Vector3(0.25f, EyeHeightM, -0.35f);
 
         private Camera viewCamera;
+
+        private readonly List<Furniture> furniture = new List<Furniture>();
+
+        /// <summary>A piece of demo furniture, as YOLO would name it (task R4).</summary>
+        public readonly struct Furniture
+        {
+            public Furniture(string cocoClass, Bounds worldBounds)
+            {
+                CocoClass = cocoClass;
+                WorldBounds = worldBounds;
+            }
+
+            public string CocoClass { get; }
+            public Bounds WorldBounds { get; }
+        }
+
+        /// <summary>The demo room's furniture, for <see cref="SimulatedObjectDetector"/>.</summary>
+        public IReadOnlyList<Furniture> FurnitureInRoom => furniture;
         private float startTime;
 
         private float targetYaw;
@@ -251,9 +270,11 @@ namespace GhostMap.Scanner.AR
 
             // Furniture, including a bed that hides part of a wall, as real
             // rooms do.
-            Box(root, "Bed", new Vector3(halfW - 0.75f, 0.25f, halfD - 1.05f), new Vector3(1.4f, 0.5f, 2.0f), new Color(0.93f, 0.93f, 0.96f));
-            Box(root, "Bed Headboard", new Vector3(halfW - 0.75f, 0.55f, halfD - 0.04f), new Vector3(1.4f, 1.1f, 0.06f), new Color(0.35f, 0.28f, 0.24f));
-            Box(root, "Desk", new Vector3(-halfW + 0.45f, 0.37f, -halfD + 0.9f), new Vector3(0.7f, 0.74f, 1.3f), new Color(0.75f, 0.62f, 0.45f));
+            Bounds bed = Box(root, "Bed", new Vector3(halfW - 0.75f, 0.25f, halfD - 1.05f), new Vector3(1.4f, 0.5f, 2.0f), new Color(0.93f, 0.93f, 0.96f));
+            bed.Encapsulate(Box(root, "Bed Headboard", new Vector3(halfW - 0.75f, 0.55f, halfD - 0.04f), new Vector3(1.4f, 1.1f, 0.06f), new Color(0.35f, 0.28f, 0.24f)));
+            Bounds desk = Box(root, "Desk", new Vector3(-halfW + 0.45f, 0.37f, -halfD + 0.9f), new Vector3(0.7f, 0.74f, 1.3f), new Color(0.75f, 0.62f, 0.45f));
+            furniture.Add(new Furniture("bed", bed));
+            furniture.Add(new Furniture("dining table", desk));
             Box(root, "Rug", new Vector3(0.1f, 0.005f, -0.3f), new Vector3(1.8f, 0.01f, 1.2f), new Color(0.48f, 0.55f, 0.60f));
 
             var lightGo = new GameObject("Simulated Light", typeof(Light));
@@ -269,7 +290,7 @@ namespace GhostMap.Scanner.AR
             RenderSettings.ambientLight = new Color(0.55f, 0.55f, 0.58f);
         }
 
-        private void Box(Transform parent, string name, Vector3 center, Vector3 size, Color color)
+        private Bounds Box(Transform parent, string name, Vector3 center, Vector3 size, Color color)
         {
             GameObject box = GameObject.CreatePrimitive(PrimitiveType.Cube);
             box.name = name;
@@ -296,6 +317,7 @@ namespace GhostMap.Scanner.AR
             }
 
             renderer.material.color = color;
+            return renderer.bounds;
         }
     }
 }

@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using GhostMap.Scanner.Capture;
 using GhostMap.Scanner.Share;
 using GhostMap.Scanner.Workflow;
@@ -510,6 +512,23 @@ namespace GhostMap.Scanner.UI
             FurnitureDetectionController detection = workflow.FurnitureDetection;
             string type = Capitalize(objects.SelectedType);
             string error = objects.LastError;
+            IReadOnlyList<IdentifiedFurniture> proposals = workflow.FurnitureIdentification != null
+                ? workflow.FurnitureIdentification.Proposals
+                : (IReadOnlyList<IdentifiedFurniture>)Array.Empty<IdentifiedFurniture>();
+
+            // Task R4: what the camera recognised, added with one tap.
+            if (proposals.Count > 0)
+            {
+                return new ScanGuideStep(
+                    6,
+                    "Add furniture",
+                    $"Found: {FurnitureIdentificationController.Describe(proposals)}. Tap Add All.",
+                    null,
+                    string.IsNullOrEmpty(error)
+                        ? "Missing something? Look at it for a moment, or place it by hand."
+                        : error,
+                    string.IsNullOrEmpty(error) ? GuideMessageKind.Tip : GuideMessageKind.Error);
+            }
 
             // ADR-0006: a detected surface is offered first. GhostMap measured
             // it; the user still says what it is.
@@ -523,7 +542,7 @@ namespace GhostMap.Scanner.UI
                 // ADR-0007: when GhostMap has a specific guess, the user's
                 // usual job is a single tap.
                 string suggested = detection.SelectedType;
-                string instruction = detection.TypeIsSuggested && suggested != FurnitureTypeSuggester.Fallback
+                string instruction = detection.TypeIsSuggested && detection.IsIdentified(candidate)
                     ? $"Looks like a {suggested} at the yellow dot. Tap Add. Wrong type? Tap Is: to change it, or Skip."
                     : "Found something at the yellow dot. Tap Is: to say what it is, then Add. Or Skip it.";
 

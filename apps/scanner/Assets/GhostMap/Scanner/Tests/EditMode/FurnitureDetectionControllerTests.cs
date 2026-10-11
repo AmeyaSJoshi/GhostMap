@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using GhostMap.Scanner.AR;
 using GhostMap.Scanner.Capture;
 using GhostMap.Shared.Domain;
@@ -680,11 +681,14 @@ namespace GhostMap.Scanner.Tests.EditMode
     
 
         // -------------------------------------------------------------------
-        // ADR-0007 suggested type
+        // Task R4 identified type (replaced ADR-0007's ARKit-label guess)
         // -------------------------------------------------------------------
 
+        private static Dictionary<TrackableId, string> Identified(FurnitureCandidate candidate, string type)
+            => new Dictionary<TrackableId, string> { { candidate.SurfaceId, type } };
+
         [Test]
-        public void SuggestedType_IsPreselectedForTheOfferedSurface()
+        public void SuggestedType_IsGenericUntilIdentified_WhateverARKitCallsThePlane()
         {
             FakeSpatialProvider provider = Provider();
             FurnitureDetectionController detector = Detector(provider);
@@ -694,42 +698,67 @@ namespace GhostMap.Scanner.Tests.EditMode
 
             Assert.IsTrue(detector.Refresh(out _));
 
-            Assert.AreEqual("chair", detector.Candidates[0].SuggestedType);
-            Assert.AreEqual("chair", detector.SelectedType);
-            Assert.IsTrue(detector.TypeIsSuggested);
+            Assert.AreEqual("generic", detector.SuggestedTypeFor(detector.Candidates[0]));
+            Assert.AreEqual("generic", detector.SelectedType);
+            Assert.IsFalse(detector.IsIdentified(detector.Candidates[0]));
         }
 
         [Test]
-        public void SuggestedType_FollowsALabelThatArrivesOnALaterRefresh()
+        public void IdentifiedType_IsPreselectedForTheOfferedSurface()
         {
             FakeSpatialProvider provider = Provider();
             FurnitureDetectionController detector = Detector(provider);
-            DetectedSurface unlabelled = Surface(detector.Frame, 2f, 1.5f, 0.45f, 1.9f, 0.6f);
-            provider.DetectedSurfaces.Add(unlabelled);
+            provider.DetectedSurfaces.Add(Surface(detector.Frame, 2f, 1.5f, 0.45f, 0.5f, 0.5f));
             Assert.IsTrue(detector.Refresh(out _));
-            Assert.AreEqual("generic", detector.SelectedType);
 
-            // ARKit decides a few seconds later; same plane, now a seat.
-            provider.DetectedSurfaces.Clear();
-            provider.DetectedSurfaces.Add(new DetectedSurface(
-                unlabelled.Id, unlabelled.WorldCenter, unlabelled.WorldRotation,
-                unlabelled.ExtentsM, unlabelled.Alignment, PlaneClassifications.Seat));
+            detector.SetIdentifiedTypes(Identified(detector.Candidates[0], "chair"));
+
+            Assert.AreEqual("chair", detector.SuggestedTypeFor(detector.Candidates[0]));
+            Assert.AreEqual("chair", detector.SelectedType);
+            Assert.IsTrue(detector.TypeIsSuggested);
+            Assert.IsTrue(detector.IsIdentified(detector.Candidates[0]));
+        }
+
+        [Test]
+        public void IdentifiedType_SurvivesARefresh()
+        {
+            FakeSpatialProvider provider = Provider();
+            FurnitureDetectionController detector = Detector(provider);
+            provider.DetectedSurfaces.Add(Surface(detector.Frame, 2f, 1.5f, 0.45f, 1.9f, 0.6f));
+            Assert.IsTrue(detector.Refresh(out _));
+            detector.SetIdentifiedTypes(Identified(detector.Candidates[0], "couch"));
+
             Assert.IsTrue(detector.Refresh(out _));
 
             Assert.AreEqual("couch", detector.SelectedType);
         }
 
         [Test]
-        public void UsersChoice_SurvivesRefresh_AndIsNotOverwrittenBySuggestion()
+        public void IdentifiedType_IgnoresAnUnsupportedType()
         {
             FakeSpatialProvider provider = Provider();
             FurnitureDetectionController detector = Detector(provider);
             provider.DetectedSurfaces.Add(DeskSurface(detector.Frame));
             Assert.IsTrue(detector.Refresh(out _));
+
+            detector.SetIdentifiedTypes(Identified(detector.Candidates[0], "spaceship"));
+
+            Assert.AreEqual("generic", detector.SelectedType);
+        }
+
+        [Test]
+        public void UsersChoice_SurvivesRefresh_AndIsNotOverwrittenByIdentification()
+        {
+            FakeSpatialProvider provider = Provider();
+            FurnitureDetectionController detector = Detector(provider);
+            provider.DetectedSurfaces.Add(DeskSurface(detector.Frame));
+            Assert.IsTrue(detector.Refresh(out _));
+            detector.SetIdentifiedTypes(Identified(detector.Candidates[0], "desk"));
             Assert.AreEqual("desk", detector.SelectedType);
 
             Assert.IsTrue(detector.SetType("table"));
             Assert.IsTrue(detector.Refresh(out _));
+            detector.SetIdentifiedTypes(Identified(detector.Candidates[0], "desk"));
 
             Assert.AreEqual("table", detector.SelectedType);
             Assert.IsFalse(detector.TypeIsSuggested);
@@ -754,25 +783,30 @@ namespace GhostMap.Scanner.Tests.EditMode
             FakeSpatialProvider provider = Provider();
             FurnitureDetectionController detector = Detector(provider);
             provider.DetectedSurfaces.Add(DeskSurface(detector.Frame));
-            provider.DetectedSurfaces.Add(Surface(
-                detector.Frame, 1f, 1f, 0.45f, 0.5f, 0.5f,
-                classifications: PlaneClassifications.Seat));
+            provider.DetectedSurfaces.Add(Surface(detector.Frame, 1f, 1f, 0.45f, 0.5f, 0.5f));
             Assert.IsTrue(detector.Refresh(out _));
+            var types = new Dictionary<TrackableId, string>
+            {
+                { detector.Candidates[0].SurfaceId, "desk" },
+                { detector.Candidates[1].SurfaceId, "chair" }
+            };
+            detector.SetIdentifiedTypes(types);
             Assert.IsTrue(detector.SetType("table"));
 
             Assert.IsTrue(detector.SelectNextCandidate());
 
-            Assert.AreEqual(detector.Candidates[detector.SelectedIndex].SuggestedType, detector.SelectedType);
+            Assert.AreEqual(detector.SuggestedTypeFor(detector.Candidates[detector.SelectedIndex]), detector.SelectedType);
             Assert.IsTrue(detector.TypeIsSuggested);
         }
 
         [Test]
-        public void SuggestedType_IsWhatAnAcceptedCandidateBecomes()
+        public void IdentifiedType_IsWhatAnAcceptedCandidateBecomes()
         {
             FakeSpatialProvider provider = Provider();
             FurnitureDetectionController detector = Detector(provider);
             provider.DetectedSurfaces.Add(DeskSurface(detector.Frame));
             Assert.IsTrue(detector.Refresh(out _));
+            detector.SetIdentifiedTypes(Identified(detector.Candidates[0], "desk"));
 
             Assert.IsTrue(detector.TryBuildSelected(out SceneObjectModel model, out _));
 

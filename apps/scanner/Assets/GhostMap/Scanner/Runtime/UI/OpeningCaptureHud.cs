@@ -180,7 +180,7 @@ namespace GhostMap.Scanner.UI
             {
                 selectWallLabel.text = capture.WallCount == 0
                     ? "No walls"
-                    : $"Wall {capture.SelectedWallIndex + 1}/{capture.WallCount}";
+                    : $"Wall {capture.SelectedWallIndex + 1} of {capture.WallCount}  ›";
             }
 
             if (selectWallButton != null)
@@ -190,7 +190,7 @@ namespace GhostMap.Scanner.UI
 
             if (toggleTypeLabel != null)
             {
-                toggleTypeLabel.text = $"Type: {capture.SelectedType}";
+                toggleTypeLabel.text = $"Type: {ScanGuide.Capitalize(ScanGuide.OpeningName(capture.SelectedType))}";
             }
 
             if (capturePointButton != null)
@@ -201,8 +201,8 @@ namespace GhostMap.Scanner.UI
             if (capturePointLabel != null)
             {
                 capturePointLabel.text = capture.HasPendingStartPoint
-                    ? "Capture Upper-Right"
-                    : "Capture Lower-Left";
+                    ? "Mark Top-Right"
+                    : "Mark Bottom-Left";
             }
 
             if (undoOpeningButton != null)
@@ -344,6 +344,7 @@ namespace GhostMap.Scanner.UI
         private GameObject CreateMarker(string markerName)
         {
             GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            MarkerMaterials.MakeUnlit(marker);
             marker.name = markerName;
             marker.transform.SetParent(transform, worldPositionStays: false);
             marker.transform.localScale = Vector3.one * MarkerDiameterM;

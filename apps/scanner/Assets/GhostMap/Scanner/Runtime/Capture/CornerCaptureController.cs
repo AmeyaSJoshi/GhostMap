@@ -292,6 +292,109 @@ namespace GhostMap.Scanner.Capture
             LastRejection = CornerCaptureRejection.None;
         }
 
+        /// <summary>
+        /// Installs four corners that were derived rather than aimed at — the
+        /// output of <see cref="WallSweepController.TryDeriveCorners"/> under
+        /// ADR-0005.
+        ///
+        /// <para><b>Why this lives here.</b> Everything downstream of corner
+        /// capture — closure verification, height capture's wall derivation,
+        /// opening placement, and the snapshot's <c>corners</c> array — reads
+        /// this controller. Giving the swept path its own corner store would
+        /// create a second source of corners and force every one of those
+        /// consumers to ask which path produced the room. Instead the swept
+        /// path computes corners and hands them here, so there is exactly one
+        /// corner store and one closure measurement, whichever way the user
+        /// captured.</para>
+        ///
+        /// <para>Validation is the same shared <see cref="RoomValidator"/> rule
+        /// set a walked room faces. Deriving corners from a line fit is not a
+        /// licence to skip spacing, area, wall length, interior angle or
+        /// self-intersection: a sweep of four nearly-parallel walls, or of a
+        /// cupboard rather than a room, must be refused exactly as a bad walk
+        /// would be.</para>
+        ///
+        /// <para><b>Tracking is deliberately not checked.</b> Unlike
+        /// <see cref="TryCaptureCorner"/>, this reads no camera ray — the
+        /// samples were already gated on tracking as they were swept. Failing
+        /// adoption because tracking wobbled a moment after a good sweep would
+        /// discard four perfectly measured walls for nothing.</para>
+        ///
+        /// <para>Any existing corners and closure measurement are replaced: the
+        /// derived footprint is a complete room, not an addition to one.</para>
+        /// </summary>
+        /// <returns>True when the derived corners were installed.</returns>
+        public bool TryAdoptDerivedCorners(
+            IReadOnlyList<Vector3> derived,
+            out CornerCaptureRejection rejection)
+        {
+            LastError = string.Empty;
+
+            if (Frame == null)
+            {
+                rejection = CornerCaptureRejection.FloorNotLocked;
+                LastRejection = rejection;
+                return false;
+            }
+
+            if (derived == null || derived.Count != RequiredCornerCount)
+            {
+                rejection = CornerCaptureRejection.NotFourCorners;
+                LastRejection = rejection;
+                return false;
+            }
+
+            var candidates = new CornerModel[RequiredCornerCount];
+
+            for (int i = 0; i < RequiredCornerCount; i++)
+            {
+                Vector3 corner = derived[i];
+
+                // Scene schema v1 requires floor corners at exactly y = 0.
+                // WallFitting already forces this; re-forcing it here keeps the
+                // invariant owned by the store that publishes it rather than by
+                // a caller.
+                candidates[i] = new CornerModel
+                {
+                    id = Guid.NewGuid().ToString(),
+                    position = new Vec3Dto(corner.x, 0f, corner.z)
+                };
+            }
+
+            var candidateRoom = new RoomModel
+            {
+                id = "candidate",
+                name = "Room",
+                heightM = 0f,
+                corners = candidates,
+                openings = Array.Empty<OpeningModel>(),
+                objects = Array.Empty<SceneObjectModel>()
+            };
+
+            ValidationResult result = RoomValidator.ValidateRoom(candidateRoom);
+
+            if (!result.IsValid)
+            {
+                LastError = result.Error;
+                rejection = CornerCaptureRejection.ValidationFailed;
+                LastRejection = rejection;
+                return false;
+            }
+
+            corners.Clear();
+
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                corners.Add(candidates[i]);
+            }
+
+            ForgetClosure();
+
+            rejection = CornerCaptureRejection.None;
+            LastRejection = rejection;
+            return true;
+        }
+
         // -------------------------------------------------------------------
         // Closure verification
         // -------------------------------------------------------------------

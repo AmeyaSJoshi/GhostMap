@@ -33,12 +33,16 @@ namespace GhostMap.Scanner.Tests.EditMode
         private static ScanWorkflowController NewWorkflow(FakeSpatialProvider provider)
         {
             var floorLock = new FloorLockController(provider);
+            var wallSweep = new WallSweepController(provider, floorLock);
             var corners = new CornerCaptureController(provider, floorLock);
             var height = new HeightCaptureController(provider, floorLock, corners);
             var openingCapture = new OpeningCaptureController(provider, floorLock, corners, height);
             var objectPlacement = new ObjectPlacementController(provider, floorLock);
+            var furnitureDetection = new FurnitureDetectionController(provider, floorLock, corners);
 
-            return new ScanWorkflowController(floorLock, corners, height, openingCapture, objectPlacement);
+            return new ScanWorkflowController(
+                floorLock, wallSweep, corners, height, openingCapture, objectPlacement,
+                furnitureDetection);
         }
 
         private static ScanWorkflowController LockedWorkflow(FakeSpatialProvider provider)

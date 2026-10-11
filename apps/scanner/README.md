@@ -13,7 +13,7 @@ Scene**. Regenerate it after changing `ScannerSceneBuilder`; do not hand-edit it
 ## Test
 
 ```bash
-./tools/run_unity_tests.sh scanner      # EditMode, -buildTarget iOS, macOS only
+./tools/run_unity_tests.sh scanner      # EditMode; runs on macOS or Linux
 ```
 
 ## Build to an iPhone
@@ -35,9 +35,23 @@ The Editor's Play mode is never evidence for AR, device or network behavior
 
 ## Use
 
-Point at the floor and tap **Lock Floor**, capture four corners, re-aim at the
-first corner and tap **Verify First Corner**, capture the height (or type it),
-add doors and windows, then furniture, then tap **Finalize GhostMap**.
+1. Point at the floor and tap **Lock Floor**.
+2. Tap **Scan Room** and turn slowly in place, pointing at the walls. If a wall
+   is missing the guide says where to look; **Help GhostMap** switches to
+   sweeping each wall's floor line, and **Trace Walls Instead** to walking to
+   the corners.
+3. Confirm or capture the height, then add doors and windows.
+4. Point at furniture; detected surfaces are offered with their measured size.
+   Tap **Add**, **Skip**, **Next** or **Add All**, or place items by hand.
+5. Tap **Finalize GhostMap**.
 
-To stream to the Viewer, type the computer's LAN IP into **Laptop IP** and tap
-**Connect** at any point. The phone and computer must be on the same network.
+Today Send to Computer uses UDP discovery and the desktop Viewer. Roadmap tasks
+`R6`-`R7` replace that with a phone-built export bundle and the iOS share sheet
+(ADR-0013).
+
+## Demo mode without a phone
+
+In the Editor and the iOS Simulator (never on a device) the scanner can run
+against a virtual furnished room you look around by dragging. Build a Simulator
+project with `ScannerSimulatorBuild.ConfigureForSimulator` then
+`ScannerSimulatorBuild.BuildForSimulator` (`-executeMethod`).

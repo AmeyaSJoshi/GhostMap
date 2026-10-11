@@ -9,9 +9,10 @@ using UnityEngine.UI;
 namespace GhostMap.Scanner.UI
 {
     /// <summary>
-    /// The Task S2 scene-facing shell: a center crosshair, a Lock Floor button
-    /// that is disabled while tracking is poor, and the readout that makes the
-    /// GhostMap frame observable on a phone.
+    /// The Task S2 scene-facing shell: a Lock Floor button that is disabled
+    /// while tracking is poor, and the readout that makes the GhostMap frame
+    /// observable on a phone. The crosshair itself belongs to
+    /// <see cref="ScannerGuideHud"/>, which colors it for every step.
     ///
     /// <para>All logic lives in <see cref="FloorLockController"/> and
     /// <see cref="ScanWorkflowController"/>. This class only reads them and
@@ -29,16 +30,18 @@ namespace GhostMap.Scanner.UI
     {
         [SerializeField] private ArSpatialProvider spatialProvider;
         [SerializeField] private Button lockFloorButton;
-        [SerializeField] private Graphic crosshair;
         [SerializeField] private Text readoutText;
 
         private readonly StringBuilder builder = new StringBuilder();
 
         private FloorLockController floorLock;
+        private WallSweepController wallSweep;
         private CornerCaptureController cornerCapture;
         private HeightCaptureController heightCapture;
         private OpeningCaptureController openingCapture;
         private ObjectPlacementController objectPlacement;
+        private FurnitureDetectionController furnitureDetection;
+        private AutoRoomScanController autoScan;
         private ScanWorkflowController workflow;
 
         private FloorLockRejection lastAttemptRejection = FloorLockRejection.None;
@@ -52,6 +55,14 @@ namespace GhostMap.Scanner.UI
         /// revisions and two rooms.
         /// </summary>
         public ScanWorkflowController Workflow => workflow;
+
+        /// <summary>
+        /// Why the most recent Lock Floor press was refused, or None when it
+        /// succeeded or has not happened. <see cref="ScannerGuideHud"/> turns
+        /// this into plain language.
+        /// </summary>
+        public FloorLockRejection LastAttemptRejection =>
+            hasAttempted ? lastAttemptRejection : FloorLockRejection.None;
 
         private void Awake()
         {
@@ -87,12 +98,17 @@ namespace GhostMap.Scanner.UI
         private void BuildWorkflow()
         {
             floorLock = new FloorLockController(spatialProvider);
+            wallSweep = new WallSweepController(spatialProvider, floorLock);
             cornerCapture = new CornerCaptureController(spatialProvider, floorLock);
             heightCapture = new HeightCaptureController(spatialProvider, floorLock, cornerCapture);
             openingCapture = new OpeningCaptureController(spatialProvider, floorLock, cornerCapture, heightCapture);
             objectPlacement = new ObjectPlacementController(spatialProvider, floorLock);
+            furnitureDetection = new FurnitureDetectionController(
+                spatialProvider, floorLock, cornerCapture);
+            autoScan = new AutoRoomScanController(spatialProvider, floorLock);
             workflow = new ScanWorkflowController(
-                floorLock, cornerCapture, heightCapture, openingCapture, objectPlacement);
+                floorLock, wallSweep, cornerCapture, heightCapture, openingCapture,
+                objectPlacement, furnitureDetection, autoScan);
 
             hasAttempted = false;
             lastAttemptRejection = FloorLockRejection.None;
@@ -117,19 +133,10 @@ namespace GhostMap.Scanner.UI
 
             if (lockFloorButton != null)
             {
+                // Shown through step 1 only; disabled until a lock can work.
+                lockFloorButton.gameObject.SetActive(!floorLock.IsLocked);
                 lockFloorButton.interactable =
                     workflow.Phase == ScanPhase.FindFloor && floorLock.CanLock;
-            }
-
-            if (crosshair != null)
-            {
-                // Green once the frame exists, amber while a lock is possible,
-                // grey while tracking is too poor to try.
-                crosshair.color = floorLock.IsLocked
-                    ? Color.green
-                    : floorLock.CanLock
-                        ? new Color(1f, 0.75f, 0.2f)
-                        : new Color(0.6f, 0.6f, 0.6f);
             }
 
             if (readoutText != null)

@@ -92,28 +92,28 @@ simultaneous editing from two devices.
 
 ## 7. Functional requirements
 
-"Built" means implemented and covered by automated tests. "Hackathon" means it
-exists in `GhostMapDublinHacks` and arrives in this repository with plan task
-`R1`. Nothing has been verified end to end from iPhone to computer yet.
+"Built" means implemented and covered by automated tests. "Device-verified"
+means it has also run correctly on a physical iPhone. Nothing has been verified
+end to end from iPhone to computer yet.
 
 | ID | Requirement | Status |
 | --- | --- | --- |
 | FR-01 | **Start scan.** ARKit world tracking; captures blocked while tracking is degraded. | Built, device-verified |
 | FR-02 | **Floor lock.** Lock a detected horizontal floor as the reference plane. | Built, device-verified |
-| FR-03 | **Stand-in-place room capture.** While the user turns in one spot, detected wall planes become four walls and the room's corners and dimensions are derived. Says which way to look when a wall is missing. | Hackathon (automatic room scan) |
-| FR-04 | **Fallback room capture.** Sweep each wall's floor line, or walk to each corner. | Sweep: hackathon. Walked corners: built, device-verified |
+| FR-03 | **Stand-in-place room capture.** While the user turns in one spot, detected wall planes become four walls and the room's corners and dimensions are derived. Says which way to look when a wall is missing. | Built, not device-verified |
+| FR-04 | **Fallback room capture.** Sweep each wall's floor line, or walk to each corner. | Sweep: built, not device-verified. Walked corners: device-verified |
 | FR-05 | **Validated footprint.** Reject self-crossing, too-small or implausible rooms; closure check on the manual paths. | Built, device-verified |
-| FR-06 | **Room height.** From the ceiling plane when seen; otherwise aim at the wall/ceiling line or type it. | Ceiling plane: hackathon. Aim and type: built, device-verified |
+| FR-06 | **Room height.** From the ceiling plane when seen; otherwise aim at the wall/ceiling line or type it. | Ceiling plane: built, not device-verified. Aim and type: device-verified |
 | FR-07 | **Walls and ceiling.** Derived from the footprint and height. | Built |
-| FR-08 | **Doors and windows.** Automatically from labelled planes; otherwise mark two corners on a wall. | Automatic: hackathon. Manual: built, device-verified |
+| FR-08 | **Doors and windows.** Automatically from labelled planes; otherwise mark two corners on a wall. | Automatic: built, not device-verified. Manual: device-verified |
 | FR-09 | **Furniture identification on the phone.** A YOLO-n detector names furniture in the camera image; each item is matched to its measured surface for size and position; one tap adds them all. | Not built (plan task `R4`, ADR-0011) |
-| FR-10 | **Furniture measurement.** Width, depth, height and yaw from the ARKit surface the object sits on; adjustable. | Hackathon (surface detection) |
+| FR-10 | **Furniture measurement.** Width, depth, height and yaw from the ARKit surface the object sits on; adjustable. | Built, not device-verified |
 | FR-11 | **Manual furniture fallback.** Pick a type, aim at its floor position, adjust size and yaw. | Built, device-verified |
-| FR-12 | **Export bundle on the phone.** On finalize the phone writes one zip: `room.html`, a whole-room `room.glb` with openings, one `.glb` per object, `scene.json`, `README.txt`. | Per-object `.glb` exporter: hackathon (runs on the computer). Phone-side bundle: not built (`R6`) |
+| FR-12 | **Export bundle on the phone.** On finalize the phone writes one zip: `room.html`, a whole-room `room.glb` with openings, one `.glb` per object, `scene.json`, `README.txt`. | Per-object `.glb` exporter: built, runs in the Unity Viewer today. Phone-side bundle: not built (`R6`) |
 | FR-13 | **Send to Computer.** One button opens the iOS share sheet with the bundle; AirDrop to a Mac, or Files, iCloud or Mail. No IP, no network setup. | Not built (`R7`) |
 | FR-14 | **Saved scans.** The phone keeps every finalized room and can send it again. | Not built (`R6`) |
 | FR-15 | **Browser viewer.** `room.html` opens by double-click, offline, in any browser: orbit, dollhouse, click an object for its name and size, measure 3D and horizontal distance. View and measure only. | Not built (`R8`) |
-| FR-16 | **Unity-ready files.** `.glb` in metres, +Y up, furniture on the floor; imports into Unity with glTFast. | Per-object: hackathon. Whole room: not built (`R6`) |
+| FR-16 | **Unity-ready files.** `.glb` in metres, +Y up, furniture on the floor; imports into Unity with glTFast. | Per-object: built (Unity Viewer). Whole room: not built (`R6`) |
 | FR-17 | **Detector label kept.** A `generic` object keeps the detector's class name, such as "potted plant". | Not built (`R5`, additive schema change) |
 | FR-18 | **Developer live stream.** The Unity Viewer shows the room while the phone scans, over TCP with a typed IP. | Built; developer tool only, retires with the Unity Viewer (`R10`) |
 | FR-19 | Editing on the computer, delete/hide objects, floor-plan view. | Not planned; edit in Unity |

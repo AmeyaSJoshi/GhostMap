@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
+using UnityEngine.XR.Management;
 
 namespace GhostMap.Scanner.AR
 {
@@ -23,6 +24,11 @@ namespace GhostMap.Scanner.AR
     /// both, and a raycast hit and the camera position can be compared and
     /// subtracted directly.</para>
     ///
+    /// <para><b>Demo mode.</b> In the Unity Editor and the iOS Simulator there
+    /// is no ARKit, so this provider answers from a <see cref="SimulatedRoom"/>
+    /// instead. <see cref="SimulatedRoom.ShouldSimulate"/> never selects it on
+    /// a physical iPhone.</para>
+    ///
     /// <para>That is what makes the GhostMap frame immune to
     /// <c>CameraYOffset</c>: the frame's origin is the floor hit, and
     /// <c>WorldToGhost</c> subtracts that origin, so any constant offset shared
@@ -34,31 +40,87 @@ namespace GhostMap.Scanner.AR
     public sealed class ArSpatialProvider : MonoBehaviour, ISpatialProvider
     {
         [SerializeField] private ARRaycastManager raycastManager;
+        [SerializeField] private ARPlaneManager planeManager;
         [SerializeField] private Camera arCamera;
+
+        /// <summary>A fixed id for the demo floor, so repeated hits read as one plane.</summary>
+        private static readonly TrackableId SimulatedFloorId = new TrackableId(0x6768_6f73_7400_0001, 1);
 
         private readonly List<ARRaycastHit> hits = new List<ARRaycastHit>();
 
+        private SimulatedRoom simulatedRoom;
+
         public Camera ArCamera => arCamera;
 
-        public ARSessionState SessionState => ARSession.state;
+        /// <summary>True when answering from the demo room rather than ARKit.</summary>
+        public bool IsSimulated => simulatedRoom != null;
 
-        public NotTrackingReason NotTrackingReason => ARSession.notTrackingReason;
+        public ARSessionState SessionState =>
+            IsSimulated
+                ? (simulatedRoom.IsTrackingGood ? ARSessionState.SessionTracking : ARSessionState.SessionInitializing)
+                : ARSession.state;
+
+        public NotTrackingReason NotTrackingReason =>
+            IsSimulated
+                ? (simulatedRoom.IsTrackingGood ? NotTrackingReason.None : NotTrackingReason.Initializing)
+                : ARSession.notTrackingReason;
 
         public bool IsTrackingGood =>
-            ARSession.state == ARSessionState.SessionTracking &&
-            ARSession.notTrackingReason == NotTrackingReason.None;
+            IsSimulated
+                ? simulatedRoom.IsTrackingGood
+                : ARSession.state == ARSessionState.SessionTracking &&
+                  ARSession.notTrackingReason == NotTrackingReason.None;
 
         public Vector2 CenterScreenPoint => new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
 
         private void Reset()
         {
             raycastManager = FindFirstObjectByType<ARRaycastManager>();
+            planeManager = FindFirstObjectByType<ARPlaneManager>();
             arCamera = Camera.main;
+        }
+
+        private void Awake()
+        {
+            XRManagerSettings manager = XRGeneralSettings.Instance != null
+                ? XRGeneralSettings.Instance.Manager
+                : null;
+
+            bool hasActiveLoader = manager != null && manager.activeLoader != null;
+
+            if (arCamera != null
+                && SimulatedRoom.ShouldSimulate(Application.isEditor, SimulatedRoom.IsRunningInIosSimulator(), hasActiveLoader))
+            {
+                // With no XR loader the AR session can only fail; stop it
+                // trying, so it logs nothing in a mode where that is expected.
+                ARSession session = FindFirstObjectByType<ARSession>();
+                if (session != null)
+                {
+                    session.enabled = false;
+                }
+
+                var demoGo = new GameObject("Demo Mode (no ARKit)");
+                simulatedRoom = demoGo.AddComponent<SimulatedRoom>();
+                simulatedRoom.Initialize(arCamera);
+
+                Debug.Log("GhostMap: no ARKit here, so the scanner is running in demo mode with a virtual room.");
+            }
         }
 
         public bool TryGetFloorHit(Vector2 screenPoint, out FloorHit hit)
         {
             hit = default;
+
+            if (IsSimulated)
+            {
+                if (!SimulatedRoom.TryRaycastFloor(GetScreenRay(screenPoint), out Vector3 floorPoint))
+                {
+                    return false;
+                }
+
+                hit = new FloorHit(floorPoint, PlaneAlignment.HorizontalUp, SimulatedFloorId);
+                return true;
+            }
 
             if (raycastManager == null)
             {
@@ -104,6 +166,57 @@ namespace GhostMap.Scanner.AR
 
             Transform cameraTransform = arCamera.transform;
             pose = new Pose(cameraTransform.position, cameraTransform.rotation);
+            return true;
+        }
+
+        /// <summary>
+        /// ADR-0006: enumerates detected planes for furniture detection.
+        ///
+        /// <para>This is the <b>second</b> use of plane detection in GhostMap,
+        /// and the only one besides the floor lock. It does not weaken
+        /// <c>ADR-0004</c>: that rejected depending on detection of blank
+        /// <i>vertical</i> walls, which is slow and partial on a non-Pro
+        /// device. Horizontal furniture surfaces are the favourable case —
+        /// textured, lit, seen from above — and are exactly what the
+        /// already-device-verified floor lock relies on.</para>
+        ///
+        /// <para>The world centre is <c>TransformPoint(plane.center)</c> rather
+        /// than <c>transform.position</c>: ARKit refines the observed centre
+        /// within the plane's own space as it sees more of the surface, and
+        /// <c>plane.center</c> is where that refinement lands.</para>
+        /// </summary>
+        public bool TryGetDetectedSurfaces(List<DetectedSurface> into)
+        {
+            if (into == null)
+            {
+                return false;
+            }
+
+            into.Clear();
+
+            if (planeManager == null || planeManager.trackables.count == 0)
+            {
+                return planeManager != null;
+            }
+
+            foreach (ARPlane plane in planeManager.trackables)
+            {
+                if (plane == null)
+                {
+                    continue;
+                }
+
+                Transform planeTransform = plane.transform;
+
+                into.Add(new DetectedSurface(
+                    plane.trackableId,
+                    planeTransform.TransformPoint(plane.center),
+                    planeTransform.rotation,
+                    plane.size,
+                    plane.alignment,
+                    plane.classifications));
+            }
+
             return true;
         }
     }

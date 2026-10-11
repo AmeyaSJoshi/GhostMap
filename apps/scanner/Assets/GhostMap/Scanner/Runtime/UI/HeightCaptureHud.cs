@@ -156,7 +156,7 @@ namespace GhostMap.Scanner.UI
             {
                 selectWallLabel.text = height.WallCount == 0
                     ? "No walls"
-                    : $"Wall {height.SelectedWallIndex + 1}/{height.WallCount}";
+                    : $"Wall {height.SelectedWallIndex + 1} of {height.WallCount}  ›";
             }
 
             if (selectWallButton != null)
@@ -171,7 +171,7 @@ namespace GhostMap.Scanner.UI
 
             if (captureHeightLabel != null)
             {
-                captureHeightLabel.text = "Capture Height";
+                captureHeightLabel.text = "Measure Height";
             }
         }
 
@@ -267,6 +267,7 @@ namespace GhostMap.Scanner.UI
         private GameObject CreateMarker()
         {
             GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            MarkerMaterials.MakeUnlit(marker);
             marker.name = "HeightAimMarker";
             marker.transform.SetParent(transform, worldPositionStays: false);
             marker.transform.localScale = Vector3.one * AimMarkerDiameterM;

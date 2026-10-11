@@ -59,6 +59,7 @@ namespace GhostMap.Scanner.UI
         private readonly List<GameObject> objectMarkers = new List<GameObject>();
 
         private GameObject aimMarker;
+        private Text placeObjectLabel;
 
         private void Awake()
         {
@@ -127,14 +128,20 @@ namespace GhostMap.Scanner.UI
             SetActive(selectTypeButton, inObjectsPhase);
             SetActive(placeObjectButton, inObjectsPhase);
             SetActive(undoObjectButton, inObjectsPhase);
-            SetActive(widthPlusButton, inObjectsPhase);
-            SetActive(widthMinusButton, inObjectsPhase);
-            SetActive(depthPlusButton, inObjectsPhase);
-            SetActive(depthMinusButton, inObjectsPhase);
-            SetActive(heightPlusButton, inObjectsPhase);
-            SetActive(heightMinusButton, inObjectsPhase);
-            SetActive(yawPlusButton, inObjectsPhase);
-            SetActive(yawMinusButton, inObjectsPhase);
+
+            // The size steppers act on the last placed object, so they are
+            // hidden rather than greyed out until there is one: eight dead
+            // buttons on a first-time user's screen explain nothing.
+            bool showSteppers = inObjectsPhase && placement.ObjectCount > 0;
+
+            SetActive(widthPlusButton, showSteppers);
+            SetActive(widthMinusButton, showSteppers);
+            SetActive(depthPlusButton, showSteppers);
+            SetActive(depthMinusButton, showSteppers);
+            SetActive(heightPlusButton, showSteppers);
+            SetActive(heightMinusButton, showSteppers);
+            SetActive(yawPlusButton, showSteppers);
+            SetActive(yawMinusButton, showSteppers);
             SetActive(finishObjectsButton, inObjectsPhase);
 
             if (!inObjectsPhase)
@@ -175,36 +182,27 @@ namespace GhostMap.Scanner.UI
         {
             if (selectTypeLabel != null)
             {
-                selectTypeLabel.text = $"Type: {placement.SelectedType}";
+                selectTypeLabel.text = $"Type: {ScanGuide.Capitalize(placement.SelectedType)}";
             }
 
             if (placeObjectButton != null)
             {
                 placeObjectButton.interactable = placement.CanPlace;
+
+                if (placeObjectLabel == null)
+                {
+                    placeObjectLabel = placeObjectButton.GetComponentInChildren<Text>(includeInactive: true);
+                }
+
+                if (placeObjectLabel != null)
+                {
+                    placeObjectLabel.text = $"Place {ScanGuide.Capitalize(placement.SelectedType)}";
+                }
             }
 
             if (undoObjectButton != null)
             {
                 undoObjectButton.interactable = placement.ObjectCount > 0;
-            }
-
-            bool hasLastObject = placement.ObjectCount > 0;
-
-            SetInteractable(widthPlusButton, hasLastObject);
-            SetInteractable(widthMinusButton, hasLastObject);
-            SetInteractable(depthPlusButton, hasLastObject);
-            SetInteractable(depthMinusButton, hasLastObject);
-            SetInteractable(heightPlusButton, hasLastObject);
-            SetInteractable(heightMinusButton, hasLastObject);
-            SetInteractable(yawPlusButton, hasLastObject);
-            SetInteractable(yawMinusButton, hasLastObject);
-        }
-
-        private static void SetInteractable(Button button, bool interactable)
-        {
-            if (button != null)
-            {
-                button.interactable = interactable;
             }
         }
 
@@ -330,6 +328,7 @@ namespace GhostMap.Scanner.UI
         private GameObject CreateMarker(string markerName, float diameterM)
         {
             GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            MarkerMaterials.MakeUnlit(marker);
             marker.name = markerName;
             marker.transform.SetParent(transform, worldPositionStays: false);
             marker.transform.localScale = Vector3.one * diameterM;

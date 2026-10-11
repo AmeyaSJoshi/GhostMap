@@ -7,15 +7,18 @@ Full history (F0-F4 detail and the F4 review findings):
 
 ## Current state
 
-**F0-F4 complete. Scene schema v1 and protocol v1 are frozen.** Neither app
-workstream has needed a contract change.
+**F0-F4 complete. Scene schema v1 and protocol v1 are frozen.** Task `R1`
+imported three additive pieces from `GhostMapDublinHacks`: `WallFitting`
+(ADR-0005), `RoomGeometry.ContainsPointXZ` (ADR-0006) and
+`PeerDiscoveryProtocol` (UDP 47832, ADR-0009; superseded by ADR-0013 and removed
+in `R10`).
 
 | Area | Contents |
 | --- | --- |
 | `Runtime/Domain` | `Vec3Dto`, `CornerModel`, `OpeningModel`, `SceneObjectModel`, `RoomModel`, `SceneSnapshot`, `ValidationResult`, `WallDefinition` |
-| `Runtime/Geometry` | `GhostCoordinateFrame`, `RayPlaneMath`, `RoomGeometry`, `WallGeometry`, `MeasurementMath` |
+| `Runtime/Geometry` | `GhostCoordinateFrame`, `RayPlaneMath`, `RoomGeometry` (incl. `ContainsPointXZ`), `WallGeometry`, `WallFitting`, `MeasurementMath` |
 | `Runtime/Validation` | `RoomValidator`, `OpeningValidator`, `FurnitureValidator`, `ClosureQuality` |
-| `Runtime/Protocol` | `ProtocolConstants`, wire messages, `ProtocolSerializer`, `SnapshotRevisionPolicy` |
+| `Runtime/Protocol` | `ProtocolConstants`, wire messages, `ProtocolSerializer`, `SnapshotRevisionPolicy`, `PeerDiscoveryProtocol` (dormant) |
 | `fixtures/` | Three canonical snapshots (valid, door + window, intentionally malformed) |
 | `tools/` | `inspect_snapshot.py`, `send_fixture.py`, `run_unity_tests.sh` |
 | `shared/TestProject` | Host project whose only job is running the shared EditMode suite |
@@ -24,8 +27,8 @@ The tag `shared-v1-ready` marks the frozen foundation baseline.
 
 ## Last verified commit
 
-- Shared sources: `47a6a0a` (F4 review fix: true interior angles, validator
-  parity). Nothing under `shared/**` has changed since.
+- Shared sources: `0b7a106` from `GhostMapDublinHacks`, merged in task `R1`.
+  The frozen contract code was last changed in `47a6a0a` (F4).
 
 ## Tests run
 
@@ -34,8 +37,10 @@ The tag `shared-v1-ready` marks the frozen foundation baseline.
 python3 tools/inspect_snapshot.py fixtures/valid-room-v1.json
 ```
 
-Last recorded Unity result: **156 tests, 156 passed** (Unity 6000.3.24f1, Test
-Framework 1.6.0). On 2026-10-10 `inspect_snapshot.py` reported the two valid
+Last recorded Unity result, in `GhostMapDublinHacks`: **202 tests, 202 passed**
+(156 foundation + 32 `WallFittingTests` + 9 `RoomContainmentTests` + 5 discovery
+tests), Unity 6000.3.24f1, Test Framework 1.6.0. **Not yet re-run in this
+repository**; the merged shared code is byte-identical to that tree. On 2026-10-10 `inspect_snapshot.py` reported the two valid
 fixtures valid and the malformed one invalid on the height rule alone, and
 `send_fixture.py --dry-run` produced the documented 176 / 1059 / 141-byte
 messages.
@@ -61,15 +66,15 @@ the architecture overview's code map.
   `SceneSnapshotValidator`).
 - `shared/TestProject/` is not in the plan's original layout. It exists because
   a Unity package cannot run its own tests; see its README.
+- `WallFitting`'s gates (8 samples, 0.40 m span, 5° between walls) are
+  capture-time guards, not serialized rules, so `inspect_snapshot.py`
+  deliberately does not mirror them.
 - The fixtures are hand-written and unusually tidy (integer corners, catalog
   dimensions, 0/90/180 degree yaw). A snapshot captured off the wire during
   `R2` would make a more realistic fixture.
 
 ## Next safe task
 
-- `R1` lands shared work from `GhostMapDublinHacks`: `WallFitting`,
-  `RoomGeometry.ContainsPointXZ`, and a UDP discovery contract
-  (`PeerDiscoveryProtocol`) that ADR-0013 supersedes and `R10` removes.
 - `R5`: optional `label` on `SceneObjectModel` (additive schema v1 change,
   ADR-0011) with contract doc, tests, `inspect_snapshot.py` and fixtures.
 - `R6`: new `Runtime/Export/` (moved from the Viewer: `GlbExporter`, furniture

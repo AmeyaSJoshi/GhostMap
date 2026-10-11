@@ -59,7 +59,7 @@ The only source of truth for:
 - **Domain** — `Vec3Dto`, `CornerModel`, `OpeningModel`, `SceneObjectModel`,
   `RoomModel`, `SceneSnapshot`, `ValidationResult`, `WallDefinition`.
 - **Geometry** — `GhostCoordinateFrame`, `RayPlaneMath`, `RoomGeometry`,
-  `WallGeometry`, `MeasurementMath`.
+  `WallGeometry`, `WallFitting`, `MeasurementMath`.
 - **Protocol** — `ProtocolConstants`, `WireMessages`, `ProtocolSerializer`.
 - **Validation** — `RoomValidator`, `OpeningValidator`, `FurnitureValidator`.
 
@@ -98,33 +98,62 @@ interaction controllers read only `ViewerEditableScene`.
 ## 4. Capture model
 
 See `docs/decisions/ADR-0012-stand-in-place-on-device-capture.md`, which amends
-`docs/decisions/ADR-0004-no-dense-depth-in-mvp.md`.
+`docs/decisions/ADR-0004-no-dense-depth-in-mvp.md`, and
+`docs/decisions/ADR-0005-sweep-wall-capture.md` for the sweep fallback.
 
 The user locks the floor, then stands in one spot and turns. ARKit's plane
 detection and a small on-device detector propose the room and its contents;
 GhostMap's own geometry and validators decide what is accepted. Every automatic
 step has a manual fallback that does not depend on ARKit detecting anything.
 
-| What | Primary | Fallback | Where it is built |
+| What | Primary | Fallback | State |
 | --- | --- | --- | --- |
-| Floor | ARKit horizontal plane, locked once | — | here, device-verified |
-| Walls and corners | ARKit vertical planes clustered into four walls; corners where they meet | Sweep the floor line (ADR-0005), then walk to corners | primary and sweep: `GhostMapDublinHacks`; walked: here |
-| Height | ARKit ceiling plane | Aim at the wall/ceiling line; type it | primary: `GhostMapDublinHacks`; fallbacks: here |
-| Doors and windows | ARKit door/window planes | Two points on a derived wall plane | primary: `GhostMapDublinHacks`; fallback: here |
-| Furniture identity | YOLO-n on device (ADR-0011) | User picks a type | not built |
-| Furniture size and position | Matched ARKit horizontal surface (ADR-0006) | Floor-ray placement plus per-type defaults | primary: `GhostMapDublinHacks`; fallback: here |
+| Floor | ARKit horizontal plane, locked once | — | built, device-verified |
+| Walls and corners | ARKit vertical planes clustered into four walls (`WallPlaneAccumulator`, `RoomFromWalls`); corners where they meet | Sweep the floor line (ADR-0005), then walk to corners | built; only walked corners device-verified |
+| Height | ARKit ceiling plane | Aim at the wall/ceiling line; type it | built; only the fallbacks device-verified |
+| Doors and windows | ARKit door/window planes | Two points on a derived wall plane | built; only the fallback device-verified |
+| Furniture identity | YOLO-n on device (ADR-0011) | User picks a type | not built; today ARKit plane labels (ADR-0007) |
+| Furniture size and position | Matched ARKit horizontal surface (ADR-0006) | Floor-ray placement plus per-type defaults | built; only the fallback device-verified |
 
 The fallback math is a camera ray intersected with a plane GhostMap already
 knows:
 
 | Capture | Ray | Plane |
 | --- | --- | --- |
-| Room corner | center-screen camera ray | locked floor plane (`Y = floorY`) |
+| Wall floor junction (swept) | center-screen camera ray, per frame | locked floor plane (`Y = floorY`) |
+| Room corner (walked, fallback) | center-screen camera ray | locked floor plane (`Y = floorY`) |
 | Furniture center | center-screen camera ray | locked floor plane |
 | Room height | center-screen camera ray | derived wall plane |
 | Door / window | center-screen camera ray | derived wall plane |
 
-Wall planes are generated from captured corners:
+### Three paths to the same four corners
+
+1. **Automatic room scan** (default, ADR-0012). The user turns in place while
+   `WallPlaneAccumulator` merges ARKit vertical planes into wall clusters (same
+   normal within 12°, offsets within 0.30 m). `RoomFromWalls` picks the four
+   that best enclose the user and derives corners with `WallFitting`. With
+   fewer than four trustworthy walls it names the missing direction instead of
+   inventing a wall.
+2. **Sweep** (ADR-0005). The user sweeps the aim along each wall's floor line;
+   each sweep is fitted to a line by total least squares (`WallFitting`) and
+   corners are intersections of consecutive lines:
+
+   ```text
+   corner[i] = intersect(wall[i - 1], wall[i])     indices mod 4
+   ```
+
+   Aim error grows with roughly the square of aim distance, and a systematic
+   aim bias is invisible to the fit residual (ADR-0005, Consequences).
+3. **Walked corners** (S3). Tap once at each corner. Device-verified.
+
+All three install exactly four ordered Ghost-space floor corners into the same
+corner store and pass the same `RoomValidator`; a room looks identical on the
+wire whichever path produced it. The manual paths also re-aim at the first
+corner (`VerifyClosure`); the automatic path does not, so its `closureErrorM`
+is 0.
+
+Wall planes for height and opening capture are generated from those corners,
+whichever path produced them:
 
 ```text
 tangent = normalize(B - A)
@@ -213,7 +242,7 @@ Finalize
 ```
 
 The bundle layout is a contract: `docs/contracts/export-bundle-v1.md` (task
-`R6`). The UDP discovery from `GhostMapDublinHacks` (ADR-0009) is superseded
+`R6`). The UDP discovery imported with `R1` (ADR-0009) is superseded
 and is removed with the Unity Viewer.
 
 ---
@@ -242,8 +271,10 @@ Boot
  → WaitingForTracking
  → FindFloor
  → FloorLocked
- → CaptureCorners
- → VerifyClosure
+ → AutoScanRoom        default (ADR-0012)           ─┐
+ → SweepWalls          Help GhostMap (ADR-0005)      │ one of these
+ → CaptureCorners      walked (S3)                  ─┘
+ → VerifyClosure       manual paths only
  → CaptureHeight
  → AddOpenings
  → AddObjects
@@ -251,13 +282,16 @@ Boot
  → Finalized
 ```
 
-Allowed back transitions:
+Allowed transitions beyond the straight line, from `ScanWorkflowController`:
 
 ```text
-VerifyClosure → CaptureCorners
-CaptureHeight → CaptureCorners
-AddOpenings   → CaptureHeight
-AddObjects    → AddOpenings
+FloorLocked   → AutoScanRoom | SweepWalls | CaptureCorners
+AutoScanRoom  → CaptureHeight | SweepWalls | CaptureCorners | FloorLocked
+SweepWalls    → VerifyClosure | CaptureCorners
+VerifyClosure → CaptureHeight | CaptureCorners | SweepWalls
+CaptureHeight → AddOpenings | CaptureCorners | SweepWalls | AutoScanRoom
+AddOpenings   → AddObjects | CaptureHeight | AutoScanRoom
+AddObjects    → ReadyToFinalize | AddOpenings
 ```
 
 ---
@@ -269,6 +303,11 @@ Bad scans are rejected, never silently rendered.
 | Gate | Rule |
 | --- | --- |
 | Tracking | `ARSession.notTrackingReason` must be `None` before a critical capture |
+| Automatic walls | a wall cluster counts only once trustworthy (labelled ≥ 1.0 m wide, or unlabelled ≥ 2.5 m); never invented |
+| Sweep samples | ≥ 8 accepted floor-plane samples per wall |
+| Sweep span | ≥ 0.40 m swept along the fitted wall direction |
+| Sweep residual | RMS perpendicular residual ≤ 0.05 m |
+| Wall crossing | consecutive wall lines ≥ 5° apart before intersecting |
 | Corner spacing | ≥ 0.50 m from previous corner |
 | Corner separation | ≥ 0.20 m from any non-neighbor corner |
 | Polygon | no self-intersection in XZ |
@@ -311,7 +350,8 @@ GhostMap-<room>-<yyyyMMdd-HHmm>.zip
 
 `.glb` files are glTF 2.0 binary in metres with +Y up. Unity imports them with
 the glTFast package; Blender opens them directly. Built on the phone (task
-`R6`); the per-object exporter exists today in `GhostMapDublinHacks`' Viewer.
+`R6`); the per-object exporter exists today in the Unity Viewer
+(`Runtime/Export/`).
 
 ---
 
@@ -341,31 +381,40 @@ Every runtime type, by project and folder. Tests mirror these names with a
 | `Domain` | `ValidationResult`, `WallDefinition` | Validation result; a derived wall |
 | `Geometry` | `GhostCoordinateFrame` | AR world ↔ Ghost space |
 | `Geometry` | `RayPlaneMath` | Ray / floor-plane and ray / wall-plane intersection |
-| `Geometry` | `RoomGeometry`, `WallGeometry` | Area, self-intersection, interior angles, wall derivation, wall-local `u`/`v` |
+| `Geometry` | `RoomGeometry`, `WallGeometry` | Area, self-intersection, interior angles, point-in-room, wall derivation, wall-local `u`/`v` |
+| `Geometry` | `WallFitting` | Total-least-squares wall lines, line intersection, corners from four walls |
 | `Geometry` | `MeasurementMath` | Distance, horizontal distance, area, volume, perimeter |
 | `Validation` | `RoomValidator`, `OpeningValidator`, `FurnitureValidator`, `ClosureQuality` | Every limit in section 9 |
-| `Protocol` | `ProtocolConstants`, `WireMessages`, `ProtocolSerializer`, `SnapshotRevisionPolicy` | Protocol v1 |
+| `Protocol` | `ProtocolConstants`, `WireMessages`, `ProtocolSerializer`, `SnapshotRevisionPolicy` | Protocol v1 (developer stream) |
+| `Protocol` | `PeerDiscoveryProtocol` | UDP discovery on 47832; dormant, removed in `R10` |
 
 ### 12.2 `apps/scanner/Assets/GhostMap/Scanner`
 
 | Folder | Types | Role |
 | --- | --- | --- |
-| `Runtime/AR` | `ISpatialProvider`, `FloorHit`, `ArSpatialProvider` | The only seam onto AR Foundation; faked in tests |
+| `Runtime/AR` | `ISpatialProvider`, `FloorHit`, `ArSpatialProvider`, `SimulatedRoom` | The only seam onto AR Foundation; faked in tests; `SimulatedRoom` drives Editor/Simulator demo mode |
 | `Runtime/Workflow` | `ScanPhase`, `ScanWorkflowController` | Phase machine, session id, revision, current snapshot |
 | `Runtime/Capture` | `FloorLockController`, `CornerCaptureController`, `HeightCaptureController`, `OpeningCaptureController`, `ObjectPlacementController` | One plain-C# controller per capture step |
-| `Runtime/Networking` | `ISnapshotSink`, `ScannerSnapshotPublisher`, `ScannerNetworkClient` | Revision changes → messages → TCP |
+| `Runtime/Capture` | `AutoRoomScanController`, `WallPlaneAccumulator`, `RoomFromWalls` | Automatic room scan from ARKit planes |
+| `Runtime/Capture` | `WallSweepController` | Sweep fallback |
+| `Runtime/Capture` | `FurnitureDetectionController`, `FurnitureTypeSuggester` | Furniture surface candidates; label-based type guess (removed in `R4`) |
+| `Runtime/Networking` | `ISnapshotSink`, `ScannerSnapshotPublisher`, `ScannerNetworkClient` | Revision changes → messages → TCP (developer stream) |
+| `Runtime/Networking` | `PeerDiscoveryClient` | UDP discovery; dormant, removed in `R10` |
 | `Runtime/UI` | `FloorLockHud` | Composition root: builds every controller and the workflow; Reset rebuilds them |
-| `Runtime/UI` | `CornerCaptureHud`, `HeightCaptureHud`, `OpeningCaptureHud`, `ObjectPlacementHud` | Per-phase buttons, readouts, world-space markers |
+| `Runtime/UI` | `ScanGuide`, `ScannerGuideHud`, `SafeAreaFitter`, `MarkerMaterials` | Guided-flow wording (pure, tested), header/bubble/bottom sheet, safe area, marker materials |
+| `Runtime/UI` | `AutoScanHud`, `WallSweepHud`, `CornerCaptureHud`, `HeightCaptureHud`, `OpeningCaptureHud`, `FurnitureDetectionHud`, `ObjectPlacementHud` | Per-phase controls, readouts, world-space markers |
 | `Runtime/UI` | `ScannerHudController` | Connect, network status, Reset, Finalize; owns the network thread |
 | `Runtime/Bootstrap` | `ScannerBootstrap` | S1 tracking diagnostics readout |
 | `Editor` | `ScannerSceneBuilder` | Generates `Scanner.unity` (menu **GhostMap > Build Scanner Scene**) and verifies its wiring |
 | `Editor` | `ScannerBuild`, `ScannerXrSettings`, `ScannerInputSettings`, `ScannerIosPostBuild` | Two-step iOS build: **Configure Scanner XR (iOS)**, then **Build Scanner (iOS)** into `apps/scanner/Builds/iOS` |
+| `Editor` | `ScannerSimulatorBuild`, `ScannerUiKit` | Simulator demo-mode build; uGUI building blocks for the scene builder |
 
 ### 12.3 `apps/viewer/Assets/GhostMap/Viewer` (frozen, retiring)
 
 | Folder | Types | Role |
 | --- | --- | --- |
 | `Runtime/Networking` | `ViewerTcpServer`, `LineReader` | Accept one scanner, frame lines, deserialize on background threads |
+| `Runtime/Networking` | `ViewerDiscoveryResponder` | Answers UDP discovery; dormant |
 | `Runtime/Bootstrap` | `ViewerSession` | Drains the server queue on the main thread and dispatches messages |
 | `Runtime/Bootstrap` | `ViewerBootstrap` | Composition root: wires session, scenes, renderer, camera, interaction |
 | `Runtime/Scene` | `IViewerSceneSource`, `ViewerSceneStore`, `ViewerEditableScene`, `SceneSnapshotValidator`, `FixtureLoader` | Scene ownership layers (section 3.3) and validation |
@@ -375,6 +424,7 @@ Every runtime type, by project and folder. Tests mirror these names with a
 | `Runtime/Interaction` | `ObjectSelectionController`, `SelectionOutlineBuilder`, `ObjectEditController`, `MeasurementController` | Select, highlight, edit, measure |
 | `Runtime/Interaction` | `ViewerInteractionRouter` | The single per-frame mouse reader; routes clicks and drags |
 | `Runtime/Persistence` | `ScenePersistence` | Atomic save and validated load of a `SceneSnapshot` |
+| `Runtime/Export` | `GlbExporter`, `FurnitureAssetExporter` | Per-object `.glb`; moves to the shared package in `R6` |
 | `Runtime/UI` | `ViewerHudController`, `InspectorPanelController` | Status, buttons, inspector fields |
 | `Editor` | `ViewerSceneBuilder` | Generates `Viewer.unity` (menu **GhostMap > Build Viewer Scene**) |
 

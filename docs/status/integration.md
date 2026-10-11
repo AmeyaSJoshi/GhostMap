@@ -5,11 +5,11 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 
 ## Current state
 
-**Roadmap not started. Next: `R1`.**
+**`R1` merged; its Unity test run is still to do. Next: run the suites, then `R2`.**
 
 | Task | What | State |
 | --- | --- | --- |
-| R1 | Bring `GhostMapDublinHacks` into this repository | Not started. Needs the owner's explicit approval to merge |
+| R1 | Bring `GhostMapDublinHacks` into this repository | **Merged** (owner-approved, 2026-10-11). Code is byte-identical to the hackathon tree that passed 202 / 548 / 577; re-run here pending |
 | R2 | First device session: every capture path on a real iPhone | Not started |
 | R3 | Accuracy benchmark against a tape measure | Not started |
 | R4 | YOLO-n furniture identification on the phone (ADR-0011) | Not started |
@@ -23,20 +23,30 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 Nothing has gone from the phone to a computer yet. The S6 network test used a
 Python listener.
 
-### What `R1` brings in
+### What `R1` brought in
 
-`GhostMapDublinHacks` is this repository at `f5a7d30` plus 31 commits from
-2026-10-03: the guided-scan UI overhaul, automatic room scan from ARKit planes,
-wall sweep (ADR-0005), furniture surface detection and per-object `.glb` export
-(ADR-0006), plane-label type guessing (ADR-0007, to be removed by `R4`),
-peer-to-peer scoping (ADR-0008), UDP quick-send discovery (ADR-0009, superseded
-by ADR-0013, removed in `R10`), and two research spikes. Last recorded suites
-there: shared 202, viewer 548, scanner 577, all passing; unsigned iOS build
-succeeded. None of it has run on an iPhone.
+`GhostMapDublinHacks` at `0b7a106`: the guided-scan UI overhaul and Simulator
+demo mode, the automatic room scan, wall sweep (ADR-0005), furniture surface
+detection and per-object `.glb` export (ADR-0006), plane-label type guessing
+(ADR-0007, removed by `R4`), peer-to-peer scoping (ADR-0008), UDP quick-send
+discovery (ADR-0009, superseded by ADR-0013, removed in `R10`), and two research
+spikes now under `docs/research/`.
+
+How it was merged:
+
+- Code (`apps/`, `shared/`, `fixtures/`) merged without conflicts and is
+  byte-identical to the hackathon tree apart from READMEs and removed
+  placeholder files.
+- Documentation conflicts were resolved in favour of this repository's docs;
+  the status pages now describe the imported features.
+- The hackathon's eight handoffs and older status text stay in git history
+  (`0b7a106`), not in the working tree.
+- `tools/run_unity_tests.sh` runs the scanner suite without `-buildTarget iOS`,
+  since `ScannerIosPostBuild` is now guarded by `UNITY_IOS`.
 
 ## Last verified commit
 
-None.
+None in this repository. Hackathon suites last passed at `0b7a106`.
 
 ## Tests run
 
@@ -61,8 +71,9 @@ From reading the code, not from a failed run:
 
 ## Next safe task
 
-**`R1`**: merge `GhostMapDublinHacks/main` on an `integration/import-dublinhacks`
-branch once the owner approves, then run all three suites.
+1. On a machine with Unity 6000.3.24f1, run `./tools/run_unity_tests.sh` and
+   record the three counts here. Expected: shared 202, viewer 548, scanner 577.
+2. Then **`R2`**: the first device session (plan section 18).
 
 ## Do not touch
 

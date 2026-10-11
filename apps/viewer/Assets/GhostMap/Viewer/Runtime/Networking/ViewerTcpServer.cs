@@ -72,6 +72,8 @@ namespace GhostMap.Viewer.Networking
 
         public ServerConnectionState State { get; private set; } = ServerConnectionState.NotListening;
 
+        public int Port => port;
+
         /// <summary>The remote endpoint of the current or most recent connection.</summary>
         public string RemoteEndpoint { get; private set; } = string.Empty;
 

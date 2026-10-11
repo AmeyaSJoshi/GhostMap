@@ -1,6 +1,6 @@
 # Viewer Status
 
-Workstream: Viewer. Owns `apps/viewer/**` and this file.
+Workstream: Viewer. Owns `apps/web-viewer/**`, `apps/viewer/**` and this file.
 Full task-by-task history (V1-V6 design notes, visual captures, test breakdowns):
 `git show f5a7d30:docs/status/viewer.md`.
 
@@ -20,6 +20,8 @@ is the browser viewer in `apps/web-viewer/` (task `R8`).
 | V4 | Parametric furniture for all 8 types (one bounding-box collider per object), orbit camera, `F` frame, `D` dollhouse |
 | V5 | Select, drag on the floor, edit X/Z, yaw, W/D/H in the inspector, two-point measurement (3D and horizontal) |
 | V6 | Save and Load of the finalized scene, HUD with connection, session, revision, phase and editing state |
+| ADR-0006 (imported, `R1`) | **Export Assets** writes one `.glb` per furniture object to `Application.persistentDataPath/ghostmap-assets/` via `GlbExporter` and `FurnitureAssetExporter`. Moves to the shared package in `R6` |
+| ADR-0009 (imported, `R1`) | `ViewerDiscoveryResponder` answers UDP discovery on 47832. Superseded by ADR-0013; removed in `R10` |
 
 ### Scene ownership layers
 
@@ -44,7 +46,8 @@ Editing, Save and Load are gated on a finalized scene (ADR-0003). A new scanner
 
 ## Last verified commit
 
-- Viewer sources: `b9fa1f5` (V6 persistence-authority fix), merged in PR #12.
+- Viewer sources: `0b7a106` from `GhostMapDublinHacks`, merged in task `R1`.
+  V6 itself was `b9fa1f5` (PR #12).
 
 ## Tests run
 
@@ -52,8 +55,10 @@ Editing, Save and Load are gated on a finalized scene (ADR-0003). A new scanner
 ./tools/run_unity_tests.sh viewer
 ```
 
-Last recorded result at `b9fa1f5`: **475 tests, 475 passed** (319 viewer + 156
-embedded shared). A standalone macOS build was verified once during V6.
+Last recorded result, in `GhostMapDublinHacks` at the quick-send commit:
+**548 tests, 548 passed** (viewer plus 202 embedded shared). **Not yet re-run in
+this repository**; the merged viewer code is byte-identical to that tree. A
+standalone macOS build was verified once during V6.
 
 ## Interfaces consumed
 
@@ -68,6 +73,8 @@ From `com.ghostmap.shared`: `SceneSnapshot`, `RoomModel`, `OpeningModel`,
 None blocking `R1`.
 
 **Behavior**
+- No exported `.glb` has been opened in Blender or checked with
+  `npx gltf-validator`; that check moves to `R6`, where export runs on the phone.
 - **No liveness detection.** The server sets no read timeout and ignores
   heartbeats, so a phone that drops off Wi-Fi without closing the socket leaves
   the HUD on `Connected`. "Disconnected — displaying last snapshot." appears

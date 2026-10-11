@@ -5,6 +5,8 @@ using GhostMap.Shared.Domain;
 using GhostMap.Shared.Geometry;
 using GhostMap.Shared.Protocol;
 using GhostMap.Shared.Validation;
+using UnityEngine;
+using UnityEngine.XR.ARSubsystems;
 
 namespace GhostMap.Scanner.Workflow
 {
@@ -17,6 +19,19 @@ namespace GhostMap.Scanner.Workflow
 
         /// <summary>The scan phase does not permit finalization.</summary>
         WrongPhase
+    }
+
+    /// <summary>Why the automatic room scan could not be finished. <see cref="None"/> means it succeeded.</summary>
+    public enum AutoScanRejection
+    {
+        None = 0,
+        WrongPhase,
+
+        /// <summary>The walls seen so far do not close into a room.</summary>
+        NoRoomYet,
+
+        /// <summary>The shared room validator refused the derived footprint.</summary>
+        RoomRejected
     }
 
     /// <summary>
@@ -46,36 +61,59 @@ namespace GhostMap.Scanner.Workflow
                 { ScanPhase.Boot, new[] { ScanPhase.WaitingForTracking } },
                 { ScanPhase.WaitingForTracking, new[] { ScanPhase.FindFloor } },
                 { ScanPhase.FindFloor, new[] { ScanPhase.FloorLocked } },
-                { ScanPhase.FloorLocked, new[] { ScanPhase.CaptureCorners } },
+                {
+                    ScanPhase.FloorLocked,
+                    new[] { ScanPhase.AutoScanRoom, ScanPhase.SweepWalls, ScanPhase.CaptureCorners }
+                },
+                {
+                    ScanPhase.AutoScanRoom,
+                    new[] { ScanPhase.CaptureHeight, ScanPhase.SweepWalls, ScanPhase.CaptureCorners, ScanPhase.FloorLocked }
+                },
+                { ScanPhase.SweepWalls, new[] { ScanPhase.VerifyClosure, ScanPhase.CaptureCorners } },
                 { ScanPhase.CaptureCorners, new[] { ScanPhase.VerifyClosure } },
-                { ScanPhase.VerifyClosure, new[] { ScanPhase.CaptureHeight, ScanPhase.CaptureCorners } },
-                { ScanPhase.CaptureHeight, new[] { ScanPhase.AddOpenings, ScanPhase.CaptureCorners } },
-                { ScanPhase.AddOpenings, new[] { ScanPhase.AddObjects, ScanPhase.CaptureHeight } },
+                {
+                    ScanPhase.VerifyClosure,
+                    new[] { ScanPhase.CaptureHeight, ScanPhase.CaptureCorners, ScanPhase.SweepWalls }
+                },
+                {
+                    ScanPhase.CaptureHeight,
+                    new[] { ScanPhase.AddOpenings, ScanPhase.CaptureCorners, ScanPhase.SweepWalls, ScanPhase.AutoScanRoom }
+                },
+                { ScanPhase.AddOpenings, new[] { ScanPhase.AddObjects, ScanPhase.CaptureHeight, ScanPhase.AutoScanRoom } },
                 { ScanPhase.AddObjects, new[] { ScanPhase.ReadyToFinalize, ScanPhase.AddOpenings } },
                 { ScanPhase.ReadyToFinalize, new[] { ScanPhase.Finalized } },
                 { ScanPhase.Finalized, Array.Empty<ScanPhase>() }
             };
 
         private readonly FloorLockController floorLock;
+        private readonly WallSweepController wallSweep;
         private readonly CornerCaptureController corners;
         private readonly HeightCaptureController height;
         private readonly OpeningCaptureController openingCapture;
         private readonly ObjectPlacementController objectPlacement;
+        private readonly FurnitureDetectionController furnitureDetection;
+        private readonly AutoRoomScanController autoScan;
 
         private bool isFinalized;
 
         public ScanWorkflowController(
             FloorLockController floorLock,
+            WallSweepController wallSweep,
             CornerCaptureController corners,
             HeightCaptureController height,
             OpeningCaptureController openingCapture,
-            ObjectPlacementController objectPlacement)
+            ObjectPlacementController objectPlacement,
+            FurnitureDetectionController furnitureDetection,
+            AutoRoomScanController autoScan = null)
         {
             this.floorLock = floorLock;
+            this.wallSweep = wallSweep;
             this.corners = corners;
             this.height = height;
             this.openingCapture = openingCapture;
             this.objectPlacement = objectPlacement;
+            this.furnitureDetection = furnitureDetection;
+            this.autoScan = autoScan;
             SessionId = Guid.NewGuid().ToString();
             RoomId = Guid.NewGuid().ToString();
             Phase = ScanPhase.Boot;
@@ -98,6 +136,9 @@ namespace GhostMap.Scanner.Workflow
         /// <summary>The locked GhostMap frame, or null before floor lock.</summary>
         public GhostCoordinateFrame Frame => floorLock.Frame;
 
+        /// <summary>ADR-0005 wall sweeping. Read-only from outside the workflow.</summary>
+        public WallSweepController WallSweep => wallSweep;
+
         /// <summary>Task S3 corner capture and closure. Read-only from outside the workflow.</summary>
         public CornerCaptureController Corners => corners;
 
@@ -109,6 +150,15 @@ namespace GhostMap.Scanner.Workflow
 
         /// <summary>Task S5 object placement. Read-only from outside the workflow.</summary>
         public ObjectPlacementController Objects => objectPlacement;
+
+        /// <summary>ADR-0006 furniture detection. Read-only from outside the workflow.</summary>
+        public FurnitureDetectionController FurnitureDetection => furnitureDetection;
+
+        /// <summary>The automatic room scan. Null in a workflow built without one.</summary>
+        public AutoRoomScanController Auto => autoScan;
+
+        /// <summary>True when the current footprint came from the automatic scan.</summary>
+        public bool RoomWasAutoScanned { get; private set; }
 
         /// <summary>
         /// Advances the pre-floor-lock phases from tracking quality. Boot
@@ -155,6 +205,350 @@ namespace GhostMap.Scanner.Workflow
             }
 
             TransitionTo(ScanPhase.FloorLocked);
+            Publish();
+            return true;
+        }
+
+        // -------------------------------------------------------------------
+        // Automatic room scan — the default path (hackathon)
+        // -------------------------------------------------------------------
+
+        /// <summary>
+        /// Leaves <see cref="ScanPhase.FloorLocked"/> for
+        /// <see cref="ScanPhase.AutoScanRoom"/> and starts watching ARKit's
+        /// planes. Publishes nothing: no structural change yet.
+        /// </summary>
+        public bool BeginAutoScan(float now)
+        {
+            if (Phase != ScanPhase.FloorLocked || autoScan == null)
+            {
+                return false;
+            }
+
+            TransitionTo(ScanPhase.AutoScanRoom);
+            autoScan.Begin(now);
+            return true;
+        }
+
+        /// <summary>Per-frame feed for the automatic scan. A no-op in any other phase.</summary>
+        public void TickAutoScan(float now)
+        {
+            if (Phase == ScanPhase.AutoScanRoom && autoScan != null)
+            {
+                autoScan.Tick(now);
+            }
+        }
+
+        /// <summary>
+        /// Turns the walls the scan found into the room: four corners through
+        /// the single corner store, then a ceiling height if ARKit saw one, then
+        /// any door or window planes. Refuses, rather than inventing a wall,
+        /// when the evidence does not close into a legal room.
+        /// </summary>
+        public bool TryFinishAutoScan(out AutoScanRejection rejection)
+        {
+            rejection = AutoScanRejection.None;
+
+            if (Phase != ScanPhase.AutoScanRoom || autoScan == null)
+            {
+                rejection = AutoScanRejection.WrongPhase;
+                return false;
+            }
+
+            RoomFromWallsResult found = autoScan.Reselect();
+
+            if (!found.Success)
+            {
+                rejection = AutoScanRejection.NoRoomYet;
+                return false;
+            }
+
+            if (!corners.TryAdoptDerivedCorners(found.Corners, out _))
+            {
+                rejection = AutoScanRejection.RoomRejected;
+                return false;
+            }
+
+            wallSweep.ClearWalls();
+            RoomWasAutoScanned = true;
+            openingCapture.ClearOpenings();
+            height.ResetWallSelection();
+            autoScan.End();
+            TransitionTo(ScanPhase.CaptureHeight);
+
+            // The ceiling is the one thing ARKit may hand over for free. If it
+            // did not, the existing height capture is the fallback.
+            if (autoScan.TryGetCeilingHeight(out float ceilingM) &&
+                height.TrySetManualHeight(ceilingM, out _))
+            {
+                TransitionTo(ScanPhase.AddOpenings);
+                AdoptDetectedOpenings();
+            }
+
+            Publish();
+            return true;
+        }
+
+        private void AdoptDetectedOpenings()
+        {
+            List<OpeningModel> proposals = autoScan.ProposeOpenings(openingCapture.Walls, height.HeightM);
+
+            foreach (OpeningModel proposal in proposals)
+            {
+                openingCapture.TryAdoptDetectedOpening(proposal, out _);
+            }
+        }
+
+        /// <summary>
+        /// "Help GhostMap": leaves the automatic scan for the existing wall
+        /// sweep without losing the floor lock.
+        /// </summary>
+        public bool FallBackFromAutoScan()
+        {
+            if (Phase != ScanPhase.AutoScanRoom)
+            {
+                return false;
+            }
+
+            autoScan?.End();
+            TransitionTo(ScanPhase.SweepWalls);
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Throws the auto-scanned room away and scans again. The locked frame
+        /// is untouched: a rescan re-measures the room, it does not re-anchor it.
+        /// </summary>
+        public bool RedoAutoScan(float now)
+        {
+            if (autoScan == null || !RoomWasAutoScanned ||
+                (Phase != ScanPhase.CaptureHeight && Phase != ScanPhase.AddOpenings))
+            {
+                return false;
+            }
+
+            corners.ClearCorners();
+            openingCapture.ClearOpenings();
+            height.ResetWallSelection();
+            RoomWasAutoScanned = false;
+            TransitionTo(ScanPhase.AutoScanRoom);
+            autoScan.Begin(now);
+            Publish();
+            return true;
+        }
+
+        // -------------------------------------------------------------------
+        // ADR-0005 — wall sweeping (the default capture path)
+        // -------------------------------------------------------------------
+
+        /// <summary>
+        /// Leaves <see cref="ScanPhase.FloorLocked"/> for
+        /// <see cref="ScanPhase.SweepWalls"/>.
+        ///
+        /// <para>Explicit rather than automatic on lock, for the same reason as
+        /// <see cref="BeginCornerCapture"/>: FloorLocked is a state the user
+        /// actually sees.</para>
+        /// </summary>
+        public bool BeginWallSweeping()
+        {
+            if (Phase != ScanPhase.FloorLocked)
+            {
+                return false;
+            }
+
+            TransitionTo(ScanPhase.SweepWalls);
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Starts a sweep for the next wall.
+        ///
+        /// <para>Publishes nothing: starting to aim is not a structural
+        /// mutation, and no wall exists yet.</para>
+        /// </summary>
+        public bool TryBeginWallSweep(out WallSweepRejection rejection)
+        {
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                rejection = WallSweepRejection.WrongPhase;
+                return false;
+            }
+
+            return wallSweep.TryBeginSweep(out rejection);
+        }
+
+        /// <summary>
+        /// Feeds one frame's crosshair position into the active sweep. Called
+        /// every frame while the sweep control is held.
+        ///
+        /// <para><b>Never publishes.</b> Performance target section 24 forbids
+        /// per-frame snapshot generation, and a sweep in progress has not
+        /// mutated the scene.</para>
+        /// </summary>
+        public bool TryAddWallSweepSample(out WallSweepRejection rejection)
+        {
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                rejection = WallSweepRejection.WrongPhase;
+                return false;
+            }
+
+            return wallSweep.TryAddSample(out rejection);
+        }
+
+        /// <summary>
+        /// Ends the active sweep. An accepted sweep becomes a wall, which is a
+        /// structural mutation and therefore publishes.
+        ///
+        /// <para>The fourth accepted wall does not itself advance the phase —
+        /// <see cref="TryDeriveRoomFromSweeps"/> does, because deriving the
+        /// corners can still fail validation and the user may want to re-sweep
+        /// a wall before committing.</para>
+        /// </summary>
+        public bool TryCompleteWallSweep(out WallSweepRejection rejection)
+        {
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                rejection = WallSweepRejection.WrongPhase;
+                return false;
+            }
+
+            if (!wallSweep.TryCompleteSweep(out rejection))
+            {
+                return false;
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>Abandons the active sweep. Publishes nothing: no wall changed.</summary>
+        public bool CancelWallSweep()
+        {
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                return false;
+            }
+
+            return wallSweep.CancelSweep();
+        }
+
+        /// <summary>
+        /// Removes the most recently accepted wall so the user can re-sweep it.
+        /// </summary>
+        public bool TryUndoLastWall(out WallSweepRejection rejection)
+        {
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                rejection = WallSweepRejection.WrongPhase;
+                return false;
+            }
+
+            if (!wallSweep.TryUndoLastWall(out rejection))
+            {
+                return false;
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Derives the four corners from the four swept walls, installs them
+        /// through the single corner store, and moves the scan into closure
+        /// verification.
+        ///
+        /// <para>Two gates, in order: the geometry must produce four corners
+        /// (<see cref="WallSweepController.TryDeriveCorners"/>), and those
+        /// corners must form a legal room
+        /// (<see cref="CornerCaptureController.TryAdoptDerivedCorners"/>, which
+        /// runs the unchanged shared <c>RoomValidator</c>). Failing either
+        /// leaves the phase at <see cref="ScanPhase.SweepWalls"/> with every
+        /// swept wall intact, so the user can undo and re-sweep the bad one
+        /// rather than starting the room again.</para>
+        /// </summary>
+        public bool TryDeriveRoomFromSweeps(
+            out WallSweepRejection sweepRejection,
+            out CornerCaptureRejection cornerRejection)
+        {
+            cornerRejection = CornerCaptureRejection.None;
+
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                sweepRejection = WallSweepRejection.WrongPhase;
+                return false;
+            }
+
+            if (!wallSweep.TryDeriveCorners(out Vector3[] derived, out sweepRejection))
+            {
+                return false;
+            }
+
+            if (!corners.TryAdoptDerivedCorners(derived, out cornerRejection))
+            {
+                return false;
+            }
+
+            TransitionTo(ScanPhase.VerifyClosure);
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Discards the swept walls and the footprint they produced, and
+        /// returns to sweeping. The locked frame is deliberately left alone: a
+        /// rescan re-measures the room, it does not re-anchor it.
+        ///
+        /// <para>The sweep-path counterpart of <see cref="RedoCorners"/>. Any
+        /// in-progress wall selection is cleared for the same reason: the new
+        /// footprint will derive different walls, and a stale index must not
+        /// silently resolve against one of them.</para>
+        /// </summary>
+        public bool RedoWallSweeps()
+        {
+            if (Phase != ScanPhase.VerifyClosure &&
+                Phase != ScanPhase.CaptureHeight &&
+                Phase != ScanPhase.SweepWalls)
+            {
+                return false;
+            }
+
+            wallSweep.ClearWalls();
+            corners.ClearCorners();
+            RoomWasAutoScanned = false;
+            height.ResetWallSelection();
+
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                TransitionTo(ScanPhase.SweepWalls);
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Abandons sweeping for Task S3's walked capture.
+        ///
+        /// <para>The fallback <c>ADR-0005</c> retains until the swept path has
+        /// accuracy numbers from Task I2. Swept walls and any derived corners
+        /// are discarded, because the two paths must never contribute corners
+        /// to the same room.</para>
+        /// </summary>
+        public bool FallBackToWalkedCorners()
+        {
+            if (Phase != ScanPhase.SweepWalls)
+            {
+                return false;
+            }
+
+            wallSweep.ClearWalls();
+            corners.ClearCorners();
+            RoomWasAutoScanned = false;
+            height.ResetWallSelection();
+            TransitionTo(ScanPhase.CaptureCorners);
             Publish();
             return true;
         }
@@ -291,6 +685,30 @@ namespace GhostMap.Scanner.Workflow
             TransitionTo(ScanPhase.CaptureCorners);
             Publish();
             return true;
+        }
+
+        /// <summary>
+        /// True when the current footprint came from swept walls rather than
+        /// walked corners. Swept walls are kept after the room is derived, and
+        /// the walked fallback clears them, so their presence identifies the path.
+        /// </summary>
+        public bool RoomWasSwept => wallSweep.WallCount > 0;
+
+        /// <summary>
+        /// Discards the footprint and returns to whichever capture path
+        /// produced it: <see cref="RedoWallSweeps"/> for a swept room,
+        /// <see cref="RedoCorners"/> for a walked one. A user who swept must
+        /// not be dropped into walking corners just because they asked to
+        /// try again.
+        /// </summary>
+        public bool RedoRoom()
+        {
+            if (RoomWasAutoScanned)
+            {
+                return RedoAutoScan(Time.realtimeSinceStartup);
+            }
+
+            return RoomWasSwept ? RedoWallSweeps() : RedoCorners();
         }
 
         // -------------------------------------------------------------------
@@ -578,6 +996,160 @@ namespace GhostMap.Scanner.Workflow
 
             Publish();
             return true;
+        }
+
+        // -------------------------------------------------------------------
+        // ADR-0006 — furniture detection, inside the existing AddObjects phase
+        // -------------------------------------------------------------------
+
+        /// <summary>
+        /// Re-reads detected planes and rebuilds the candidate list.
+        ///
+        /// <para><b>Publishes nothing.</b> Looking around is not a structural
+        /// mutation, and a candidate is not furniture until it is accepted. The
+        /// HUD calls this on a timer, so publishing here would violate
+        /// performance target section 24's "snapshots only on mutation".</para>
+        ///
+        /// <para>No new scan phase: detection is a second input method for
+        /// <see cref="ScanPhase.AddObjects"/>, which already exists.</para>
+        /// </summary>
+        public bool TryRefreshFurnitureDetection(out FurnitureDetectionRejection rejection)
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                rejection = FurnitureDetectionRejection.NoRoomFootprint;
+                return false;
+            }
+
+            return furnitureDetection.Refresh(out rejection);
+        }
+
+        /// <summary>Chooses the type the next accepted candidate becomes.</summary>
+        public bool SetDetectedFurnitureType(string type)
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                return false;
+            }
+
+            return furnitureDetection.SetType(type);
+        }
+
+        /// <summary>Cycles the highlighted candidate. Publishes nothing.</summary>
+        public bool SelectNextDetectedCandidate()
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                return false;
+            }
+
+            return furnitureDetection.SelectNextCandidate();
+        }
+
+        /// <summary>
+        /// Turns the selected candidate into a real furniture object with its
+        /// measured dimensions, and publishes.
+        ///
+        /// <para>Two gates in order: the detection must produce a valid
+        /// candidate for the chosen type, and the object must then be accepted
+        /// by the single object store, which runs the unchanged shared
+        /// <c>FurnitureValidator</c>. The surface is only marked resolved once
+        /// the object is actually in the store, so a failure leaves the
+        /// candidate available to retry with a different type.</para>
+        /// </summary>
+        public bool TryAcceptDetectedFurniture(
+            out FurnitureDetectionRejection detectionRejection,
+            out ObjectPlacementRejection placementRejection)
+        {
+            placementRejection = ObjectPlacementRejection.None;
+
+            if (Phase != ScanPhase.AddObjects)
+            {
+                detectionRejection = FurnitureDetectionRejection.NoRoomFootprint;
+                return false;
+            }
+
+            TrackableId surfaceId = default;
+            bool hasSurface = furnitureDetection.HasSelection;
+
+            if (hasSurface)
+            {
+                surfaceId = furnitureDetection.Candidates[furnitureDetection.SelectedIndex].SurfaceId;
+            }
+
+            if (!furnitureDetection.TryBuildSelected(
+                    out SceneObjectModel model, out detectionRejection))
+            {
+                return false;
+            }
+
+            if (!objectPlacement.TryAdoptDetectedObject(model, out placementRejection))
+            {
+                return false;
+            }
+
+            if (hasSurface)
+            {
+                furnitureDetection.MarkResolved(surfaceId);
+            }
+
+            Publish();
+            return true;
+        }
+
+        /// <summary>
+        /// Adds every detected surface using its suggested type, so a first
+        /// pass over the room needs one tap. Anything that does not validate
+        /// is skipped, never forced. Each object goes through the same store
+        /// as one added by hand.
+        /// </summary>
+        public int TryAcceptAllDetectedFurniture()
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                return 0;
+            }
+
+            furnitureDetection.Refresh(out _);
+
+            int added = 0;
+
+            // Bounded: each pass either adds a candidate or dismisses it.
+            for (int guard = 0; guard < 32 && furnitureDetection.CandidateCount > 0; guard++)
+            {
+                if (!furnitureDetection.HasSelection)
+                {
+                    furnitureDetection.SelectCandidate(0);
+                }
+
+                furnitureDetection.SetType(
+                    furnitureDetection.Candidates[furnitureDetection.SelectedIndex].SuggestedType);
+
+                if (TryAcceptDetectedFurniture(out _, out _))
+                {
+                    added++;
+                }
+                else if (!furnitureDetection.DismissSelected())
+                {
+                    break;
+                }
+            }
+
+            return added;
+        }
+
+        /// <summary>
+        /// Drops the selected candidate without creating anything. Publishes
+        /// nothing: no scene state changed.
+        /// </summary>
+        public bool DismissDetectedCandidate()
+        {
+            if (Phase != ScanPhase.AddObjects)
+            {
+                return false;
+            }
+
+            return furnitureDetection.DismissSelected();
         }
 
         /// <summary>

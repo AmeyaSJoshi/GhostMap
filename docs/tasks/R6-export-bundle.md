@@ -31,6 +31,9 @@ comment when moving the code; placing objects in the room is the job of
 whoever reads `scene.json` (Unity user, `room.html`). Node names are
 `<type>_<shortened id>`.
 
+**Ask the owner first:** whether furniture should import into Unity already
+placed (see "Open decisions" in `docs/status/integration.md`). It changes step 1.
+
 ## Steps
 
 ### 1. Move the pure geometry into the shared package (Shared, rule 8)

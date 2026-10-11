@@ -5,14 +5,14 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 
 ## Current state
 
-**`R1` done: merged, and all three Unity suites pass in this repository (shared 202, viewer 548, scanner 577, run on the owner's Mac on 2026-10-11). `R6` (phone-built export bundle), `R7` (share-sheet Send to Computer) and `R8` (browser viewer) are built and verified as far as a Mac can; none has run on the iPhone. The whole product path now exists in code. Next: `R2` on the iPhone, ending with Finish and an AirDrop to the Mac.**
+**`R1` done: merged, and all three Unity suites pass in this repository (shared 202, viewer 548, scanner 577, run on the owner's Mac on 2026-10-11). `R4` (on-device YOLO furniture identification), `R6` (phone-built export bundle), `R7` (share-sheet Send to Computer) and `R8` (browser viewer) are built and verified as far as a Mac can; none has run on the iPhone. The whole product path now exists in code. Next: `R2` on the iPhone, ending with Finish and an AirDrop to the Mac.**
 
 | Task | What | State |
 | --- | --- | --- |
 | R1 | Bring `GhostMapDublinHacks` into this repository | **Merged** (owner-approved, 2026-10-11). Suites confirmed here 2026-10-11 at `69af8eb`: 202 / 548 / 577, all passing |
 | R2 | First device session: every capture path on a real iPhone | Not started |
 | R3 | Accuracy benchmark against a tape measure | Not started |
-| R4 | YOLO-n furniture identification on the phone (ADR-0011) | Not started |
+| R4 | YOLO-n furniture identification on the phone (ADR-0011) | **Built** on `scanner/r4-yolo-identification`: YOLO11n Core ML model (SHA-256s in ADR-0011), native Vision plugin, `FurnitureIdentificationController`, "Found: ..." and Add All; ARKit-label guessing removed. EditMode-tested, compiled for iPhone with Core ML linked and the model inside. Device check is the owner's (`R2`) |
 | R5 | Optional `label` on `SceneObjectModel` (additive schema change) | Not started |
 | R6 | The phone builds the export bundle (`room.html`, `room.glb`, objects, `scene.json`) and keeps saved scans | **Built** on `integration/r6-export-bundle`: shared `Runtime/Export/`, whole-room `.glb`, zip on Finalize, saved scans, contract complete. All `.glb` pass the Khronos validator; imports into Unity with glTFast verified. Not run on the iPhone; saved-scans list UI moves to `R7` |
 | R7 | Send to Computer through the iOS share sheet | **Built** on `scanner/r7-share-sheet`: native share-sheet plugin, `ShareController`, **Send to Computer** after Finish, **Rooms** list. EditMode-tested and compiled for iPhone; the AirDrop device check is the owner's (`R2`) |
@@ -67,6 +67,9 @@ How it was merged:
 | 2026-10-11 | Owner's Mac, Unity 6000.3.24f1, `scanner/r7-share-sheet` | scanner (EditMode) | **710/710** (+16 share and saved-rooms tests); `ScannerSceneTests` passes on the regenerated `Scanner.unity`. Shared and viewer unchanged by `R7` |
 | 2026-10-11 | Owner's Mac, `scanner/r7-share-sheet` | `ConfigureXr`, `BuildScanner`, unsigned `xcodebuild` Release iphoneos | `BUILD SUCCEEDED`; `GhostMapShare.mm` compiled into `UnityFramework` (`_GhostMapShare_ShareFile` defined) and called from the IL2CPP `DllImport` stub |
 | 2026-10-11 | Owner's Mac, iOS Simulator (iPhone 17, iOS 26.5), Simulator demo build | **Rooms** list, **Send to Computer**, the real share sheet | **Rooms** listed a saved bundle as "Fixture Bedroom With Window · 11 Oct, 12:00"; **Send to Computer** opened `UIActivityViewController` with the 182 KB zip; **Save to Files** → Save reported back through `UnitySendMessage` and the panel showed "Saved to Files."; the file in Files was byte-identical. AirDrop does not exist in the Simulator. Demo mode's automatic scan did not finish ("Having trouble? Tap Help GhostMap."), so the bundle was placed in `Documents/scans` by hand rather than made by Finish |
+| 2026-10-11 | Owner's Mac, Unity 6000.3.24f1, `scanner/r4-yolo-identification` | scanner (EditMode) | **773/773** (+73 identification cases, +4 guide and detection, -14 ADR-0007 suggester tests). Shared and viewer unchanged by `R4` |
+| 2026-10-11 | Owner's Mac, `scanner/r4-yolo-identification` | `ConfigureXr`, `BuildScanner`, unsigned `xcodebuild` Release iphoneos | `BUILD SUCCEEDED`. `UnityFramework` links `CoreML.framework` and `Vision.framework` and defines the `GhostMapDetector_*` functions the IL2CPP stubs call; the app carries the model at `Data/Raw/GhostMap/yolo11n.mlpackage` (5.2 MB, no `.meta` files) |
+| 2026-10-11 | Owner's Mac, Swift + Vision, the committed `yolo11n.mlpackage` | Load, classify a test photo upright and as a landscape sensor image with orientation `.right` | 80 COCO labels including `bed`, `couch`, `dining table`, `tv`; identical boxes both ways (so Vision reports boxes in the upright image, which `DetectionGeometry` assumes); 2.3 ms per frame warm on the Mac |
 | 2026-10-11 | Owner's Mac, `69af8eb` | Python tools checks (`inspect_snapshot.py --quiet` on the three fixtures, `send_fixture.py --dry-run`, `bash -n tools/run_unity_tests.sh`) | Passed: the two valid fixtures valid, the malformed one rejected on the height rule alone |
 
 The counts match those recorded in `GhostMapDublinHacks` at `0b7a106`. CI's Unity jobs still stop at the missing-secrets check, so for now the suites are confirmed only on the owner's Mac.
@@ -120,6 +123,9 @@ From reading the code, not from a failed run:
 - **Local `room.html` limits.** Browsers block a local page from reading files
   beside it, so all geometry must be embedded (`R8`).
 - **Detector licence.** YOLO-n is AGPL-3.0 (ADR-0011).
+- **Detector in real rooms.** COCO has no desk or dresser; a desk is a "dining
+  table" on a desk-height surface. Recall in the owner's room and the frame
+  time on the iPhone are unknown until `R4`'s device check.
 
 ## Next safe task
 
@@ -131,9 +137,12 @@ From reading the code, not from a failed run:
    `docs/status/viewer.md`. In `R2`, also note the `GhostMap export:` time,
    then **Send to Computer** by AirDrop three times, Save to Files once, and
    open `room.html` from the unzipped bundle (`R7` device check).
-3. **Agent, in parallel:** `R4` (YOLO-n) code and tests; `R5` once `R4`'s
-   class list is settled. See `docs/tasks/README.md`.
-4. **Owner, when convenient:** add `UNITY_LICENSE`, `UNITY_EMAIL`,
+3. **Owner, in `R2`:** `R4`'s device check: point at the bed, desk, table,
+   chairs; note what "Found:" says, the `GhostMap yolo:` frame time, and the
+   added sizes against a tape.
+4. **Agent, in parallel:** `R5` (detector label in the schema), then `R9`.
+   See `docs/tasks/README.md`.
+5. **Owner, when convenient:** add `UNITY_LICENSE`, `UNITY_EMAIL`,
    `UNITY_PASSWORD` as repository secrets (`docs/ci.md`) so CI can run the
    Unity suites on every push. Until then, run `./tools/run_unity_tests.sh` on
    the Mac before merging Unity changes.

@@ -117,7 +117,7 @@ step has a manual fallback that does not depend on ARKit detecting anything.
 | Walls and corners | ARKit vertical planes clustered into four walls (`WallPlaneAccumulator`, `RoomFromWalls`); corners where they meet | Sweep the floor line (ADR-0005), then walk to corners | built; only walked corners device-verified |
 | Height | ARKit ceiling plane | Aim at the wall/ceiling line; type it | built; only the fallbacks device-verified |
 | Doors and windows | ARKit door/window planes | Two points on a derived wall plane | built; only the fallback device-verified |
-| Furniture identity | YOLO-n on device (ADR-0011) | User picks a type | not built; today ARKit plane labels (ADR-0007) |
+| Furniture identity | YOLO-n on device (ADR-0011) | User picks a type | built (`R4`); not run on an iPhone |
 | Furniture size and position | Matched ARKit horizontal surface (ADR-0006) | Floor-ray placement plus per-type defaults | built; only the fallback device-verified |
 
 The fallback math is a camera ray intersected with a plane GhostMap already
@@ -408,7 +408,11 @@ Every runtime type, by project and folder. Tests mirror these names with a
 | `Runtime/Capture` | `FloorLockController`, `CornerCaptureController`, `HeightCaptureController`, `OpeningCaptureController`, `ObjectPlacementController` | One plain-C# controller per capture step |
 | `Runtime/Capture` | `AutoRoomScanController`, `WallPlaneAccumulator`, `RoomFromWalls` | Automatic room scan from ARKit planes |
 | `Runtime/Capture` | `WallSweepController` | Sweep fallback |
-| `Runtime/Capture` | `FurnitureDetectionController`, `FurnitureTypeSuggester` | Furniture surface candidates; label-based type guess (removed in `R4`) |
+| `Runtime/Capture` | `FurnitureDetectionController` | Furniture surface candidates with measured size and yaw (ADR-0006) |
+| `Runtime/Capture` | `FurnitureIdentificationController`, `IdentifiedFurniture`, `FurnitureClassMap`, `DetectionGeometry` | Task `R4` (ADR-0011): detector box to floor point, surface match, COCO class to type, tracker, proposals for Add All |
+| `Runtime/AR` | `IObjectDetector`, `ObjectDetection`, `CoreMlObjectDetector`, `SimulatedObjectDetector`, `ObjectDetectors` | The seam onto the YOLO11n detector; demo mode reports the virtual room's furniture |
+| `Assets/Plugins/iOS/GhostMapDetector` | `GhostMapDetector.mm` | Native plugin: Vision + Core ML on the `ARFrame` image, off the main thread |
+| `Assets/StreamingAssets/GhostMap` | `yolo11n.mlpackage` | The model, compiled on the phone on first use (SHA-256s in ADR-0011) |
 | `Runtime/Networking` | `ISnapshotSink`, `ScannerSnapshotPublisher`, `ScannerNetworkClient` | Revision changes → messages → TCP (developer stream) |
 | `Runtime/Networking` | `PeerDiscoveryClient` | UDP discovery; dormant, removed in `R10` |
 | `Runtime/Export` | `ExportBundleBuilder`, `SavedScanStore`, `ScanExporter`, `ExportResult` | The zip on Finalize (`room.html`, `room.glb`, objects, `scene.json`, `README.txt`), saved atomically in `persistentDataPath/scans/` (task `R6`) |

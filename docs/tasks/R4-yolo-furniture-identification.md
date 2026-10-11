@@ -5,6 +5,23 @@
 **Who:** an agent writes the plugin, C# pipeline and tests; the owner builds to
 the iPhone and runs the device check.
 
+> **Built 2026-10-11** on `scanner/r4-yolo-identification` (handoff
+> `docs/handoffs/2026-10-11-scanner-r4-yolo-identification.md`). Left: the
+> owner's device check below. Where the build differs from this brief:
+>
+> - The model is `Assets/StreamingAssets/GhostMap/yolo11n.mlpackage`, compiled
+>   on the phone on first use, not in `Plugins/iOS` (reason, SHA-256s and
+>   export versions in ADR-0011, "As built").
+> - The plugin is Objective-C++ (`GhostMapDetector.mm`) and asynchronous:
+>   `Submit` a frame, read `Latest` later; no Swift.
+> - `TryGetLatest` returns a `double` timestamp.
+> - A surface matches only classes it can be the top of (so a chair beside a
+>   desk keeps its own size), and a chair or couch keeps at least its default
+>   height. ADR-0011 lists the ranges.
+> - Not built: per-item remove (Undo removes the last added object) and
+>   world-space label markers. The Details readout and the `GhostMap
+>   identify:` log line show what is tracked.
+
 ## Goal
 
 When the user points at furniture during `AddObjects`, the phone names it

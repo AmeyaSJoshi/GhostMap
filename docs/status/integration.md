@@ -54,6 +54,7 @@ None in this repository. Hackathon suites last passed at `0b7a106`.
 | --- | --- | --- | --- |
 | 2026-10-11 | Agent cloud container | shared, viewer, scanner | **Not run.** The container has no Unity and its network policy blocks Unity's download and licensing hosts (`download.unity3d.com`, `public-cdn.cloud.unity3d.com`, `unity.com`); Unity also needs the owner's licence. Added GitHub Actions CI instead |
 | 2026-10-11 | Agent cloud container | Python tools job (`inspect_snapshot.py` on the three fixtures, `send_fixture.py --dry-run`, `bash -n tools/run_unity_tests.sh`) | Passed |
+| 2026-10-11 | GitHub Actions, run 1 (`7859878`) | tools; Unity shared, viewer, scanner | tools **passed**. All three Unity jobs **stopped at "Unity licence secrets are missing"**, as designed: the secrets are not set yet. Unity never started |
 
 No Unity count has been observed in this repository yet. Expected after `R1`:
 shared 202, viewer 548, scanner 577.

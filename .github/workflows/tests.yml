@@ -93,8 +93,10 @@ jobs:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
           checkName: EditMode results (${{ matrix.suite }})
 
+      # Skip when the test step never ran (e.g. missing secrets): its
+      # artifactsPath output is empty then and upload-artifact errors on it.
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.tests.outcome != 'skipped'
         with:
           name: test-results-${{ matrix.suite }}
           path: ${{ steps.tests.outputs.artifactsPath }}

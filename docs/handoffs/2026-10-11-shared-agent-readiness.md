@@ -46,8 +46,10 @@ See the merge of this branch into `main`.
 - Unity suites: **not run.** The agent container has no Unity, its network
   policy blocks Unity's hosts, and Unity needs the owner's licence. This is why
   CI was added. Recorded in `docs/status/integration.md`.
-- Python tools job checks: passed locally in the container. Result of the first
-  GitHub Actions run: see `docs/status/integration.md`.
+- Python tools job checks: passed locally in the container and in GitHub
+  Actions run 1. The three Unity jobs in that run stopped at the missing-secrets
+  check, as designed. Run 1 also showed the artifact upload erroring when the
+  test step was skipped; fixed by skipping the upload in that case.
 
 ## Known failures
 - The `unity` CI jobs fail with "Unity licence secrets are missing" until the

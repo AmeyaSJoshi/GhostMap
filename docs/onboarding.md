@@ -82,10 +82,10 @@ native Swift. Do not start a rewrite, or argue for one mid-task (`AGENTS.md` rul
 | Share-sheet Send to Computer | Not built (`R7`) | — |
 | `room.html` browser viewer | Not built (`R8`) | — |
 
-Test suites: shared 202, viewer 548, scanner 577, all passing at the
-hackathon commit `0b7a106`. The merged code is byte-identical to that tree.
-They have **not yet been re-run in this repository**; CI does that once the
-owner adds the Unity secrets (`docs/ci.md`).
+Test suites: shared 202, viewer 548, scanner 577, all passing in this
+repository (owner's Mac, 2026-10-11, `69af8eb`). CI's Unity jobs still wait
+for the owner's licence secrets (`docs/ci.md`); until then run
+`./tools/run_unity_tests.sh` on a Mac with Unity.
 
 ---
 

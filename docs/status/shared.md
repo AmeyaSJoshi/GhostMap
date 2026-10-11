@@ -28,7 +28,8 @@ The tag `shared-v1-ready` marks the frozen foundation baseline.
 ## Last verified commit
 
 - Shared sources: `0b7a106` from `GhostMapDublinHacks`, merged in task `R1`.
-  The frozen contract code was last changed in `47a6a0a` (F4).
+  The frozen contract code was last changed in `47a6a0a` (F4). EditMode suite
+  passes at `69af8eb`.
 
 ## Tests run
 
@@ -39,8 +40,8 @@ python3 tools/inspect_snapshot.py fixtures/valid-room-v1.json
 
 Last recorded Unity result, in `GhostMapDublinHacks`: **202 tests, 202 passed**
 (156 foundation + 32 `WallFittingTests` + 9 `RoomContainmentTests` + 5 discovery
-tests), Unity 6000.3.24f1, Test Framework 1.6.0. **Not yet re-run in this
-repository**; the merged shared code is byte-identical to that tree. On 2026-10-10 `inspect_snapshot.py` reported the two valid
+tests), Unity 6000.3.24f1, Test Framework 1.6.0. **Confirmed in this repository
+on 2026-10-11 at `69af8eb`: 202/202**, 0 failed (owner's Mac). On 2026-10-10 `inspect_snapshot.py` reported the two valid
 fixtures valid and the malformed one invalid on the height rule alone, and
 `send_fixture.py --dry-run` produced the documented 176 / 1059 / 141-byte
 messages.

@@ -16,7 +16,7 @@
 | --- | --- | --- |
 | A — Foundation | `F0`-`F4` | Complete |
 | B — Assisted-capture MVP | `S1`-`S6`, `V1`-`V6` | Complete; scanner verified on a physical iPhone |
-| C — Stand-in-place GhostMap | `R1`-`R10` (section 18) | **`R1` merged 2026-10-11. Next: confirm the test suites, then `R2`** |
+| C — Stand-in-place GhostMap | `R1`-`R10` (section 18) | **`R1` done 2026-10-11; suites confirmed green the same day. Next: `R2`** |
 
 Task `R1` brought the owner's hackathon work into this repository: the guided
 scan UI, automatic room scan, wall sweep, furniture surface detection and
@@ -1189,7 +1189,7 @@ R2, R7, R8 -> R9 -> R10
 
 ## Task R1: Bring in `GhostMapDublinHacks`
 
-**Done 2026-10-11** (owner-approved merge of `0b7a106`). The merged code is byte-identical to the hackathon tree; the three suites still need one run in this repository. Research spikes moved to `docs/research/`. Record in `docs/status/integration.md`.
+**Done 2026-10-11** (owner-approved merge of `0b7a106`). The merged code is byte-identical to the hackathon tree; the three suites passed in this repository at `69af8eb` (shared 202, viewer 548, scanner 577). Research spikes moved to `docs/research/`. Record in `docs/status/integration.md`.
 
 The owner's hackathon repository is this repository at `f5a7d30` plus 31 commits:
 

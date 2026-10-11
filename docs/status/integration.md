@@ -5,11 +5,11 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 
 ## Current state
 
-**`R1` merged; its Unity test run is still to do. CI (`.github/workflows/tests.yml`) is ready to run it once the owner adds three secrets (`docs/ci.md`). Then `R2`.**
+**`R1` done: merged, and all three Unity suites pass in this repository (shared 202, viewer 548, scanner 577, run on the owner's Mac on 2026-10-11). Next: `R2` on the iPhone; `R8` can start in parallel.**
 
 | Task | What | State |
 | --- | --- | --- |
-| R1 | Bring `GhostMapDublinHacks` into this repository | **Merged** (owner-approved, 2026-10-11). Code is byte-identical to the hackathon tree that passed 202 / 548 / 577; re-run here pending |
+| R1 | Bring `GhostMapDublinHacks` into this repository | **Merged** (owner-approved, 2026-10-11). Suites confirmed here 2026-10-11 at `69af8eb`: 202 / 548 / 577, all passing |
 | R2 | First device session: every capture path on a real iPhone | Not started |
 | R3 | Accuracy benchmark against a tape measure | Not started |
 | R4 | YOLO-n furniture identification on the phone (ADR-0011) | Not started |
@@ -46,7 +46,7 @@ How it was merged:
 
 ## Last verified commit
 
-None in this repository. Hackathon suites last passed at `0b7a106`.
+`69af8eb` (main after PR #29): shared 202, viewer 548, scanner 577, all passing (EditMode, owner's Mac). Nothing since R1 has run on an iPhone.
 
 ## Tests run
 
@@ -56,9 +56,10 @@ None in this repository. Hackathon suites last passed at `0b7a106`.
 | 2026-10-11 | Agent cloud container | Python tools job (`inspect_snapshot.py` on the three fixtures, `send_fixture.py --dry-run`, `bash -n tools/run_unity_tests.sh`) | Passed |
 | 2026-10-11 | GitHub Actions, run 1 (`7859878`) | tools; Unity shared, viewer, scanner | tools **passed**. All three Unity jobs **stopped at "Unity licence secrets are missing"**, as designed: the secrets are not set yet. Unity never started |
 | 2026-10-11 | GitHub Actions, run 5 on `main` (`04550b9`, merge of PR #25) | tools; Unity shared, viewer, scanner | Same as run 1: tools **passed**, Unity jobs stopped at the missing-secrets check. Artifact upload now skips cleanly |
+| 2026-10-11 | Owner's Mac, Unity 6000.3.24f1, `./tools/run_unity_tests.sh` at `69af8eb` | shared, viewer, scanner (EditMode) | **All passed: shared 202/202, viewer 548/548, scanner 577/577**, 0 failed, 0 skipped. First Unity run in this repository; confirms `R1` |
+| 2026-10-11 | Owner's Mac, `69af8eb` | Python tools checks (`inspect_snapshot.py --quiet` on the three fixtures, `send_fixture.py --dry-run`, `bash -n tools/run_unity_tests.sh`) | Passed: the two valid fixtures valid, the malformed one rejected on the height rule alone |
 
-No Unity count has been observed in this repository yet. Expected after `R1`:
-shared 202, viewer 548, scanner 577.
+The counts match those recorded in `GhostMapDublinHacks` at `0b7a106`. CI's Unity jobs still stop at the missing-secrets check, so for now the suites are confirmed only on the owner's Mac.
 
 ## Open decisions for the owner
 
@@ -66,8 +67,8 @@ shared 202, viewer 548, scanner 577.
    revisit after `R2`** (owner, 2026-10-11). Reasoning in `docs/onboarding.md`,
    "Where Unity fits, and why"; rule in `AGENTS.md` rule 15. When `R2` is recorded, put the question back to the
    owner with the result.
-2. **Unity licence secrets** for CI (`docs/ci.md`). Until they exist, no Unity
-   test result can be recorded.
+2. **Unity licence secrets** for CI (`docs/ci.md`). Until they exist, Unity
+   results come only from local runs on the owner's Mac (`./tools/run_unity_tests.sh`).
 3. **Should furniture arrive in Unity already placed?** Each `objects/<id>.glb`
    is written at the origin with no node transform (checked in
    `GlbExporter.Build`), so dragged into Unity every piece lands at the room's
@@ -113,15 +114,16 @@ From reading the code, not from a failed run:
 
 ## Next safe task
 
-1. **Owner, once:** add `UNITY_LICENSE`, `UNITY_EMAIL`, `UNITY_PASSWORD` as
-   repository secrets (`docs/ci.md`), then **Actions → tests → Run workflow**.
-   An agent then records the three counts here from the run. Expected: shared
-   202, viewer 548, scanner 577. Fallback: `./tools/run_unity_tests.sh` on the
-   Mac.
-2. Then **`R2`**: the first device session (`docs/tasks/R2-first-device-session.md`).
-3. In parallel, an agent can start **`R8`** (`docs/tasks/R8-browser-viewer.md`),
-   which needs neither Unity nor the iPhone, and the code parts of `R6` and
-   `R4`. See `docs/tasks/README.md`.
+1. **Owner: `R2`**, the first device session on the iPhone
+   (`docs/tasks/R2-first-device-session.md`). The Unity suites are green at
+   `69af8eb`, so the build is ready to try.
+2. **Agent, in parallel: `R8`** (`docs/tasks/R8-browser-viewer.md`), which
+   needs neither Unity nor the iPhone; then the code parts of `R6` and `R4`.
+   See `docs/tasks/README.md`.
+3. **Owner, when convenient:** add `UNITY_LICENSE`, `UNITY_EMAIL`,
+   `UNITY_PASSWORD` as repository secrets (`docs/ci.md`) so CI can run the
+   Unity suites on every push. Until then, run `./tools/run_unity_tests.sh` on
+   the Mac before merging Unity changes.
 
 ## Do not touch
 

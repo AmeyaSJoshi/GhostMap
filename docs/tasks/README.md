@@ -10,7 +10,7 @@ and the ADRs win; fix the brief.
 
 | Task | Brief | Depends on | Who can do it |
 | --- | --- | --- | --- |
-| R1 | Merge `GhostMapDublinHacks` | — | Done 2026-10-11; suites still to run (CI or owner) |
+| R1 | Merge `GhostMapDublinHacks` | — | Done; suites green at `69af8eb` (202 / 548 / 577) |
 | R2 | [First device session](R2-first-device-session.md) | R1 | **Owner** on an iPhone; an agent prepares the checklist |
 | R3 | [Accuracy benchmark](R3-accuracy-benchmark.md) | R2 | **Owner** with a tape measure |
 | R4 | [YOLO-n furniture identification](R4-yolo-furniture-identification.md) | R2 | Agent writes code and tests; owner builds and device-tests |

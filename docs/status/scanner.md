@@ -54,7 +54,7 @@ validation and the snapshot are identical however the room was captured.
 
 - Device-verified: `f087aaa` (S6).
 - Latest scanner sources: `0b7a106` from `GhostMapDublinHacks`, merged in task
-  `R1`. Not device-verified.
+  `R1`. EditMode suite passes at `69af8eb`. Not device-verified.
 
 ## Tests run
 
@@ -65,9 +65,12 @@ validation and the snapshot are identical however the room was captured.
 Last recorded result, in `GhostMapDublinHacks` at the quick-send commit:
 **577 tests, 577 passed** (scanner plus embedded shared). One earlier run had a
 transient failure in `ReconnectAfterFinalizationResendsTheFinalizedSnapshot`
-(timing); an immediate rerun passed. **Not yet re-run in this repository**; the
-merged scanner code is byte-identical to that tree. `ScannerBuild.BuildScanner`
-and an unsigned `xcodebuild` (Release, iphoneos) succeeded there.
+(timing); an immediate rerun passed. `ScannerBuild.BuildScanner` and an
+unsigned `xcodebuild` (Release, iphoneos) succeeded there.
+
+**Confirmed in this repository on 2026-10-11 at `69af8eb`: 577 tests, 577
+passed**, 0 failed (owner's Mac, Unity 6000.3.24f1). The iOS build has not been
+repeated here.
 
 ## Interfaces consumed
 

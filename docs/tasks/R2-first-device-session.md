@@ -30,13 +30,16 @@ guided UI) has passed EditMode tests but has never run on a phone.
 | 6 | Height: was a ceiling plane used? If not, aim or type | Height value; tape-measured height |
 | 7 | Openings: were any detected automatically? Add one door manually | Door width vs tape |
 | 8 | Furniture: point at a bed, desk, table and a chair | Which surfaces appeared, suggested type, measured W×D×H vs tape (`GhostMap detect:`) |
-| 9 | **Add All**, then **Finalize GhostMap** | Object count; any refusal message |
-| 10 | Note the frame rate feel during steps 2, 3 and 8 | Smooth / stutters / freezes |
-| 11 | Screenshots of anything confusing | Attach or describe |
+| 9 | **Add All**, then **Finish** | Object count; any refusal message; the `GhostMap export:` line (time and size) |
+| 10 | **Send to Computer**, choose the Mac under AirDrop (`R7`). Repeat twice more; then Save to Files once and Mail once | Each outcome and the guide's message; any permission prompt |
+| 11 | Cancel the share sheet once | No error shown; Send works again |
+| 12 | On the Mac: unzip, double-click `room.html` (Safari), and drag `room.glb` and one object into a Unity project with glTFast (`README.txt` in the zip) | Room recognisable? Door where it is? Furniture placed by the README rule? |
+| 13 | **Restart**, open **Rooms**, send the room again from the list | Listed with the right name and time; sent |
+| 14 | Note the frame rate feel during steps 2, 3 and 8 | Smooth / stutters / freezes |
+| 15 | Screenshots of anything confusing | Attach or describe |
 
-Send to Computer is **not** part of this session: today it uses the UDP/TCP
-path that `R7` replaces. Optional: if the desktop Viewer is running on the same
-Wi-Fi, try it and note the result.
+The **Live view** chip (desktop Viewer over Wi-Fi) is a developer tool and not
+part of this session.
 
 ## Done when
 

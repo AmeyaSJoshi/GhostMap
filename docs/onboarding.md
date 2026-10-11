@@ -78,12 +78,12 @@ native Swift. Do not start a rewrite, or argue for one mid-task (`AGENTS.md` rul
 | UDP discovery to the desktop Viewer | Built (`R1`, ADR-0009); **superseded**, removed in `R10` | No |
 | Desktop Unity Viewer (render, edit, measure, save, per-object `.glb`) | Built (V1-V6, ADR-0006); **frozen**, removed in `R10` | n/a |
 | YOLO-n identification | Not built (`R4`) | — |
-| Phone-built export bundle, saved scans (`R6`) | Built: zip on Finalize, kept in `persistentDataPath/scans/`; validator-clean `.glb`, glTFast import checked; list UI in `R7` | No |
-| Share-sheet Send to Computer | Not built (`R7`) | — |
+| Phone-built export bundle, saved scans (`R6`) | Built: zip on Finish, kept in `persistentDataPath/scans/`; validator-clean `.glb`, glTFast import checked | No |
+| Share-sheet Send to Computer, Rooms list | Built (`R7`); native plugin compiled for iPhone | No |
 | `room.html` browser viewer | Built (`R8`), filled by the phone (`R6`); checked in headless Chrome, owner's Safari check left | n/a |
 
-Test suites: shared 292, viewer 569, scanner 694, all passing in this
-repository (owner's Mac, 2026-10-11, after `R6`); web viewer 41 (Node). CI's Unity jobs still wait
+Test suites: shared 292, viewer 569, scanner 710, all passing in this
+repository (owner's Mac, 2026-10-11, after `R7`); web viewer 41 (Node). CI's Unity jobs still wait
 for the owner's licence secrets (`docs/ci.md`); until then run
 `./tools/run_unity_tests.sh` on a Mac with Unity.
 
@@ -186,12 +186,17 @@ Follow this once in the source; it explains most of the scanner.
    each object, the `Resources/GhostMapRoomTemplate.html` copy of the browser
    viewer filled with the data) and `SavedScanStore` writes it atomically to
    `persistentDataPath/scans/`. `ScanGuide` shows "saved" or the error.
-8. **Today's transfer (being replaced).** `ScannerHudController` owns a
-   background thread that pumps `ScannerNetworkClient`;
-   `ScannerSnapshotPublisher.Tick` enqueues a `scene.snapshot` per revision.
-   **Send to Computer** runs `PeerDiscoveryClient` (UDP 47832), then connects
-   to the Viewer over TCP 47831 (it also retries a failed export). `R7`
-   replaces this with the share sheet over the saved bundle.
+8. **Send to Computer.** After Finish, `ScannerHudController.OnSharePressed`
+   (retrying a failed export first) calls `ShareController.TryShare` with the
+   saved zip. `IosShareSheet` calls the native plugin
+   (`Assets/Plugins/iOS/GhostMapShare/GhostMapShare.mm`), which presents
+   `UIActivityViewController` and answers through `UnitySendMessage`;
+   `ShareResult.TryParse` reads it and the guide shows the outcome.
+   `SavedRoomsHud` (**Rooms**) lists saved zips and sends any of them.
+   **Developer live view** (not the product path): the **Live view** chip
+   opens a card that discovers the desktop Viewer (`PeerDiscoveryClient`, UDP
+   47832) and streams snapshots over TCP 47831 (`ScannerNetworkClient`,
+   `ScannerSnapshotPublisher`); `R10` removes it.
 9. **UI.** `ScanGuide.Describe(workflow, context)` (pure, tested) produces the
    step title, instruction and messages; `ScannerGuideHud` renders them;
    per-phase HUDs (`AutoScanHud`, `WallSweepHud`, `FurnitureDetectionHud`, ...)
@@ -279,6 +284,25 @@ On the desktop side (frozen): `ViewerTcpServer` → `ViewerSession` →
   and clean-build before every device test.
 - Signing team is chosen by hand in Xcode.
 
+**iOS native plugins**
+- A `.mm` file is Objective-C++: declare Unity's C functions
+  (`UnitySendMessage`, `UnityGetGLViewController`) `extern "C"`, or the link
+  fails. Files under `Assets/Plugins/iOS/` are iOS-only by folder convention;
+  check `Builds/iOS/Libraries/Plugins/iOS/` after a build.
+- `UnitySendMessage` needs a GameObject by name. `IosShareSheet.Create` makes
+  one at runtime so the scene does not depend on it.
+- Only an unsigned `xcodebuild` proves a plugin compiles and links; EditMode
+  tests never load it. The iOS Simulator runs it for real (the share sheet
+  works there, without AirDrop): `ScannerSimulatorBuild.ConfigureForSimulator`
+  and `BuildForSimulator`, `xcodebuild -sdk iphonesimulator`, install. To test
+  **Rooms** without finishing a scan, copy a bundle into the app's
+  `Documents/scans` (`xcrun simctl get_app_container <udid> com.ghostmap.scanner data`).
+- `ConfigureForSimulator` changes tracked files (`XRGeneralSettingsPerBuildTarget.asset`,
+  `ProjectSettings.asset`: Simulator SDK). Run `ScannerBuild.ConfigureXr`
+  afterwards and `git checkout --` whatever is still changed before committing.
+- Injected Simulator screenshots lag one frame behind taps; take a second one
+  before concluding a tap did nothing.
+
 **Geometry**
 - The GhostMap frame is right/up/forward from the floor-lock moment and is
   immune to `XROrigin.CameraYOffset` because everything is read in world space.
@@ -309,7 +333,8 @@ On the desktop side (frozen): `ViewerTcpServer` → `ViewerSession` →
   it can be tested without a device: `ISpatialProvider` (fake:
   `FakeSpatialProvider`), `ISnapshotSink` (`FakeSnapshotSink`), sockets
   (`FakeViewerListener`, `FakeScannerClient`). Follow this for every new
-  device-facing piece (`IObjectDetector` in `R4`, `IShareSheet` in `R7`).
+  device-facing piece (`IObjectDetector` in `R4`; `IShareSheet` has
+  `FakeShareSheet`).
 - `MonoBehaviour`s stay thin: they read input and call tested plain classes.
 - Scene wiring is asserted by `ScannerSceneBuilder.VerifyScene()` and
   `ScannerSceneTests`.

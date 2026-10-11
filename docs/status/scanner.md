@@ -23,8 +23,9 @@ but none of it has run on an iPhone.**
 | Wall sweep (ADR-0005) | Fallback: sweep each wall's floor line; total-least-squares fit; corners where lines meet | Not run on a device |
 | Furniture surface detection (ADR-0006) | Horizontal surfaces 0.20-1.40 m high become candidates with measured size and yaw; Add, Skip, Next, Add All | Not run on a device |
 | Type from plane label (ADR-0007) | Pre-selects the type from ARKit's `Table`/`Seat` label plus size | Superseded by ADR-0011; removed in `R4` |
-| Export bundle (ADR-0013, task `R6`) | **Finalize GhostMap** builds `GhostMap-<room>-<time>.zip` (`room.html`, `room.glb`, `objects/<id>.glb`, `scene.json`, `README.txt`) with `ExportBundleBuilder` and keeps it via `SavedScanStore` in `persistentDataPath/scans/`. The guide says "saved on this iPhone" or shows the error; **Send to Computer** retries a failed export. Logs `GhostMap export: saved <file> (<KB>) in <ms>`. On the Mac: 27 ms, 182 KB for the fixture room | Not run on a device |
-| Quick-send discovery (ADR-0009) | Finds the Viewer over UDP 47832 after finalize | Superseded by ADR-0013; dormant, removed in `R10` |
+| Export bundle (ADR-0013, task `R6`) | **Finish** (was Finalize GhostMap) builds `GhostMap-<room>-<time>.zip` (`room.html`, `room.glb`, `objects/<id>.glb`, `scene.json`, `README.txt`) with `ExportBundleBuilder` and keeps it via `SavedScanStore` in `persistentDataPath/scans/`. The guide says "saved on this iPhone" or shows the error; **Send to Computer** retries a failed export. Logs `GhostMap export: saved <file> (<KB>) in <ms>`. On the Mac: 27 ms, 182 KB for the fixture room | Not run on a device |
+| Send to Computer and Your rooms (ADR-0013, task `R7`) | After **Finish**, **Send to Computer** opens the iOS share sheet (`UIActivityViewController`, native plugin `Assets/Plugins/iOS/GhostMapShare/GhostMapShare.mm`) with the saved zip: AirDrop, Save to Files, Mail. The guide reports "Sent with AirDrop.", "Saved to Files." or the error; a cancel says nothing and the button works again. **Rooms** (top bar) lists the five newest saved rooms ("Bedroom · 11 Oct, 14:30"), each with its own Send button. The network chip is now **Live view**, a developer tool that no longer opens by itself. Logic in `ShareController` behind `IShareSheet`; the Editor reveals the zip in Finder instead | Not run on a device. Simulator: share sheet, Save to Files and the callback work |
+| Quick-send discovery (ADR-0009) — now the developer **Live view** card | Finds the Viewer over UDP 47832 after finalize | Superseded by ADR-0013; dormant, removed in `R10` |
 
 ### Scan flow
 
@@ -45,8 +46,6 @@ validation and the snapshot are identical however the room was captured.
 | Plan says | Scanner does today | Fixed by |
 | --- | --- | --- |
 | Furniture named by YOLO-n on device | Named from ARKit plane labels, or by the user | `R4` |
-| Saved scans listed on the start screen, each sendable | Saved in `persistentDataPath/scans/`, but not listed in the UI yet | `R7` |
-| Send to Computer is the iOS share sheet | Send to Computer uses UDP discovery and TCP to the Unity Viewer | `R7` |
 | No debug text in the guided flow | `S6 diag:` line still in the status text; S1 diagnostics in Details | `R9` |
 | `phone.pose` at <= 5 Hz | Not sent | Not planned |
 | Manual height marked in snapshot metadata | HUD only | Not planned |
@@ -96,10 +95,16 @@ messages, `ProtocolSerializer` and `PeerDiscoveryProtocol`.
   is the seat; extents are a lower bound; glass and dark surfaces may be missed.
 
 **Known behaviour**
-- Export runs on the main thread when **Finalize GhostMap** is tapped. 27 ms on
+- In the Simulator demo build the automatic room scan reaches "100% seen" but
+  does not finish ("Having trouble? Tap Help GhostMap."). Not investigated;
+  check whether it also happens in the Editor demo before `R9`.
+- Export runs on the main thread when **Finish** is tapped. 27 ms on
   the Mac; the iPhone time is unmeasured (spec target under 2 s).
-- Saved rooms accumulate in `persistentDataPath/scans/` with no UI to list or
-  delete them until `R7`.
+- Saved rooms accumulate in `persistentDataPath/scans/`; **Rooms** lists the
+  newest five and counts the rest. There is no delete yet.
+- The share sheet's outcome comes back through `UnitySendMessage` to a
+  runtime-created `GhostMapShareSheet` GameObject; if iOS never calls back, the
+  Send button stays disabled until Restart.
 - Walls must be swept in order around the room; out of order is refused as
   "self-intersecting" without saying why.
 - A skipped detected surface stays skipped after a re-sweep.
@@ -120,10 +125,11 @@ messages, `ProtocolSerializer` and `PeerDiscoveryProtocol`.
 
 ## Next safe task
 
-`R2`: the first device session (plan section 18), now including **Finalize**
-and the `GhostMap export:` log line. Agent work in parallel: `R7` (share sheet
-over the saved bundle, saved-scans list), then `R4` (YOLO-n) and `R9`
-(hardening). Progress: `docs/status/integration.md`.
+`R2`: the first device session (plan section 18), now ending with **Finish**,
+the `GhostMap export:` log line, and **Send to Computer** by AirDrop to the Mac
+(`R7`'s device check in `docs/tasks/R7-share-sheet.md`). Agent work in
+parallel: `R4` (YOLO-n), then `R9` (hardening). Progress:
+`docs/status/integration.md`.
 
 ## Do not touch
 

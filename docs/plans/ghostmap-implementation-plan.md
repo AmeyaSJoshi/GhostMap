@@ -1271,6 +1271,8 @@ Shared-contract change (`AGENTS.md` rule 8): add an optional `label` string to `
 
 ## Task R7: Send to Computer through the share sheet (ADR-0013)
 
+**Built 2026-10-11** on `scanner/r7-share-sheet`: native plugin, `ShareController`, Send to Computer after Finish, saved-rooms list (also R6's item 4). Compiled for iPhone; the AirDrop device test (item 3) is the owner's, in `R2`.
+
 1. Native iOS plugin that presents `UIActivityViewController` with the bundle zip. Written in this repository, no new package.
 2. **Send to Computer** button on the finish screen and on every saved scan.
 3. Device test: AirDrop to the owner's Mac three times in a row; also Save to Files and Mail. The zip opens and `room.html` works after unzipping.

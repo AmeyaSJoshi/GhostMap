@@ -5,7 +5,7 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 
 ## Current state
 
-**`R1` done: merged, and all three Unity suites pass in this repository (shared 202, viewer 548, scanner 577, run on the owner's Mac on 2026-10-11). `R8` (browser viewer) and `R6` (phone-built export bundle) built and verified on the Mac; neither has run on the iPhone. Next: `R2` on the iPhone, which now ends with Finalize writing the bundle.**
+**`R1` done: merged, and all three Unity suites pass in this repository (shared 202, viewer 548, scanner 577, run on the owner's Mac on 2026-10-11). `R6` (phone-built export bundle), `R7` (share-sheet Send to Computer) and `R8` (browser viewer) are built and verified as far as a Mac can; none has run on the iPhone. The whole product path now exists in code. Next: `R2` on the iPhone, ending with Finish and an AirDrop to the Mac.**
 
 | Task | What | State |
 | --- | --- | --- |
@@ -15,7 +15,7 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 | R4 | YOLO-n furniture identification on the phone (ADR-0011) | Not started |
 | R5 | Optional `label` on `SceneObjectModel` (additive schema change) | Not started |
 | R6 | The phone builds the export bundle (`room.html`, `room.glb`, objects, `scene.json`) and keeps saved scans | **Built** on `integration/r6-export-bundle`: shared `Runtime/Export/`, whole-room `.glb`, zip on Finalize, saved scans, contract complete. All `.glb` pass the Khronos validator; imports into Unity with glTFast verified. Not run on the iPhone; saved-scans list UI moves to `R7` |
-| R7 | Send to Computer through the iOS share sheet | Not started |
+| R7 | Send to Computer through the iOS share sheet | **Built** on `scanner/r7-share-sheet`: native share-sheet plugin, `ShareController`, **Send to Computer** after Finish, **Rooms** list. EditMode-tested and compiled for iPhone; the AirDrop device check is the owner's (`R2`) |
 | R8 | Browser viewer `room.html` (three.js, view and measure) | **Built** on `viewer/r8-browser-viewer`: template, 41 Node tests, CI job. Checked in headless Chrome; owner's double-click check in Safari still to do. The phone fills it in `R6` |
 | R9 | Failure hardening and one guided scan flow | Not started |
 | R10 | Retire the Unity Viewer and the discovery code | Not started |
@@ -64,6 +64,9 @@ How it was merged:
 | 2026-10-11 | Owner's Mac, Khronos `gltf-validator` 2.0.0-dev.3.10 | `room.glb` and three `objects/*.glb` from a scanner-built bundle (fixture room, and the same room rotated 30°) | First run: 8 errors (accessor min/max rounded to 6 decimals) and 18 hints (no bufferView target). After the fix: **0 errors, 0 warnings, 0 hints** on all |
 | 2026-10-11 | Owner's Mac, scratch Unity 6000.3.24f1 project with glTFast 6.20.0 | Import `room.glb` and `objects/bed-1.glb` from the bundle | Loads; node names kept; **glTFast negates X**, so the room imports turned 180° about Y (floor x -4..0, z -3..0). The bed placed at `(-x, y, -z)`, rotation `(0, yaw, 0)` fills its exact footprint with its headboard at the right wall |
 | 2026-10-11 | Owner's Mac, headless Chrome 154, `file://` | `room.html` from the scanner-built bundles | Renders the real `room.glb` with door and window holes; furniture aligned with the walls, also in the rotated room; Dollhouse and Measure work |
+| 2026-10-11 | Owner's Mac, Unity 6000.3.24f1, `scanner/r7-share-sheet` | scanner (EditMode) | **710/710** (+16 share and saved-rooms tests); `ScannerSceneTests` passes on the regenerated `Scanner.unity`. Shared and viewer unchanged by `R7` |
+| 2026-10-11 | Owner's Mac, `scanner/r7-share-sheet` | `ConfigureXr`, `BuildScanner`, unsigned `xcodebuild` Release iphoneos | `BUILD SUCCEEDED`; `GhostMapShare.mm` compiled into `UnityFramework` (`_GhostMapShare_ShareFile` defined) and called from the IL2CPP `DllImport` stub |
+| 2026-10-11 | Owner's Mac, iOS Simulator (iPhone 17, iOS 26.5), Simulator demo build | **Rooms** list, **Send to Computer**, the real share sheet | **Rooms** listed a saved bundle as "Fixture Bedroom With Window · 11 Oct, 12:00"; **Send to Computer** opened `UIActivityViewController` with the 182 KB zip; **Save to Files** → Save reported back through `UnitySendMessage` and the panel showed "Saved to Files."; the file in Files was byte-identical. AirDrop does not exist in the Simulator. Demo mode's automatic scan did not finish ("Having trouble? Tap Help GhostMap."), so the bundle was placed in `Documents/scans` by hand rather than made by Finish |
 | 2026-10-11 | Owner's Mac, `69af8eb` | Python tools checks (`inspect_snapshot.py --quiet` on the three fixtures, `send_fixture.py --dry-run`, `bash -n tools/run_unity_tests.sh`) | Passed: the two valid fixtures valid, the malformed one rejected on the height rule alone |
 
 The counts match those recorded in `GhostMapDublinHacks` at `0b7a106`. CI's Unity jobs still stop at the missing-secrets check, so for now the suites are confirmed only on the owner's Mac.
@@ -125,10 +128,11 @@ From reading the code, not from a failed run:
    `69af8eb`, so the build is ready to try.
 2. **Owner, quick:** double-click a filled `room.html` in Safari to finish `R8`
    (`apps/web-viewer/README.md`, "Manual check"); record it in
-   `docs/status/viewer.md`. In `R2`, also note the `GhostMap export:` time and
-   unzip one bundle on the Mac.
-3. **Agent, in parallel:** `R7` (share sheet over the saved bundle, plus the
-   saved-scans list), then `R4`. See `docs/tasks/README.md`.
+   `docs/status/viewer.md`. In `R2`, also note the `GhostMap export:` time,
+   then **Send to Computer** by AirDrop three times, Save to Files once, and
+   open `room.html` from the unzipped bundle (`R7` device check).
+3. **Agent, in parallel:** `R4` (YOLO-n) code and tests; `R5` once `R4`'s
+   class list is settled. See `docs/tasks/README.md`.
 4. **Owner, when convenient:** add `UNITY_LICENSE`, `UNITY_EMAIL`,
    `UNITY_PASSWORD` as repository secrets (`docs/ci.md`) so CI can run the
    Unity suites on every push. Until then, run `./tools/run_unity_tests.sh` on

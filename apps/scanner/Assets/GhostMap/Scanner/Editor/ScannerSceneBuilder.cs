@@ -156,7 +156,8 @@ namespace GhostMap.Scanner.Editor
             Button captureHeightButton = ScannerUiKit.Button(primaryRow, "CaptureHeightButton", "Measure Height", ButtonStyle.Primary, out Text captureHeightLabel);
             Button captureOpeningPointButton = ScannerUiKit.Button(primaryRow, "CaptureOpeningPointButton", "Mark Bottom-Left", ButtonStyle.Primary, out Text captureOpeningPointLabel);
             Button placeObjectButton = ScannerUiKit.Button(primaryRow, "PlaceObjectButton", "Place", ButtonStyle.Primary, out _);
-            Button finalizeButton = ScannerUiKit.Button(primaryRow, "FinalizeButton", "Finish & Send", ButtonStyle.Primary, out _);
+            Button finalizeButton = ScannerUiKit.Button(primaryRow, "FinalizeButton", "Finish", ButtonStyle.Primary, out _);
+            Button shareButton = ScannerUiKit.Button(primaryRow, "ShareButton", "Send to Computer", ButtonStyle.Primary, out _);
 
             // Choice row: which wall, which kind of thing.
             Button selectWallButton = ScannerUiKit.Button(choiceRow, "SelectWallButton", "Wall 1 of 4", ButtonStyle.Secondary, out Text selectWallLabel);
@@ -219,11 +220,16 @@ namespace GhostMap.Scanner.Editor
             Button resetButton = ScannerUiKit.Button(topRow, "ResetButton", "Restart", ButtonStyle.Pill, out Text resetLabel);
             ScannerUiKit.Size(resetButton.gameObject, 80f, 210f, 0f);
 
+            // Task R7: the rooms saved on this phone, each sendable again.
+            Button savedRoomsButton = ScannerUiKit.Button(topRow, "SavedRoomsButton", "Rooms", ButtonStyle.Pill, out _);
+            ScannerUiKit.Size(savedRoomsButton.gameObject, 80f, 180f, 0f);
+
             RectTransform spacer = ScannerUiKit.Rect("Spacer", topRow);
             ScannerUiKit.Size(spacer.gameObject, 80f, 0f, 1f);
 
-            Button connectionChip = ScannerUiKit.Button(topRow, "ConnectionChip", "Connect computer", ButtonStyle.Pill, out Text connectionChipLabel);
-            ScannerUiKit.Size(connectionChip.gameObject, 80f, 340f, 0f);
+            // Developer live view (ADR-0013 section 5), not part of sending a room.
+            Button connectionChip = ScannerUiKit.Button(topRow, "ConnectionChip", "Live view", ButtonStyle.Pill, out Text connectionChipLabel);
+            ScannerUiKit.Size(connectionChip.gameObject, 80f, 260f, 0f);
             connectionChipLabel.rectTransform.offsetMin = new Vector2(52f, 4f);
             Image connectionDot = ScannerUiKit.Dot(connectionChip.transform, "StatusDot", 18f, new Color(1f, 1f, 1f, 0.45f));
             connectionDot.rectTransform.anchorMin = new Vector2(0f, 0.5f);
@@ -255,13 +261,13 @@ namespace GhostMap.Scanner.Editor
                 new Color(1f, 0.86f, 0.62f), FontStyle.Normal, TextAnchor.MiddleCenter);
 
             RectTransform connectPanel = ScannerUiKit.Card("ConnectPanel", topBar, ScannerUiKit.CardColor, 40f, 28, 16f);
-            ScannerUiKit.Label(connectPanel, "ConnectTitle", "Connect to your computer", 36, ScannerUiKit.TextPrimary, FontStyle.Bold);
+            ScannerUiKit.Label(connectPanel, "ConnectTitle", "Live view (developer)", 36, ScannerUiKit.TextPrimary, FontStyle.Bold);
             ScannerUiKit.Label(
                 connectPanel, "ConnectHelp",
-                "Open GhostMap Viewer on your computer, then use Send to Computer after finishing your scan.", 28,
+                "Shows the scan live in the desktop GhostMap Viewer while you scan. Not needed to send a finished room.", 28,
                 ScannerUiKit.TextSecondary);
             Button sendToComputerButton = ScannerUiKit.Button(
-                connectPanel, "SendToComputerButton", "Send to Computer", ButtonStyle.Primary, out _, 104f);
+                connectPanel, "SendToComputerButton", "Find Viewer", ButtonStyle.Primary, out _, 104f);
             ScannerUiKit.Label(
                 connectPanel, "ManualConnectHelp",
                 "Developer fallback: enter an address manually if discovery cannot find the Viewer.", 22,
@@ -275,6 +281,26 @@ namespace GhostMap.Scanner.Editor
             portInput.contentType = InputField.ContentType.IntegerNumber;
             Button connectButton = ScannerUiKit.Button(connectPanel, "ConnectButton", "Connect", ButtonStyle.Primary, out _, 104f);
             Text networkStatusText = ScannerUiKit.Label(connectPanel, "NetworkStatusText", string.Empty, 24, ScannerUiKit.TextSecondary);
+
+            // Task R7: "Your rooms" (plan section 19).
+            RectTransform savedRoomsPanel = ScannerUiKit.Card("SavedRoomsPanel", topBar, ScannerUiKit.CardColor, 40f, 28, 14f);
+            ScannerUiKit.Label(savedRoomsPanel, "SavedRoomsTitle", "Your rooms", 36, ScannerUiKit.TextPrimary, FontStyle.Bold);
+            Text savedRoomsEmpty = ScannerUiKit.Label(
+                savedRoomsPanel, "SavedRoomsEmpty", "No saved rooms yet. Finish a scan to save one.", 28, ScannerUiKit.TextSecondary);
+            var savedRoomRows = new GameObject[SavedRoomsHud.Slots];
+            var savedRoomLabels = new Text[SavedRoomsHud.Slots];
+            var savedRoomSendButtons = new Button[SavedRoomsHud.Slots];
+            for (int i = 0; i < SavedRoomsHud.Slots; i++)
+            {
+                RectTransform row = ScannerUiKit.Row($"SavedRoom{i + 1}", savedRoomsPanel, 12f);
+                savedRoomLabels[i] = ScannerUiKit.Label(row, "Label", string.Empty, 28, ScannerUiKit.TextPrimary, FontStyle.Normal, TextAnchor.MiddleLeft);
+                ScannerUiKit.Size(savedRoomLabels[i].gameObject, 92f, flexibleWidth: 1f);
+                savedRoomSendButtons[i] = ScannerUiKit.Button(row, "SendButton", "Send to Computer", ButtonStyle.Secondary, out _, 92f);
+                ScannerUiKit.Size(savedRoomSendButtons[i].gameObject, 92f, 400f, 0f);
+                savedRoomRows[i] = row.gameObject;
+            }
+            Text savedRoomsMore = ScannerUiKit.Label(savedRoomsPanel, "SavedRoomsMore", string.Empty, 24, ScannerUiKit.TextSecondary);
+            Text savedRoomsStatus = ScannerUiKit.Label(savedRoomsPanel, "SavedRoomsStatus", string.Empty, 26, ScannerUiKit.TextSecondary);
 
             // ---------------------------------------------------------------
             // Details: every per-step debug readout, out of the user's way
@@ -454,6 +480,7 @@ namespace GhostMap.Scanner.Editor
                 ("portInput", portInput),
                 ("connectButton", connectButton),
                 ("sendToComputerButton", sendToComputerButton),
+                ("shareButton", shareButton),
                 ("networkStatusText", networkStatusText),
                 ("resetButton", resetButton),
                 ("finalizeButton", finalizeButton),
@@ -463,6 +490,21 @@ namespace GhostMap.Scanner.Editor
                 ("connectionChipLabel", connectionChipLabel),
                 ("connectionChipDot", connectionDot),
                 ("connectPanel", connectPanel.gameObject));
+
+            // Task R7: the saved-rooms list.
+            var savedRoomsGo = new GameObject("SavedRoomsHud", typeof(SavedRoomsHud));
+            var savedRoomsHud = savedRoomsGo.GetComponent<SavedRoomsHud>();
+            AssignSerializedReferences(
+                savedRoomsHud,
+                ("scannerHud", scannerHud),
+                ("toggleButton", savedRoomsButton),
+                ("panel", savedRoomsPanel.gameObject),
+                ("emptyText", savedRoomsEmpty),
+                ("moreText", savedRoomsMore),
+                ("statusText", savedRoomsStatus));
+            AssignSerializedArray(savedRoomsHud, "rows", savedRoomRows);
+            AssignSerializedArray(savedRoomsHud, "rowLabels", savedRoomLabels);
+            AssignSerializedArray(savedRoomsHud, "rowSendButtons", savedRoomSendButtons);
 
             // The guide: words, progress, crosshair state, row collapsing.
             var guideGo = new GameObject("ScannerGuideHud", typeof(ScannerGuideHud));
@@ -504,6 +546,7 @@ namespace GhostMap.Scanner.Editor
             // Start hidden; the HUDs and the guide reveal what each step needs.
             details.gameObject.SetActive(false);
             connectPanel.gameObject.SetActive(false);
+            savedRoomsPanel.gameObject.SetActive(false);
             demoBadge.gameObject.SetActive(false);
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath) !);
@@ -666,6 +709,7 @@ namespace GhostMap.Scanner.Editor
                     "portInput",
                     "connectButton",
                     "sendToComputerButton",
+                    "shareButton",
                     "networkStatusText",
                     "resetButton",
                     "finalizeButton",
@@ -675,6 +719,13 @@ namespace GhostMap.Scanner.Editor
                     "connectionChipLabel",
                     "connectionChipDot",
                     "connectPanel");
+
+                var savedRooms = FindInScene<SavedRoomsHud>(scene);
+                Require(savedRooms != null, "no SavedRoomsHud");
+                RequireAssigned(savedRooms, "scannerHud", "toggleButton", "panel", "emptyText", "moreText", "statusText");
+                RequireArray(savedRooms, "rows", SavedRoomsHud.Slots);
+                RequireArray(savedRooms, "rowLabels", SavedRoomsHud.Slots);
+                RequireArray(savedRooms, "rowSendButtons", SavedRoomsHud.Slots);
 
                 var guide = FindInScene<ScannerGuideHud>(scene);
                 Require(guide != null, "no ScannerGuideHud");

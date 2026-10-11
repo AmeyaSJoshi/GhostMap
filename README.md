@@ -53,7 +53,7 @@ revisited after the first device session (`R2`); the reasoning is in
 | --- | --- |
 | Foundation `F0`-`F4` | Complete |
 | Assisted-capture MVP: Scanner `S1`-`S6`, Viewer `V1`-`V6` | Complete; scanner verified on a physical iPhone |
-| Stand-in-place GhostMap `R1`-`R10` | **`R1`, `R6`, `R8` done; suites green (292 / 569 / 694); next: `R2` on the iPhone** |
+| Stand-in-place GhostMap `R1`-`R10` | **`R1`, `R6`, `R7`, `R8` built; suites green (292 / 569 / 710); next: `R2` on the iPhone** |
 
 What is where today:
 
@@ -64,7 +64,8 @@ What is where today:
 | Desktop Unity Viewer, TCP live stream, UDP discovery | Built; frozen and retiring (`R10`) |
 | `room.html` browser viewer (`apps/web-viewer`) | Built (`R8`), checked in Chrome |
 | Phone-built export bundle (`room.html`, `room.glb`, furniture `.glb`, `scene.json`), saved on the phone | Built (`R6`), verified on the Mac; never run on an iPhone |
-| YOLO-n identification, share-sheet Send to Computer | Not built (`R4`, `R7`) |
+| Share-sheet Send to Computer, saved-rooms list | Built (`R7`), compiled for iPhone; never run on an iPhone |
+| YOLO-n identification | Not built (`R4`) |
 
 The roadmap is plan section 18; progress is tracked in
 [`docs/status/integration.md`](docs/status/integration.md).

@@ -1,5 +1,15 @@
 # R7: Send to Computer through the iOS share sheet
 
+> **Built 2026-10-11** (handoff `docs/handoffs/2026-10-11-scanner-r7-share-sheet.md`).
+> As built: `IShareSheet`, `ShareResult`, `ShareController` (state and
+> wording), `IosShareSheet` (a runtime-created GameObject receives the
+> `UnitySendMessage` callback, so the scene does not depend on it),
+> `EditorShareSheet` (reveals in Finder). **Send to Computer** sits in the
+> bottom sheet after **Finish**; **Rooms** in the top bar lists saved rooms with
+> a Send button each. The discovery/TCP card is relabelled **Live view
+> (developer)** and no longer opens by itself; `R10` removes it. The device
+> check below is still to do. The text below is the original brief.
+
 **Decision:** ADR-0013 section 2. **Workstream:** Scanner.
 **Who:** an agent writes the plugin and the C# side; the owner device-tests.
 

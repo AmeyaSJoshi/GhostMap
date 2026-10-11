@@ -247,8 +247,10 @@ Finalize
 ```
 
 The bundle layout is a contract: `docs/contracts/export-bundle-v1.md` (task
-`R6`). The UDP discovery imported with `R1` (ADR-0009) is superseded
-and is removed with the Unity Viewer.
+`R6`). Built: the bundle in `R6`, the share sheet and the saved-rooms list in
+`R7`. The UDP discovery imported with `R1` (ADR-0009) is superseded; it
+survives only as the developer **Live view** card and is removed with the
+Unity Viewer.
 
 ---
 
@@ -411,6 +413,9 @@ Every runtime type, by project and folder. Tests mirror these names with a
 | `Runtime/Networking` | `PeerDiscoveryClient` | UDP discovery; dormant, removed in `R10` |
 | `Runtime/Export` | `ExportBundleBuilder`, `SavedScanStore`, `ScanExporter`, `ExportResult` | The zip on Finalize (`room.html`, `room.glb`, objects, `scene.json`, `README.txt`), saved atomically in `persistentDataPath/scans/` (task `R6`) |
 | `Resources` | `GhostMapRoomTemplate.html` | Copy of `apps/web-viewer/dist/room-template.html`; a test keeps it fresh |
+| `Runtime/Share` | `IShareSheet`, `ShareResult`, `ShareController`, `ShareState`, `IosShareSheet`, `EditorShareSheet`, `ShareSheets` | Send to Computer through the share sheet; outcome wording (task `R7`) |
+| `Runtime/UI` | `SavedRoomsHud` | **Rooms**: the newest saved rooms, each with Send to Computer |
+| `Assets/Plugins/iOS/GhostMapShare` | `GhostMapShare.mm` | Native plugin: presents `UIActivityViewController`, reports via `UnitySendMessage` |
 | `Runtime/UI` | `FloorLockHud` | Composition root: builds every controller and the workflow; Reset rebuilds them |
 | `Runtime/UI` | `ScanGuide`, `ScannerGuideHud`, `SafeAreaFitter`, `MarkerMaterials` | Guided-flow wording (pure, tested), header/bubble/bottom sheet, safe area, marker materials |
 | `Runtime/UI` | `AutoScanHud`, `WallSweepHud`, `CornerCaptureHud`, `HeightCaptureHud`, `OpeningCaptureHud`, `FurnitureDetectionHud`, `ObjectPlacementHud` | Per-phase controls, readouts, world-space markers |

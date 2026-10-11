@@ -80,6 +80,7 @@ or
 | 2026-10-11 | shared | [Where Unity fits; Unity kept for the phone app until R2](2026-10-11-shared-unity-role-decision.md) |
 | 2026-10-11 | shared | [Docs placement: rules in AGENTS.md, explanation in onboarding](2026-10-11-shared-docs-placement.md) |
 | 2026-10-11 | integration | [R1 confirmed: Unity suites green in this repository](2026-10-11-integration-r1-suites-confirmed.md) |
+| 2026-10-11 | viewer | [R8: browser viewer `room.html` built](2026-10-11-viewer-r8-browser-viewer.md) |
 
 Add a row for every new handoff.
 

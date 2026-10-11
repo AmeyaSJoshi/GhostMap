@@ -17,7 +17,7 @@ ADR is changed only by a new ADR that supersedes it.
 | [0010](ADR-0010-one-button-computer-transfer.md) | One-button Send to Computer, no IP typing | Accepted; transport superseded by 0013 |
 | [0011](ADR-0011-on-device-yolo-furniture-identification.md) | Identify furniture on the phone with YOLO-n | Accepted, not built |
 | [0012](ADR-0012-stand-in-place-on-device-capture.md) | Stand in one spot, capture everything on the phone, deliver Unity-ready files | Accepted; delivery superseded by 0013 |
-| [0013](ADR-0013-phone-export-and-browser-viewer.md) | Phone builds the export bundle, Send to Computer is the iOS share sheet, `room.html` is the viewer | Accepted, not built |
+| [0013](ADR-0013-phone-export-and-browser-viewer.md) | Phone builds the export bundle, Send to Computer is the iOS share sheet, `room.html` is the viewer | Accepted; `room.html` built (R8), bundle and share sheet not built |
 
 The next ADR is **0014**.
 

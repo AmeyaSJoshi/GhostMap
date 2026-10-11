@@ -1277,6 +1277,8 @@ Shared-contract change (`AGENTS.md` rule 8): add an optional `label` string to `
 
 ## Task R8: Browser viewer, `room.html` (ADR-0013)
 
+**Built 2026-10-11** in `apps/web-viewer/` (41 Node tests, CI job `web-viewer`, contract `docs/contracts/export-bundle-v1.md` section 2). Left: the owner's double-click check in Safari. Record in `docs/status/viewer.md`.
+
 1. three.js app in `apps/web-viewer/`: load the embedded room and objects, orbit/pan/zoom, frame room, dollhouse (hide ceiling), click an object for its name, type, label and dimensions, two-click measuring with 3D and horizontal distance, an object list.
 2. Build step that inlines everything (three.js, app code, styles) into one template HTML with placeholders for the embedded data; commit the built template where the scanner can ship it.
 3. No network requests; works by double-click in Safari, Chrome and Firefox from a local folder.

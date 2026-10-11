@@ -23,7 +23,7 @@ canonical document wins (see `docs/README.md`, "Which document wins").
 - **Stack.** Two Unity 6000.3.24f1 projects (`apps/scanner` for iOS,
   `apps/viewer` desktop, frozen) sharing one local package
   (`shared/com.ghostmap.shared`). AR Foundation / ARKit 6.3.1. C#. EditMode
-  tests. A three.js browser viewer is planned in `apps/web-viewer/`. The phone
+  tests. A three.js browser viewer lives in `apps/web-viewer/` (`R8`). The phone
   app stays Unity for now (see "Where Unity fits, and why" below).
 - **Where it stands.** The original assisted-capture MVP is done and its
   scanner was verified on an iPhone. The owner's hackathon work (stand-in-place
@@ -80,7 +80,7 @@ native Swift. Do not start a rewrite, or argue for one mid-task (`AGENTS.md` rul
 | YOLO-n identification | Not built (`R4`) | — |
 | Phone-built export bundle, saved scans | Not built (`R6`) | — |
 | Share-sheet Send to Computer | Not built (`R7`) | — |
-| `room.html` browser viewer | Not built (`R8`) | — |
+| `room.html` browser viewer | Built (`R8`); checked in headless Chrome, owner's Safari check left; filled by the phone in `R6` | n/a |
 
 Test suites: shared 202, viewer 548, scanner 577, all passing in this
 repository (owner's Mac, 2026-10-11, `69af8eb`). CI's Unity jobs still wait
@@ -99,7 +99,7 @@ Most agents run in a cloud container. Know its limits before planning:
 | Regenerate `Scanner.unity` / `Viewer.unity` | **No** (needs Unity). If you change a scene builder, say so in your handoff; the owner runs **GhostMap > Build Scanner Scene** / **Build Viewer Scene** |
 | Build to an iPhone or test on a device | **No.** Only the owner can. Write a precise device procedure instead (see the `R2` brief) |
 | Run Python tools | Yes. `python3` 3.13 (stdlib only for `tools/`) |
-| Build JavaScript (for `R8`) | Yes. Node 22 is available |
+| Build and test the browser viewer | Yes. Node 22 is available: `cd apps/web-viewer && npm ci && npm test` |
 | Push | Only to the branch the session was given. You cannot delete remote branches or push tags |
 | Merge another contributor's code | An automated permission check may block it unless the owner explicitly approves in the conversation |
 | Open and merge PRs | Yes, through the GitHub tools, when the owner asks |
@@ -126,7 +126,7 @@ docs/
   specs/                  product spec: workflow, FR-01..FR-19 with real status
   plans/                  implementation plan; section 18 = roadmap R1-R10
   architecture/overview.md  design + section 12 code map + section 13 runtime model
-  contracts/              scene-schema-v1.md, protocol-v1.md (+ export-bundle-v1.md in R6)
+  contracts/              scene-schema-v1.md, protocol-v1.md, export-bundle-v1.md (room.html data; rest in R6)
   decisions/              ADR-0001..0013, index in README.md
   status/                 one page per workstream; integration.md = roadmap tracker
   handoffs/               one file per completed task; only recent ones in the tree
@@ -136,7 +136,7 @@ shared/com.ghostmap.shared/  Domain, Geometry, Validation, Protocol (+ Export in
 shared/TestProject/       host project that only runs the shared tests
 apps/scanner/             iOS app: all capture, recognition, (soon) export and share
 apps/viewer/              desktop Unity app: frozen, retiring in R10
-apps/web-viewer/          (R8) three.js source for room.html
+apps/web-viewer/          three.js source; builds dist/room-template.html (R8)
 fixtures/                 three canonical SceneSnapshot JSON files
 tools/                    run_unity_tests.sh, inspect_snapshot.py, send_fixture.py
 .github/                  PR template, CI workflow
@@ -243,6 +243,20 @@ On the desktop side (frozen): `ViewerTcpServer` → `ViewerSession` →
   projects list `com.ghostmap.shared` under `testables`. Compute expected
   counts from the results XML, never by arithmetic.
 
+**Browser viewer (`apps/web-viewer`)**
+- An element with its own `display` ignores the `hidden` attribute; the
+  stylesheet's `[hidden] { display: none !important; }` is what keeps the
+  full-screen message overlay from covering the page. Do not remove it.
+- The placeholder `__GHOSTMAP_DATA__` must appear in the template exactly once,
+  so the code that detects it checks only a prefix. Never write the full
+  placeholder in `src/`.
+- `scene.json` is left-handed Ghost space; `.glb` is glTF. Objects are placed
+  with Z negated and yaw negated (`src/placement.js`). Fix placement there,
+  never in the exporter.
+- The Claude desktop app's browser pane cannot open `file://` pages, and its
+  screenshots are blank while the pane is hidden. Check the page with headless
+  Chrome over the DevTools protocol instead.
+
 **Unity tooling**
 - Headless `-executeMethod` has hung at "Start Indexing" before; prefer
   `-runTests`. `-nographics` crashes `Camera.Render()`.
@@ -285,8 +299,9 @@ On the desktop side (frozen): `ViewerTcpServer` → `ViewerSession` →
 - `MonoBehaviour`s stay thin: they read input and call tested plain classes.
 - Scene wiring is asserted by `ScannerSceneBuilder.VerifyScene()` and
   `ScannerSceneTests`.
-- Python tools are checked in CI's `tools` job. JavaScript for `room.html`
-  gets Node tests (`R8`).
+- Python tools are checked in CI's `tools` job. The browser viewer has Node
+  tests (`apps/web-viewer`, CI job `web-viewer`); its placement test loads a
+  `.glb` written by the real C# exporter.
 - Every reproducible bug gets a regression test (rule 11).
 
 ---

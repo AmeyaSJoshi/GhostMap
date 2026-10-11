@@ -6,6 +6,7 @@ demand (**Actions → tests → Run workflow**).
 | Job | What it checks | Needs |
 | --- | --- | --- |
 | `tools` | `inspect_snapshot.py` accepts the two valid fixtures and rejects the malformed one; `send_fixture.py --dry-run` builds protocol v1 messages; `run_unity_tests.sh` parses | Nothing |
+| `web-viewer` | `npm ci`, `npm test` (Node tests for `room.html`), `npm run build` and a check that the committed `dist/room-template.html` is fresh | Nothing |
 | `unity (shared)` | Shared package EditMode suite in `shared/TestProject` | Unity licence secrets |
 | `unity (viewer)` | Viewer EditMode suite (re-runs the shared tests too) | Unity licence secrets |
 | `unity (scanner)` | Scanner EditMode suite (re-runs the shared tests too) | Unity licence secrets |
@@ -15,6 +16,7 @@ Linux image. Results appear as check runs named **EditMode results (...)** on th
 commit and as downloadable `test-results-*` artifacts.
 
 Expected counts after task `R1`: **shared 202, viewer 548, scanner 577**.
+Web viewer after task `R8`: **41**.
 
 ## Why CI and not the agent's container
 

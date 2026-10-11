@@ -46,7 +46,8 @@ Editing, Save and Load are gated on a finalized scene (ADR-0003). A new scanner
 
 ## Last verified commit
 
-- Viewer sources: `0b7a106` from `GhostMapDublinHacks`, merged in task `R1`.
+- Viewer sources: `0b7a106` from `GhostMapDublinHacks`, merged in task `R1`;
+  EditMode suite passes at `69af8eb`.
   V6 itself was `b9fa1f5` (PR #12).
 
 ## Tests run
@@ -56,8 +57,8 @@ Editing, Save and Load are gated on a finalized scene (ADR-0003). A new scanner
 ```
 
 Last recorded result, in `GhostMapDublinHacks` at the quick-send commit:
-**548 tests, 548 passed** (viewer plus 202 embedded shared). **Not yet re-run in
-this repository**; the merged viewer code is byte-identical to that tree. A
+**548 tests, 548 passed** (viewer plus 202 embedded shared). **Confirmed in this
+repository on 2026-10-11 at `69af8eb`: 548/548**, 0 failed (owner's Mac). A
 standalone macOS build was verified once during V6.
 
 ## Interfaces consumed

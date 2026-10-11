@@ -26,3 +26,16 @@ status file for whatever you are about to touch.
 3. `AGENTS.md`'s numbered rules govern how work is done.
 4. Status files describe current reality, including where it differs from the
    plan. Handoffs are history and are never edited.
+
+## Where information goes
+
+| Kind of information | Home | Everything else |
+| --- | --- | --- |
+| Working rules (binding) | `AGENTS.md` | Points to the rule; never restates it |
+| What GhostMap is, for people | `README.md` | Short; links deeper |
+| How everything fits, for a newcomer | `docs/onboarding.md` | |
+| Claude Code start-up and cloud-session limits | `CLAUDE.md` | |
+| Live state, test results, owner decisions | `docs/status/` (`integration.md` for the roadmap) | |
+| Why a design is the way it is | `docs/decisions/` (ADRs) | |
+| How to do a roadmap task | `docs/tasks/` | |
+| What happened in one piece of work | `docs/handoffs/` (append-only) | |

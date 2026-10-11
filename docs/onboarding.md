@@ -23,13 +23,44 @@ canonical document wins (see `docs/README.md`, "Which document wins").
 - **Stack.** Two Unity 6000.3.24f1 projects (`apps/scanner` for iOS,
   `apps/viewer` desktop, frozen) sharing one local package
   (`shared/com.ghostmap.shared`). AR Foundation / ARKit 6.3.1. C#. EditMode
-  tests. A three.js browser viewer is planned in `apps/web-viewer/`.
+  tests. A three.js browser viewer is planned in `apps/web-viewer/`. The phone
+  app stays Unity for now (see "Where Unity fits, and why" below).
 - **Where it stands.** The original assisted-capture MVP is done and its
   scanner was verified on an iPhone. The owner's hackathon work (stand-in-place
   scan, sweep, furniture surface detection, `.glb` export) was merged in task
   `R1`. **None of the new work has run on an iPhone.** Roadmap `R2`-`R10`
   (plan section 18) is the work ahead.
 - **Your first job** is in `docs/status/integration.md` under "Next safe task".
+
+### Where Unity fits, and why
+
+The browser viewer (`room.html`, ADR-0013) replaces only the **desktop Unity
+Viewer**. Unity stays in two places:
+
+1. **The iPhone app is a Unity app** (`apps/scanner`, AR Foundation + ARKit).
+   Capture, the YOLO-n detector (`R4`), the export bundle (`R6`) and Send to
+   Computer (`R7`) are all built inside it. The shared C# package
+   (`shared/com.ghostmap.shared`) is part of it.
+2. **Unity is where the owner uses the result.** They drag `room.glb` and
+   `objects/*.glb` into a Unity project. `room.html` is for looking and
+   measuring without opening Unity.
+
+```text
+iPhone app (Unity)  ->  zip via AirDrop  ->  room.html in a browser (look, measure)
+                                         ->  .glb files into Unity (build with it)
+```
+
+**Why the phone app is Unity:** chosen at the start (ADR-0001), when the plan
+had a desktop Unity Viewer too, so both apps could share one C# package. With
+the Viewer retiring, that reason is gone. Native Swift would fit the remaining
+work better: Core ML/Vision for YOLO-n and the share sheet are built in, and it
+builds on any Mac with no Unity licence. Against that, all capture code and its
+577 tests exist in Unity, built but never run on an iPhone.
+
+**Owner's decision (2026-10-11): stay on Unity for now; revisit after `R2`.**
+If the stand-in-place scan works on the device in `R2`, stay. If it does not,
+capture code gets rewritten anyway, and that is the cheapest point to consider
+native Swift. Do not start a rewrite, or argue for one mid-task (`AGENTS.md` rule 15).
 
 ---
 
@@ -269,9 +300,9 @@ On the desktop side (frozen): `ViewerTcpServer` → `ViewerSession` →
    `integration/<task>`), or the branch your session was given.
 3. Commits: `feat(scanner): ...`, `fix(viewer): ...`, `docs(...)`, with the
    attribution lines your environment requires.
-4. Finish: tests (or say who must run them), update your status page and
-   `docs/status/integration.md`, write a new handoff, commit, open a PR using
-   `.github/pull_request_template.md`.
+4. Finish: follow `AGENTS.md` rule 13 and its end-of-task documentation
+   checklist (tests or who must run them, every document you touched, a new
+   handoff, commit), then open a PR using `.github/pull_request_template.md`.
 5. Contract changes (schema, protocol, export bundle, validation limits):
    ADR if behaviour changes, contract doc, tests, `inspect_snapshot.py`, a
    dedicated commit (rule 8).
@@ -314,7 +345,7 @@ Do not decide these yourself; note them in your handoff if they block you.
    Settle before `R6` (`docs/status/integration.md`, "Open decisions").
 6. Unity or native Swift for the phone app. Decided "Unity for now"; revisit
    with the owner once `R2` shows whether the stand-in-place scan works on the
-   device (`CLAUDE.md`, "Where Unity fits, and why").
+   device (section 1, "Where Unity fits, and why"; `AGENTS.md` rule 15).
 
 ---
 

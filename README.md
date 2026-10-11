@@ -33,6 +33,20 @@ Direction: [ADR-0012](docs/decisions/ADR-0012-stand-in-place-on-device-capture.m
 and [ADR-0013](docs/decisions/ADR-0013-phone-export-and-browser-viewer.md).
 Detail: [`docs/architecture/overview.md`](docs/architecture/overview.md).
 
+## Where Unity fits
+
+The browser page replaces only the old desktop Unity viewer. Unity is still
+used in two places:
+
+- **The iPhone app is built with Unity** (AR Foundation on top of Apple's
+  ARKit). You never see Unity on the phone; it is just an app.
+- **Unity is where you use the result.** Drag `room.glb` and the furniture
+  `.glb` files into any Unity project.
+
+The phone app stays on Unity for now. Whether to rewrite it in native Swift is
+revisited after the first device session (`R2`); the reasoning is in
+[`docs/onboarding.md`](docs/onboarding.md).
+
 ## Status
 
 | Stage | State |

@@ -6,8 +6,8 @@
 #            Unity 6000.3.24f1 Linux image. Needs three repository secrets,
 #            set once by the owner; see docs/ci.md.
 #
-# Expected counts after task R1 (GhostMapDublinHacks at 0b7a106):
-#   shared 202 · viewer 548 · scanner 577
+# Expected counts after task R6:
+#   shared 292 · viewer 569 · scanner 694
 
 name: tests
 

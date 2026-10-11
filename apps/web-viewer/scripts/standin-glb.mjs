@@ -5,7 +5,7 @@
 // one from a fixture so the viewer can be tested and demonstrated: a floor
 // slab, a ceiling slab under a node named "ceiling", and box walls with
 // rectangular gaps for openings. Only axis-aligned rectangular rooms are
-// supported. Real furniture .glb files come from the C# GlbExporter (see
+// supported. Real furniture .glb files come from the C# GlbWriter (see
 // fixtures/README.md); nothing here describes what furniture looks like.
 
 const WALL_THICKNESS = 0.1; // matches the Unity Viewer's WallRenderer

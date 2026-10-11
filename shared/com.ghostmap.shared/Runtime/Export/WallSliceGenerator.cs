@@ -3,7 +3,7 @@ using GhostMap.Shared.Domain;
 using GhostMap.Shared.Validation;
 using UnityEngine;
 
-namespace GhostMap.Viewer.Rendering
+namespace GhostMap.Shared.Export
 {
     /// <summary>
     /// One solid rectangular region of a wall, in wall-local coordinates:
@@ -36,7 +36,8 @@ namespace GhostMap.Viewer.Rendering
 
     /// <summary>
     /// Task V3: grid-cut wall segmentation, exactly as specified by
-    /// implementation plan section 12.3.
+    /// implementation plan section 12.3. Moved from the Viewer into the shared
+    /// package in task R6 so the phone's room exporter cuts walls the same way.
     ///
     /// The wall is cut by every opening edge — horizontally at each opening's
     /// near and far edge, vertically at each sill and head — producing a grid
@@ -52,7 +53,7 @@ namespace GhostMap.Viewer.Rendering
     /// <c>GeneratorIsDeterministic</c> in the tests).
     ///
     /// Pure function: no <c>MonoBehaviour</c>, no GameObjects, no mutation of
-    /// its inputs. World-space placement is <see cref="WallRenderer"/>'s job.
+    /// its inputs. World-space placement is <see cref="WallLayout"/>'s job.
     /// </summary>
     public static class WallSliceGenerator
     {

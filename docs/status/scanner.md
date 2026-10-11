@@ -23,6 +23,7 @@ but none of it has run on an iPhone.**
 | Wall sweep (ADR-0005) | Fallback: sweep each wall's floor line; total-least-squares fit; corners where lines meet | Not run on a device |
 | Furniture surface detection (ADR-0006) | Horizontal surfaces 0.20-1.40 m high become candidates with measured size and yaw; Add, Skip, Next, Add All | Not run on a device |
 | Type from plane label (ADR-0007) | Pre-selects the type from ARKit's `Table`/`Seat` label plus size | Superseded by ADR-0011; removed in `R4` |
+| Export bundle (ADR-0013, task `R6`) | **Finalize GhostMap** builds `GhostMap-<room>-<time>.zip` (`room.html`, `room.glb`, `objects/<id>.glb`, `scene.json`, `README.txt`) with `ExportBundleBuilder` and keeps it via `SavedScanStore` in `persistentDataPath/scans/`. The guide says "saved on this iPhone" or shows the error; **Send to Computer** retries a failed export. Logs `GhostMap export: saved <file> (<KB>) in <ms>`. On the Mac: 27 ms, 182 KB for the fixture room | Not run on a device |
 | Quick-send discovery (ADR-0009) | Finds the Viewer over UDP 47832 after finalize | Superseded by ADR-0013; dormant, removed in `R10` |
 
 ### Scan flow
@@ -44,7 +45,7 @@ validation and the snapshot are identical however the room was captured.
 | Plan says | Scanner does today | Fixed by |
 | --- | --- | --- |
 | Furniture named by YOLO-n on device | Named from ARKit plane labels, or by the user | `R4` |
-| Phone builds the export bundle and keeps saved scans | Neither; a scan lives only until Restart | `R6` |
+| Saved scans listed on the start screen, each sendable | Saved in `persistentDataPath/scans/`, but not listed in the UI yet | `R7` |
 | Send to Computer is the iOS share sheet | Send to Computer uses UDP discovery and TCP to the Unity Viewer | `R7` |
 | No debug text in the guided flow | `S6 diag:` line still in the status text; S1 diagnostics in Details | `R9` |
 | `phone.pose` at <= 5 Hz | Not sent | Not planned |
@@ -55,6 +56,9 @@ validation and the snapshot are identical however the room was captured.
 - Device-verified: `f087aaa` (S6).
 - Latest scanner sources: `0b7a106` from `GhostMapDublinHacks`, merged in task
   `R1`. EditMode suite passes at `69af8eb`. Not device-verified.
+- Export bundle: branch `integration/r6-export-bundle`; EditMode 694/694,
+  `ScannerBuild.BuildScanner` and unsigned `xcodebuild` on the owner's Mac,
+  2026-10-11. Not device-verified.
 
 ## Tests run
 
@@ -69,7 +73,7 @@ transient failure in `ReconnectAfterFinalizationResendsTheFinalizedSnapshot`
 unsigned `xcodebuild` (Release, iphoneos) succeeded there.
 
 **Confirmed in this repository on 2026-10-11 at `69af8eb`: 577 tests, 577
-passed**, 0 failed (owner's Mac, Unity 6000.3.24f1). The iOS build has not been
+passed**. **After `R6`: 694 tests, 694 passed** (+90 embedded shared, +27 export), 0 failed (owner's Mac, Unity 6000.3.24f1). The iOS build has not been
 repeated here.
 
 ## Interfaces consumed
@@ -92,6 +96,10 @@ messages, `ProtocolSerializer` and `PeerDiscoveryProtocol`.
   is the seat; extents are a lower bound; glass and dark surfaces may be missed.
 
 **Known behaviour**
+- Export runs on the main thread when **Finalize GhostMap** is tapped. 27 ms on
+  the Mac; the iPhone time is unmeasured (spec target under 2 s).
+- Saved rooms accumulate in `persistentDataPath/scans/` with no UI to list or
+  delete them until `R7`.
 - Walls must be swept in order around the room; out of order is refused as
   "self-intersecting" without saying why.
 - A skipped detected surface stays skipped after a re-sweep.
@@ -112,9 +120,9 @@ messages, `ProtocolSerializer` and `PeerDiscoveryProtocol`.
 
 ## Next safe task
 
-Run `./tools/run_unity_tests.sh` on a machine with Unity to confirm the merge,
-then `R2`: the first device session (plan section 18). After that `R4`
-(YOLO-n), `R6` (export bundle and saved scans), `R7` (share sheet), `R9`
+`R2`: the first device session (plan section 18), now including **Finalize**
+and the `GhostMap export:` log line. Agent work in parallel: `R7` (share sheet
+over the saved bundle, saved-scans list), then `R4` (YOLO-n) and `R9`
 (hardening). Progress: `docs/status/integration.md`.
 
 ## Do not touch

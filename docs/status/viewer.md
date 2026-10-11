@@ -17,7 +17,7 @@ and a room summary. View and measure only. The phone does not fill it yet
 (`R6`); until then `npm run demo` fills it from a fixture.
 
 - Node tests: **41 pass** (`npm test`). Placement is checked against a bed
-  `.glb` written by the real C# `GlbExporter`, and a flipped yaw sign makes
+  `.glb` written by the real C# exporter (now the shared `GlbWriter`), and a flipped yaw sign makes
   that test fail.
 - Checked by an agent in headless Chrome 154 from `file://` (desktop 1280×800 and phone 390×844):
   the demo loads with the page as its only request and no console errors;
@@ -39,7 +39,8 @@ live until roadmap task `R10` removes it.
 | V4 | Parametric furniture for all 8 types (one bounding-box collider per object), orbit camera, `F` frame, `D` dollhouse |
 | V5 | Select, drag on the floor, edit X/Z, yaw, W/D/H in the inspector, two-point measurement (3D and horizontal) |
 | V6 | Save and Load of the finalized scene, HUD with connection, session, revision, phase and editing state |
-| ADR-0006 (imported, `R1`) | **Export Assets** writes one `.glb` per furniture object to `Application.persistentDataPath/ghostmap-assets/` via `GlbExporter` and `FurnitureAssetExporter`. Moves to the shared package in `R6` |
+| ADR-0006 (imported, `R1`) | **Export Assets** writes one `.glb` per furniture object to `Application.persistentDataPath/ghostmap-assets/` via `FurnitureAssetExporter`, using the shared `GlbWriter` |
+| `R6` | The pure geometry moved to `shared/com.ghostmap.shared/Runtime/Export/`: `FurnitureParts` (part table, colours), `WallSliceGenerator`, `WallLayout` (was `WallRenderer`), `FootprintMesh`, `GlbWriter` (was `GlbExporter`), `RoomPalette`. `FurnitureFactory`, `WallRenderer` and `FloorCeilingRenderer` remain as thin wrappers, so rendering is unchanged. 69 tests moved with the code |
 | ADR-0009 (imported, `R1`) | `ViewerDiscoveryResponder` answers UDP discovery on 47832. Superseded by ADR-0013; removed in `R10` |
 
 ### Scene ownership layers
@@ -88,7 +89,9 @@ Unity Viewer:
 
 Last recorded result, in `GhostMapDublinHacks` at the quick-send commit:
 **548 tests, 548 passed** (viewer plus 202 embedded shared). **Confirmed in this
-repository on 2026-10-11 at `69af8eb`: 548/548**, 0 failed (owner's Mac). A
+repository on 2026-10-11 at `69af8eb`: 548/548**, 0 failed (owner's Mac).
+**After `R6`: 569 tests, 569 passed** (277 viewer + 292 embedded shared; 69
+viewer tests moved to the shared suite). A
 standalone macOS build was verified once during V6.
 
 ## Interfaces consumed
@@ -102,8 +105,9 @@ From `com.ghostmap.shared`: `SceneSnapshot`, `RoomModel`, `OpeningModel`,
 ## Known issues
 
 **Browser viewer**
-- Until `R6` there is no real `room.glb`; the demo and tests use a box stand-in
-  (`scripts/standin-glb.mjs`) whose walls are plain boxes without jambs.
+- The demo and Node tests still use the box stand-in (`scripts/standin-glb.mjs`)
+  for `room.glb`. The real one now exists (`R6`); a phone-built bundle opened
+  in headless Chrome renders it correctly, including a rotated room.
 - Near walls can hide furniture standing against them from low angles, as in
   the Unity Viewer; the start view is high to avoid it.
 - On a phone-width screen the panels sit below the 3D view, so the details of
@@ -116,8 +120,8 @@ From `com.ghostmap.shared`: `SceneSnapshot`, `RoomModel`, `OpeningModel`,
 None blocking `R1`.
 
 **Behavior**
-- No exported `.glb` has been opened in Blender or checked with
-  `npx gltf-validator`; that check moves to `R6`, where export runs on the phone.
+- Exported `.glb` files pass the Khronos validator (0 errors, warnings, hints)
+  and import into Unity with glTFast 6.20.0 (`R6`). Not yet opened in Blender.
 - **No liveness detection.** The server sets no read timeout and ignores
   heartbeats, so a phone that drops off Wi-Fi without closing the socket leaves
   the HUD on `Connected`. "Disconnected — displaying last snapshot." appears
@@ -150,10 +154,10 @@ None blocking `R1`.
 1. **Owner:** `npm run demo` in `apps/web-viewer`, then double-click
    `demo/room.html` in Safari (and Firefox if installed) with Wi-Fi off, and
    check each tool. Record the result here.
-2. `R6` (Shared + Scanner): move `GlbExporter`, `FurnitureFactory.BuildParts`
-   and `WallSliceGenerator` into the shared package, write `room.glb` with a
-   `ceiling` node, and fill `dist/room-template.html` exactly as
-   `apps/web-viewer/scripts/fill.mjs` does.
+2. After any viewer change: `npm run build`, then copy
+   `dist/room-template.html` to
+   `apps/scanner/Assets/GhostMap/Scanner/Resources/GhostMapRoomTemplate.html`
+   (a scanner test fails while the copy is stale).
 3. `R10`: remove the Unity Viewer once `room.html` passes the acceptance test.
 
 See `docs/status/integration.md` for progress.

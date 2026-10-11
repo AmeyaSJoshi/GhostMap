@@ -2,18 +2,19 @@
 
 `objects/*.glb` are the three objects of `fixtures/valid-room-v1.json` (`bed-1`,
 `desk-1`, `chair-1`; `room-with-door-window-v1.json` has the same objects),
-written by the **real C# exporter**, `GlbExporter.TryExportObject` in
-`apps/viewer/Assets/GhostMap/Viewer/Runtime/Export/GlbExporter.cs`, at commit
-`69af8eb`. They let the tests check placement against what the phone will
-actually export, not against hand-made boxes.
+written by the **real C# exporter**, `GlbWriter.TryExportObject` in
+`shared/com.ghostmap.shared/Runtime/Export/GlbWriter.cs` (task `R6`). They let
+the tests check placement against what the phone actually exports, not
+against hand-made boxes. All three pass the Khronos glTF validator with no
+errors, warnings or hints.
 
-To regenerate after the exporter changes (until `R6` moves it into the shared
-package): add a throwaway EditMode test to `apps/viewer` that reads the fixture
-with `JsonUtility.FromJson<SceneSnapshot>`, calls
-`GlbExporter.TryExportObject` for each object, and writes the bytes here as
+To regenerate after the writer changes: add a throwaway EditMode test to
+`apps/scanner` (its test assembly references the shared package) that reads
+the fixture with `JsonUtility.FromJson<SceneSnapshot>`, calls
+`GlbWriter.TryExportObject` for each object, and writes the bytes here as
 `<id>.glb`. Run it with
 `-runTests -testPlatform EditMode -testFilter <its full name>`, then delete the
 test and its `.meta`.
 
-There is no real `room.glb` until `R6`; tests and the demo use
-`scripts/standin-glb.mjs` instead.
+The real `room.glb` comes from `GlbWriter.TryExportRoom`; the Node tests and
+the demo use `scripts/standin-glb.mjs` instead so they need no Unity.

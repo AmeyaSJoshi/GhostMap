@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using GhostMap.Shared.Domain;
-using GhostMap.Viewer.Rendering;
+using GhostMap.Shared.Export;
 using NUnit.Framework;
 using UnityEngine;
 
-namespace GhostMap.Viewer.Tests.EditMode
+namespace GhostMap.Shared.Tests
 {
     /// <summary>
     /// Task V3's <see cref="WallSliceGenerator"/>: the grid-cut wall
@@ -14,7 +14,7 @@ namespace GhostMap.Viewer.Tests.EditMode
     /// Everything here is expressed in wall-local coordinates: <c>u</c> runs
     /// along the wall from the start corner, <c>v</c> runs up from the floor.
     /// The generator knows nothing about which wall it is cutting — matching
-    /// an opening to its ordered corner pair is <see cref="WallRenderer"/>'s
+    /// an opening to its ordered corner pair is <see cref="WallLayout"/>'s
     /// job, and is tested there.
     /// </summary>
     public sealed class WallSliceGeneratorTests

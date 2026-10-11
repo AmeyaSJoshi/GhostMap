@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using GhostMap.Shared.Domain;
+using GhostMap.Shared.Export;
 using UnityEngine;
 
 namespace GhostMap.Viewer.Export
@@ -153,7 +154,7 @@ namespace GhostMap.Viewer.Export
                 return false;
             }
 
-            if (!GlbExporter.TryExportObject(model, out byte[] glb, out error))
+            if (!GlbWriter.TryExportObject(model, out byte[] glb, out error))
             {
                 return false;
             }
@@ -201,7 +202,7 @@ namespace GhostMap.Viewer.Export
             HashSet<string> usedNames)
         {
             string type = Sanitize(string.IsNullOrEmpty(model.type) ? "object" : model.type);
-            string shortId = Sanitize(GlbExporter.Shorten(model.id));
+            string shortId = Sanitize(GlbWriter.Shorten(model.id));
 
             string candidate = $"{type}-{shortId}{Extension}";
 

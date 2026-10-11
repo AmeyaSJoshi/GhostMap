@@ -9,7 +9,7 @@ export async function readFixture(name) {
   return JSON.parse(await readFile(join(repoRoot, 'fixtures', name), 'utf8'));
 }
 
-/** Bytes of a .glb written by the C# GlbExporter (see fixtures/README.md). */
+/** Bytes of a .glb written by the C# GlbWriter (see fixtures/README.md). */
 export async function readObjectGlb(id) {
   return new Uint8Array(await readFile(join(webViewerRoot, 'fixtures', 'objects', `${id}.glb`)));
 }

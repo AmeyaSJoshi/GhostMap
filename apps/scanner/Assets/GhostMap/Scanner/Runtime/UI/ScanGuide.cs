@@ -22,11 +22,15 @@ namespace GhostMap.Scanner.UI
         public ScanGuideContext(
             bool trackingGood,
             FloorLockRejection lastFloorRejection,
-            bool connectedToComputer)
+            bool connectedToComputer,
+            ExportState export = ExportState.None,
+            string exportError = null)
         {
             TrackingGood = trackingGood;
             LastFloorRejection = lastFloorRejection;
             ConnectedToComputer = connectedToComputer;
+            Export = export;
+            ExportError = exportError ?? string.Empty;
         }
 
         public bool TrackingGood { get; }
@@ -35,6 +39,25 @@ namespace GhostMap.Scanner.UI
         public FloorLockRejection LastFloorRejection { get; }
 
         public bool ConnectedToComputer { get; }
+
+        /// <summary>Whether the finalized room's export bundle was saved on the phone (task R6).</summary>
+        public ExportState Export { get; }
+
+        /// <summary>Why the export failed, when <see cref="Export"/> is <see cref="ExportState.Failed"/>.</summary>
+        public string ExportError { get; }
+    }
+
+    /// <summary>The finalized room's export bundle (task R6).</summary>
+    public enum ExportState
+    {
+        /// <summary>Not exported yet (not finalized).</summary>
+        None,
+
+        /// <summary>The bundle is saved on the phone.</summary>
+        Saved,
+
+        /// <summary>Building or saving the bundle failed; the scan itself is kept.</summary>
+        Failed
     }
 
     /// <summary>What the screen should say right now. See <see cref="ScanGuide"/>.</summary>
@@ -135,10 +158,23 @@ namespace GhostMap.Scanner.UI
                         context.ConnectedToComputer ? GuideMessageKind.Success : GuideMessageKind.None);
 
                 case ScanPhase.Finalized:
+                    if (context.Export == ExportState.Failed)
+                    {
+                        return new ScanGuideStep(
+                            7,
+                            "Not saved yet",
+                            "Your room is finished, but it could not be saved on this iPhone. Tap Send to Computer to try again.",
+                            null,
+                            context.ExportError,
+                            GuideMessageKind.Warning);
+                    }
+
                     return new ScanGuideStep(
                         7,
                         "All done",
-                        "Your room is saved. Open GhostMap on your computer to look around and edit it.",
+                        context.Export == ExportState.Saved
+                            ? "Your room is saved on this iPhone. Tap Send to Computer to hand it over."
+                            : "Your room is saved. Open GhostMap on your computer to look around and edit it.",
                         null,
                         context.ConnectedToComputer
                             ? "Sent to your computer."

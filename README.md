@@ -53,7 +53,7 @@ revisited after the first device session (`R2`); the reasoning is in
 | --- | --- |
 | Foundation `F0`-`F4` | Complete |
 | Assisted-capture MVP: Scanner `S1`-`S6`, Viewer `V1`-`V6` | Complete; scanner verified on a physical iPhone |
-| Stand-in-place GhostMap `R1`-`R10` | **`R1` done, suites green (202 / 548 / 577); next: `R2` on the iPhone** |
+| Stand-in-place GhostMap `R1`-`R10` | **`R1`, `R6`, `R8` done; suites green (292 / 569 / 694); next: `R2` on the iPhone** |
 
 What is where today:
 
@@ -62,8 +62,9 @@ What is where today:
 | Walked-corner capture, manual height/openings/furniture | Built, verified on an iPhone |
 | Guided scan UI, stand-in-place room scan, wall sweep, furniture surface measurement, per-object `.glb` exporter | Built (imported from the hackathon repo in `R1`), never run on an iPhone |
 | Desktop Unity Viewer, TCP live stream, UDP discovery | Built; frozen and retiring (`R10`) |
-| `room.html` browser viewer (`apps/web-viewer`) | Built (`R8`), checked in Chrome; the phone fills it in `R6` |
-| YOLO-n identification, phone-built export bundle, share-sheet Send to Computer | Not built (`R4`, `R6`, `R7`) |
+| `room.html` browser viewer (`apps/web-viewer`) | Built (`R8`), checked in Chrome |
+| Phone-built export bundle (`room.html`, `room.glb`, furniture `.glb`, `scene.json`), saved on the phone | Built (`R6`), verified on the Mac; never run on an iPhone |
+| YOLO-n identification, share-sheet Send to Computer | Not built (`R4`, `R7`) |
 
 The roadmap is plan section 18; progress is tracked in
 [`docs/status/integration.md`](docs/status/integration.md).

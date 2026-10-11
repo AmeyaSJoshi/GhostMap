@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using GhostMap.Shared.Domain;
+using GhostMap.Shared.Export;
 using GhostMap.Viewer.Scene;
 using UnityEngine;
 
@@ -20,9 +21,10 @@ namespace GhostMap.Viewer.Rendering
     /// </summary>
     public sealed class RoomRenderer : MonoBehaviour
     {
-        private static readonly Color FloorColor = new Color(0.55f, 0.45f, 0.35f);
-        private static readonly Color CeilingColor = new Color(0.85f, 0.85f, 0.85f);
-        private static readonly Color WallColor = new Color(0.75f, 0.72f, 0.65f);
+        // One palette with the exported room.glb (task R6).
+        private static readonly Color FloorColor = RoomPalette.Floor;
+        private static readonly Color CeilingColor = RoomPalette.Ceiling;
+        private static readonly Color WallColor = RoomPalette.Wall;
 
         private readonly List<string> _diagnostics = new List<string>();
 

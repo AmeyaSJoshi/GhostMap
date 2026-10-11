@@ -1258,6 +1258,8 @@ Shared-contract change (`AGENTS.md` rule 8): add an optional `label` string to `
 
 ## Task R6: The phone builds the export bundle (ADR-0013)
 
+**Built 2026-10-11** on `integration/r6-export-bundle`: shared `Runtime/Export/`, contract `docs/contracts/export-bundle-v1.md`, Khronos validator clean, Unity/glTFast import checked. Item 4's list on the start screen moves to `R7`; the iPhone export time is measured in `R2`. Not opened in Blender.
+
 1. Move `GlbExporter`, `FurnitureFactory.BuildParts` (part table and colours only) and `WallSliceGenerator` from the Viewer into `shared/com.ghostmap.shared/Runtime/Export/`, with their tests. The Viewer uses them from there until it is retired.
 2. Add a whole-room `.glb` writer: floor, ceiling and wall segments, so openings are real holes.
 3. On finalize, write `GhostMap-<room>-<yyyyMMdd-HHmm>.zip` with `room.html` (from the `R8` template), `room.glb`, `objects/<id>.glb`, `scene.json` and `README.txt` (how to import into Unity with glTFast).

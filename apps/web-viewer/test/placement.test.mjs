@@ -3,7 +3,7 @@
 // Expected numbers are worked by hand from Unity's placement in
 // apps/viewer/.../Rendering/FurnitureFactory.cs (Create: position = center,
 // rotation = Quaternion.Euler(0, yawDeg, 0); width along local X, depth along
-// local Z) and GlbExporter's Z mirror, never from the code under test.
+// local Z) and GlbWriter's Z mirror, never from the code under test.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

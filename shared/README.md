@@ -13,8 +13,9 @@ com.ghostmap.shared/
 │   ├── Domain/       scene schema v1 DTOs, ValidationResult, WallDefinition
 │   ├── Geometry/     coordinate frame, ray/plane, room and wall geometry, measurement
 │   ├── Validation/   room, opening and furniture rules
-│   └── Protocol/     protocol v1 constants, messages, serializer, revision policy
-└── Tests/Editor/     156 EditMode tests
+│   ├── Protocol/     protocol v1 constants, messages, serializer, revision policy
+│   └── Export/       .glb writer, furniture part table, wall and floor geometry (R6)
+└── Tests/Editor/     292 EditMode tests
 ```
 
 Both apps consume it from their `Packages/manifest.json` as

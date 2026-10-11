@@ -6,7 +6,11 @@ Full task-by-task history (V1-V6 design notes, visual captures, test breakdowns)
 
 ## Current state
 
-**V1-V6 complete.** The Viewer MVP is done. Desktop app, so no device test applies.
+**V1-V6 complete. Frozen by ADR-0013.** The phone now builds the Unity files
+and a browser viewer (`room.html`) itself, so this desktop app is no longer part
+of the product. Bug fixes only; it stays as the developer tool for watching a
+scan live until roadmap task `R10` removes it. The Viewer workstream's new work
+is the browser viewer in `apps/web-viewer/` (task `R8`).
 
 | Task | What works |
 | --- | --- |
@@ -67,7 +71,7 @@ None blocking `R1`.
 - **No liveness detection.** The server sets no read timeout and ignores
   heartbeats, so a phone that drops off Wi-Fi without closing the socket leaves
   the HUD on `Connected`. "Disconnected — displaying last snapshot." appears
-  only after a clean close. Fixed in roadmap task `R7`.
+  only after a clean close. Not worth fixing: the app is frozen.
 - The Viewer cannot add, delete or hide objects, and has no undo. Walls and
   openings are not editable.
 - Dollhouse hides only the ceiling; the near wall can hide furniture against it.
@@ -93,10 +97,11 @@ None blocking `R1`.
 
 ## Next safe task
 
-Roadmap tasks touching the Viewer, in order (plan section 18): `R1` import the
-hackathon discovery responder and per-object `.glb` export, `R5` show the
-detector label, `R6` whole-room `.glb` and the Export for Unity folder, `R7`
-delivery acknowledgement and liveness. See
+Roadmap tasks for the Viewer workstream, in order (plan section 18): `R6` move
+`GlbExporter`, `FurnitureFactory.BuildParts` and `WallSliceGenerator` into the
+shared package so the phone can export; `R8` build the three.js browser viewer
+in `apps/web-viewer/` (view, dollhouse, click for size, measure; no editing);
+`R10` remove this Unity app once `room.html` passes the acceptance test. See
 `docs/status/integration.md` for progress.
 
 ## Do not touch

@@ -67,11 +67,16 @@ the architecture overview's code map.
 
 ## Next safe task
 
-`R5`: add the optional `label` field to `SceneObjectModel` (additive schema v1
-change, ADR-0011) with contract doc, tests, `inspect_snapshot.py` and fixture
-updates. `R1` also lands shared work from `GhostMapDublinHacks`: `WallFitting`,
-`RoomGeometry.ContainsPointXZ` and the discovery contract (`PeerDiscoveryProtocol`,
-UDP 47832). Roadmap progress is tracked in `docs/status/integration.md`.
+- `R1` lands shared work from `GhostMapDublinHacks`: `WallFitting`,
+  `RoomGeometry.ContainsPointXZ`, and a UDP discovery contract
+  (`PeerDiscoveryProtocol`) that ADR-0013 supersedes and `R10` removes.
+- `R5`: optional `label` on `SceneObjectModel` (additive schema v1 change,
+  ADR-0011) with contract doc, tests, `inspect_snapshot.py` and fixtures.
+- `R6`: new `Runtime/Export/` (moved from the Viewer: `GlbExporter`, furniture
+  part table, `WallSliceGenerator`, plus a whole-room writer) and the new
+  contract `docs/contracts/export-bundle-v1.md`.
+
+Roadmap progress is tracked in `docs/status/integration.md`.
 
 ## Do not touch
 

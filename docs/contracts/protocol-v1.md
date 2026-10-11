@@ -4,6 +4,9 @@
 **Protocol version:** `1`
 **Carries scene schema:** v1 (`docs/contracts/scene-schema-v1.md`)
 **Owner:** Shared / Integration workstream.
+**Role since ADR-0013:** developer tool for watching a scan live in the Unity
+Viewer. The product transfer is the export bundle sent through the iOS share
+sheet (`docs/decisions/ADR-0013-phone-export-and-browser-viewer.md`).
 **Source of truth:** `shared/com.ghostmap.shared/Runtime/Protocol/`
 
 Changing anything here is a shared contract change requiring an ADR, a contract

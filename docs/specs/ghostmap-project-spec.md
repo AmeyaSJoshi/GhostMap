@@ -109,11 +109,11 @@ end to end from iPhone to computer yet.
 | FR-09 | **Furniture identification on the phone.** A YOLO-n detector names furniture in the camera image; each item is matched to its measured surface for size and position; one tap adds them all. | Not built (plan task `R4`, ADR-0011) |
 | FR-10 | **Furniture measurement.** Width, depth, height and yaw from the ARKit surface the object sits on; adjustable. | Built, not device-verified |
 | FR-11 | **Manual furniture fallback.** Pick a type, aim at its floor position, adjust size and yaw. | Built, device-verified |
-| FR-12 | **Export bundle on the phone.** On finalize the phone writes one zip: `room.html`, a whole-room `room.glb` with openings, one `.glb` per object, `scene.json`, `README.txt`. | Per-object `.glb` exporter: built, runs in the Unity Viewer today. Phone-side bundle: not built (`R6`) |
+| FR-12 | **Export bundle on the phone.** On finalize the phone writes one zip: `room.html`, a whole-room `room.glb` with openings, one `.glb` per object, `scene.json`, `README.txt`. | Built (`R6`); verified on the Mac, not on a device |
 | FR-13 | **Send to Computer.** One button opens the iOS share sheet with the bundle; AirDrop to a Mac, or Files, iCloud or Mail. No IP, no network setup. | Not built (`R7`) |
-| FR-14 | **Saved scans.** The phone keeps every finalized room and can send it again. | Not built (`R6`) |
-| FR-15 | **Browser viewer.** `room.html` opens by double-click, offline, in any browser: orbit, dollhouse, click an object for its name and size, measure 3D and horizontal distance. View and measure only. | Built (`R8`), checked in Chrome; filled by the phone in `R6` |
-| FR-16 | **Unity-ready files.** `.glb` in metres, +Y up, furniture on the floor; imports into Unity with glTFast. | Per-object: built (Unity Viewer). Whole room: not built (`R6`) |
+| FR-14 | **Saved scans.** The phone keeps every finalized room and can send it again. | Kept on the phone (`R6`); listing and sending again: `R7` |
+| FR-15 | **Browser viewer.** `room.html` opens by double-click, offline, in any browser: orbit, dollhouse, click an object for its name and size, measure 3D and horizontal distance. View and measure only. | Built (`R8`, filled by the phone in `R6`), checked in Chrome |
+| FR-16 | **Unity-ready files.** `.glb` in metres, +Y up, furniture on the floor; imports into Unity with glTFast. | Built (`R6`); imports with glTFast 6.20.0 (turned 180° about Y; furniture placement rule in `README.txt`) |
 | FR-17 | **Detector label kept.** A `generic` object keeps the detector's class name, such as "potted plant". | Not built (`R5`, additive schema change) |
 | FR-18 | **Developer live stream.** The Unity Viewer shows the room while the phone scans, over TCP with a typed IP. | Built; developer tool only, retires with the Unity Viewer (`R10`) |
 | FR-19 | Editing on the computer, delete/hide objects, floor-plan view. | Not planned; edit in Unity |

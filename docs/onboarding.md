@@ -78,12 +78,12 @@ native Swift. Do not start a rewrite, or argue for one mid-task (`AGENTS.md` rul
 | UDP discovery to the desktop Viewer | Built (`R1`, ADR-0009); **superseded**, removed in `R10` | No |
 | Desktop Unity Viewer (render, edit, measure, save, per-object `.glb`) | Built (V1-V6, ADR-0006); **frozen**, removed in `R10` | n/a |
 | YOLO-n identification | Not built (`R4`) | — |
-| Phone-built export bundle, saved scans | Not built (`R6`) | — |
+| Phone-built export bundle, saved scans (`R6`) | Built: zip on Finalize, kept in `persistentDataPath/scans/`; validator-clean `.glb`, glTFast import checked; list UI in `R7` | No |
 | Share-sheet Send to Computer | Not built (`R7`) | — |
-| `room.html` browser viewer | Built (`R8`); checked in headless Chrome, owner's Safari check left; filled by the phone in `R6` | n/a |
+| `room.html` browser viewer | Built (`R8`), filled by the phone (`R6`); checked in headless Chrome, owner's Safari check left | n/a |
 
-Test suites: shared 202, viewer 548, scanner 577, all passing in this
-repository (owner's Mac, 2026-10-11, `69af8eb`). CI's Unity jobs still wait
+Test suites: shared 292, viewer 569, scanner 694, all passing in this
+repository (owner's Mac, 2026-10-11, after `R6`); web viewer 41 (Node). CI's Unity jobs still wait
 for the owner's licence secrets (`docs/ci.md`); until then run
 `./tools/run_unity_tests.sh` on a Mac with Unity.
 
@@ -126,13 +126,13 @@ docs/
   specs/                  product spec: workflow, FR-01..FR-19 with real status
   plans/                  implementation plan; section 18 = roadmap R1-R10
   architecture/overview.md  design + section 12 code map + section 13 runtime model
-  contracts/              scene-schema-v1.md, protocol-v1.md, export-bundle-v1.md (room.html data; rest in R6)
+  contracts/              scene-schema-v1.md, protocol-v1.md, export-bundle-v1.md
   decisions/              ADR-0001..0013, index in README.md
   status/                 one page per workstream; integration.md = roadmap tracker
   handoffs/               one file per completed task; only recent ones in the tree
   tasks/                  implementation briefs for R2-R10
   research/               hackathon experiments, not production
-shared/com.ghostmap.shared/  Domain, Geometry, Validation, Protocol (+ Export in R6)
+shared/com.ghostmap.shared/  Domain, Geometry, Validation, Protocol, Export (.glb writer, part table, walls)
 shared/TestProject/       host project that only runs the shared tests
 apps/scanner/             iOS app: all capture, recognition, (soon) export and share
 apps/viewer/              desktop Unity app: frozen, retiring in R10
@@ -181,12 +181,17 @@ Follow this once in the source; it explains most of the scanner.
    store; manual placement uses the same store.
 7. **Finalize.** `TryFinalize` sets `finalized = true` and publishes once more.
    No structural method accepts the `Finalized` phase, so the scene is frozen.
+   `ScannerHudController.OnFinalizePressed` then calls `ScanExporter.Export`:
+   `ExportBundleBuilder` builds the zip (shared `GlbWriter` for `room.glb` and
+   each object, the `Resources/GhostMapRoomTemplate.html` copy of the browser
+   viewer filled with the data) and `SavedScanStore` writes it atomically to
+   `persistentDataPath/scans/`. `ScanGuide` shows "saved" or the error.
 8. **Today's transfer (being replaced).** `ScannerHudController` owns a
    background thread that pumps `ScannerNetworkClient`;
    `ScannerSnapshotPublisher.Tick` enqueues a `scene.snapshot` per revision.
    **Send to Computer** runs `PeerDiscoveryClient` (UDP 47832), then connects
-   to the Viewer over TCP 47831. `R6`/`R7` replace this with the export bundle
-   and the share sheet.
+   to the Viewer over TCP 47831 (it also retries a failed export). `R7`
+   replaces this with the share sheet over the saved bundle.
 9. **UI.** `ScanGuide.Describe(workflow, context)` (pure, tested) produces the
    step title, instruction and messages; `ScannerGuideHud` renders them;
    per-phase HUDs (`AutoScanHud`, `WallSweepHud`, `FurnitureDetectionHud`, ...)
@@ -279,8 +284,17 @@ On the desktop side (frozen): `ViewerTcpServer` → `ViewerSession` →
   immune to `XROrigin.CameraYOffset` because everything is read in world space.
 - Interior angles use polygon winding; a reflex corner must be rejected
   (F4 found and fixed this).
-- glTF is right-handed: the exporter negates Z. glTFast negates it back on
-  import into Unity.
+- glTF is right-handed: the exporter negates Z. **glTFast negates X on import**
+  (checked with glTFast 6.20.0), so exported files arrive in Unity turned 180°
+  about Y relative to `scene.json`. Furniture placed by hand in Unity goes at
+  `(-x, y, -z)` with yaw unchanged (`docs/contracts/export-bundle-v1.md`
+  section 4). An earlier note here said glTFast negates Z back; it does not.
+- `GlbWriter` must write accessor `min`/`max` with round-trip precision; glTF
+  requires them to equal the data exactly, and float noise on rotated walls
+  broke six-decimal rounding. Run the Khronos validator after changing it.
+- The scanner ships a copy of the browser viewer template in `Resources/`.
+  Rebuild `apps/web-viewer` and recopy; `ShippedTemplate_MatchesTheWebViewerBuild`
+  fails while the copy is stale.
 
 **Process**
 - Handoffs are append-only. Status pages describe reality, including where it
@@ -355,9 +369,10 @@ Do not decide these yourself; note them in your handoff if they block you.
 3. Whether to keep the developer TCP stream after `R10`.
 4. 20 stale remote branches still exist; only the owner can delete them (list
    and command in `docs/status/integration.md`).
-5. Whether furniture should arrive in Unity already placed. Today each
-   `objects/<id>.glb` sits at the origin; placement is only in `scene.json`.
-   Settle before `R6` (`docs/status/integration.md`, "Open decisions").
+5. Whether furniture should arrive in Unity already placed. `R6` kept each
+   `objects/<id>.glb` at its own origin, with a verified manual placement rule
+   in `README.txt`; a placed `room-furnished.glb` would be additive
+   (`docs/status/integration.md`, "Open decisions").
 6. Unity or native Swift for the phone app. Decided "Unity for now"; revisit
    with the owner once `R2` shows whether the stand-in-place scan works on the
    device (section 1, "Where Unity fits, and why"; `AGENTS.md` rule 15).
@@ -377,6 +392,6 @@ Do not decide these yourself; note them in your handoff if they block you.
 | Sweep | Fallback: sweep the aim along each wall's floor line, fit lines |
 | Walked corners | Fallback: tap at each of the four corners |
 | Surface / candidate | An ARKit horizontal plane offered as a piece of furniture |
-| Export bundle | The zip the phone writes on finalize (`R6`) |
+| Export bundle | The zip the phone writes on finalize (`R6`; contract `docs/contracts/export-bundle-v1.md`) |
 | Developer stream | Protocol v1 over TCP to the desktop Viewer; not a product path |
 | `R1`-`R10` | Roadmap tasks, plan section 18 |

@@ -14,9 +14,10 @@ them.
 
 1. `docs/status/integration.md` records a passing section 23 acceptance test,
    with date and build.
-2. `R6` has moved `GlbExporter`, `FurnitureFactory.BuildParts`/`ColorFor`,
-   `WallSliceGenerator`, the pure part of `WallRenderer` and floor/ceiling
-   triangulation into `shared/com.ghostmap.shared/Runtime/Export/`, with tests.
+2. `R6` has moved the exporter and pure geometry into
+   `shared/com.ghostmap.shared/Runtime/Export/` (`GlbWriter`, `FurnitureParts`,
+   `WallSliceGenerator`, `WallLayout`, `FootprintMesh`, `RoomPalette`), with
+   tests. **Done 2026-10-11.** Re-check that
    `grep -rn "GhostMap.Viewer" shared apps/scanner` returns nothing.
 3. Nothing else in the Viewer is wanted. Its features (editing, inspector,
    saved snapshots, live TCP view, UDP discovery responder) are all superseded

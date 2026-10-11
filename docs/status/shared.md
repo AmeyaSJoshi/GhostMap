@@ -7,7 +7,8 @@ Full history (F0-F4 detail and the F4 review findings):
 
 ## Current state
 
-**F0-F4 complete. Scene schema v1 and protocol v1 are frozen.** Task `R1`
+**F0-F4 complete. Scene schema v1 and protocol v1 are frozen. Task `R6` added
+`Runtime/Export/` and completed the export bundle v1 contract.** Task `R1`
 imported three additive pieces from `GhostMapDublinHacks`: `WallFitting`
 (ADR-0005), `RoomGeometry.ContainsPointXZ` (ADR-0006) and
 `PeerDiscoveryProtocol` (UDP 47832, ADR-0009; superseded by ADR-0013 and removed
@@ -19,6 +20,7 @@ in `R10`).
 | `Runtime/Geometry` | `GhostCoordinateFrame`, `RayPlaneMath`, `RoomGeometry` (incl. `ContainsPointXZ`), `WallGeometry`, `WallFitting`, `MeasurementMath` |
 | `Runtime/Validation` | `RoomValidator`, `OpeningValidator`, `FurnitureValidator`, `ClosureQuality` |
 | `Runtime/Protocol` | `ProtocolConstants`, wire messages, `ProtocolSerializer`, `SnapshotRevisionPolicy`, `PeerDiscoveryProtocol` (dormant) |
+| `Runtime/Export` (task `R6`) | `GlbWriter` (`TryExportObject`, `TryExportRoom`), `RoomPalette`, `FurnitureParts` (part table and colours), `WallSliceGenerator`, `WallLayout`, `FootprintMesh`. Moved from the Viewer so the phone exports the same geometry the Viewer renders; contract `docs/contracts/export-bundle-v1.md` |
 | `fixtures/` | Three canonical snapshots (valid, door + window, intentionally malformed) |
 | `tools/` | `inspect_snapshot.py`, `send_fixture.py`, `run_unity_tests.sh` |
 | `shared/TestProject` | Host project whose only job is running the shared EditMode suite |
@@ -30,6 +32,8 @@ The tag `shared-v1-ready` marks the frozen foundation baseline.
 - Shared sources: `0b7a106` from `GhostMapDublinHacks`, merged in task `R1`.
   The frozen contract code was last changed in `47a6a0a` (F4). EditMode suite
   passes at `69af8eb`.
+- `Runtime/Export/`: branch `integration/r6-export-bundle` (task `R6`), suite
+  292/292 on the owner's Mac, 2026-10-11.
 
 ## Tests run
 
@@ -41,7 +45,8 @@ python3 tools/inspect_snapshot.py fixtures/valid-room-v1.json
 Last recorded Unity result, in `GhostMapDublinHacks`: **202 tests, 202 passed**
 (156 foundation + 32 `WallFittingTests` + 9 `RoomContainmentTests` + 5 discovery
 tests), Unity 6000.3.24f1, Test Framework 1.6.0. **Confirmed in this repository
-on 2026-10-11 at `69af8eb`: 202/202**, 0 failed (owner's Mac). On 2026-10-10 `inspect_snapshot.py` reported the two valid
+on 2026-10-11 at `69af8eb`: 202/202**, 0 failed (owner's Mac). **After `R6`: 292 tests, 292
+passed** (+69 moved from the Viewer, +21 new export tests). On 2026-10-10 `inspect_snapshot.py` reported the two valid
 fixtures valid and the malformed one invalid on the height rule alone, and
 `send_fixture.py --dry-run` produced the documented 176 / 1059 / 141-byte
 messages.
@@ -57,6 +62,11 @@ See `docs/contracts/scene-schema-v1.md`, `docs/contracts/protocol-v1.md` and
 the architecture overview's code map.
 
 ## Known issues
+
+- `GlbWriter` writes accessor `min`/`max` with round-trip precision. Six
+  decimals once broke the glTF rule that they equal the data exactly (found by
+  the Khronos validator on a rotated wall; regression test
+  `DeclaredBounds_EqualTheDataExactly`).
 
 - `tools/inspect_snapshot.py` re-implements the validation rules in Python.
   **Any change to a shared limit or rule must be mirrored there in the same
@@ -78,10 +88,8 @@ the architecture overview's code map.
 
 - `R5`: optional `label` on `SceneObjectModel` (additive schema v1 change,
   ADR-0011) with contract doc, tests, `inspect_snapshot.py` and fixtures.
-- `R6`: finish `docs/contracts/export-bundle-v1.md` (`R8` wrote section 2,
-  the `room.html` data, and 3.1, the `ceiling` node); new `Runtime/Export/` (moved from the Viewer: `GlbExporter`, furniture
-  part table, `WallSliceGenerator`, plus a whole-room writer) and the new
-  contract `docs/contracts/export-bundle-v1.md`.
+- `R6` is built (`Runtime/Export/`, contract complete). Next shared work is
+  `R5` above, then removing `PeerDiscoveryProtocol` in `R10`.
 
 Roadmap progress is tracked in `docs/status/integration.md`.
 

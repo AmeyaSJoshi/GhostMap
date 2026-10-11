@@ -62,6 +62,9 @@ The only source of truth for:
   `WallGeometry`, `WallFitting`, `MeasurementMath`.
 - **Protocol** — `ProtocolConstants`, `WireMessages`, `ProtocolSerializer`.
 - **Validation** — `RoomValidator`, `OpeningValidator`, `FurnitureValidator`.
+- **Export** — `GlbWriter`, `FurnitureParts`, `WallSliceGenerator`,
+  `WallLayout`, `FootprintMesh`, `RoomPalette` (task `R6`): the geometry both
+  the phone's exporter and the Unity Viewer's renderer use.
 
 Neither app may redefine any of these. If an app needs a contract change, the
 shared change is made, tested, documented, and merged **first**.
@@ -85,9 +88,9 @@ never reimplements a shared rule. Built; the phone-side fill arrives in `R6`.
 
 The desktop Unity app from tasks V1-V6: TCP server, revision arbitration,
 rendering, orbit and dollhouse camera, editing, measurement, save/load. Frozen
-by ADR-0013 and removed in task `R10`. Its geometry code (`GlbExporter`,
-`FurnitureFactory.BuildParts`, `WallSliceGenerator`) moves to the shared
-package in task `R6`.
+by ADR-0013 and removed in task `R10`. Its pure geometry moved to the shared
+package's `Runtime/Export/` in task `R6`; `FurnitureFactory`, `WallRenderer`
+and `FloorCeilingRenderer` remain as thin Unity wrappers around it.
 
 Scene state flows through two layers. `ViewerSceneStore` holds the newest
 accepted scanner snapshot. `ViewerEditableScene` passes it through unchanged
@@ -351,9 +354,10 @@ GhostMap-<room>-<yyyyMMdd-HHmm>.zip
 ```
 
 `.glb` files are glTF 2.0 binary in metres with +Y up. Unity imports them with
-the glTFast package; Blender opens them directly. Built on the phone (task
-`R6`); the per-object exporter exists today in the Unity Viewer
-(`Runtime/Export/`).
+the glTFast package (which turns them 180° about Y; see the contract's
+section 4); Blender opens them directly. Built on the phone by
+`ExportBundleBuilder` (task `R6`); exact rules in
+`docs/contracts/export-bundle-v1.md`.
 
 ---
 
@@ -389,6 +393,9 @@ Every runtime type, by project and folder. Tests mirror these names with a
 | `Validation` | `RoomValidator`, `OpeningValidator`, `FurnitureValidator`, `ClosureQuality` | Every limit in section 9 |
 | `Protocol` | `ProtocolConstants`, `WireMessages`, `ProtocolSerializer`, `SnapshotRevisionPolicy` | Protocol v1 (developer stream) |
 | `Protocol` | `PeerDiscoveryProtocol` | UDP discovery on 47832; dormant, removed in `R10` |
+| `Export` | `GlbWriter`, `RoomPalette` | `.glb` for one object (`TryExportObject`) and the room shell (`TryExportRoom`); Z negated; validator-clean |
+| `Export` | `FurnitureParts`, `FurniturePartSpec` | The one part table and colour table for the eight furniture types |
+| `Export` | `WallSliceGenerator`, `WallLayout`, `FootprintMesh` | Opening-safe wall segments, wall placement, floor/ceiling triangulation (section 10) |
 
 ### 12.2 `apps/scanner/Assets/GhostMap/Scanner`
 
@@ -402,6 +409,8 @@ Every runtime type, by project and folder. Tests mirror these names with a
 | `Runtime/Capture` | `FurnitureDetectionController`, `FurnitureTypeSuggester` | Furniture surface candidates; label-based type guess (removed in `R4`) |
 | `Runtime/Networking` | `ISnapshotSink`, `ScannerSnapshotPublisher`, `ScannerNetworkClient` | Revision changes → messages → TCP (developer stream) |
 | `Runtime/Networking` | `PeerDiscoveryClient` | UDP discovery; dormant, removed in `R10` |
+| `Runtime/Export` | `ExportBundleBuilder`, `SavedScanStore`, `ScanExporter`, `ExportResult` | The zip on Finalize (`room.html`, `room.glb`, objects, `scene.json`, `README.txt`), saved atomically in `persistentDataPath/scans/` (task `R6`) |
+| `Resources` | `GhostMapRoomTemplate.html` | Copy of `apps/web-viewer/dist/room-template.html`; a test keeps it fresh |
 | `Runtime/UI` | `FloorLockHud` | Composition root: builds every controller and the workflow; Reset rebuilds them |
 | `Runtime/UI` | `ScanGuide`, `ScannerGuideHud`, `SafeAreaFitter`, `MarkerMaterials` | Guided-flow wording (pure, tested), header/bubble/bottom sheet, safe area, marker materials |
 | `Runtime/UI` | `AutoScanHud`, `WallSweepHud`, `CornerCaptureHud`, `HeightCaptureHud`, `OpeningCaptureHud`, `FurnitureDetectionHud`, `ObjectPlacementHud` | Per-phase controls, readouts, world-space markers |
@@ -420,13 +429,13 @@ Every runtime type, by project and folder. Tests mirror these names with a
 | `Runtime/Bootstrap` | `ViewerSession` | Drains the server queue on the main thread and dispatches messages |
 | `Runtime/Bootstrap` | `ViewerBootstrap` | Composition root: wires session, scenes, renderer, camera, interaction |
 | `Runtime/Scene` | `IViewerSceneSource`, `ViewerSceneStore`, `ViewerEditableScene`, `SceneSnapshotValidator`, `FixtureLoader` | Scene ownership layers (section 3.3) and validation |
-| `Runtime/Rendering` | `RoomRenderer`, `FloorCeilingRenderer`, `WallRenderer`, `WallSliceGenerator` | Room shell and opening segmentation (section 10) |
+| `Runtime/Rendering` | `RoomRenderer`, `FloorCeilingRenderer`, `WallRenderer` | Room shell; thin wrappers over the shared `Export` geometry |
 | `Runtime/Rendering` | `FurnitureRenderer`, `FurnitureFactory`, `SceneObjectBinding`, `RoomBounds` | Parametric furniture, object identity on colliders, framing bounds |
 | `Runtime/Interaction` | `OrbitCameraRig`, `OrbitCameraController` | Camera maths (pure) and its input wrapper |
 | `Runtime/Interaction` | `ObjectSelectionController`, `SelectionOutlineBuilder`, `ObjectEditController`, `MeasurementController` | Select, highlight, edit, measure |
 | `Runtime/Interaction` | `ViewerInteractionRouter` | The single per-frame mouse reader; routes clicks and drags |
 | `Runtime/Persistence` | `ScenePersistence` | Atomic save and validated load of a `SceneSnapshot` |
-| `Runtime/Export` | `GlbExporter`, `FurnitureAssetExporter` | Per-object `.glb`; moves to the shared package in `R6` |
+| `Runtime/Export` | `FurnitureAssetExporter` | **Export Assets**: writes each object's `.glb` (shared `GlbWriter`) to disk |
 | `Runtime/UI` | `ViewerHudController`, `InspectorPanelController` | Status, buttons, inspector fields |
 | `Editor` | `ViewerSceneBuilder` | Generates `Viewer.unity` (menu **GhostMap > Build Viewer Scene**) |
 

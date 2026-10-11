@@ -1,5 +1,13 @@
 # R6: The phone builds the export bundle
 
+> **Built 2026-10-11** (handoff `docs/handoffs/2026-10-11-integration-r6-export-bundle.md`).
+> Differences from this brief: the moved classes kept recognisable names
+> (`WallSliceGenerator`, `WallLayout` from `WallRenderer`, `GlbWriter` from
+> `GlbExporter`, `FurnitureParts`, `FootprintMesh`, plus `RoomPalette`);
+> `ZipArchive` compiled without a `csc.rsp`; the saved-scans *list UI* moved
+> to `R7`; glTFast was found to negate X, so Unity users place furniture at
+> `(-x, y, -z)` (contract section 4). The text below is the original brief.
+
 **Decision:** ADR-0013 sections 1 and 4. **Workstreams:** Shared (moves the
 exporters, new contract), Scanner (builds and stores the bundle).
 **Who:** an agent; CI runs the tests; the owner opens the files on the Mac.

@@ -84,11 +84,11 @@ The scanner replaces `__GHOSTMAP_DATA__` with one JSON object:
 
 - `scene.json` is in **Ghost space**: Unity axes, left-handed, metres, +Y up
   (`docs/architecture/overview.md`, scene schema v1).
-- The `.glb` files are glTF: right-handed, +Y up. `GlbExporter` converts by
-  negating Z.
+- The `.glb` files are glTF: right-handed, +Y up. `GlbWriter` (shared package,
+  was the Viewer's `GlbExporter`) converts by negating Z.
 - `room.glb` is already in room position (Ghost positions, Z negated).
 - Each `objects/<id>.glb` is at the **origin** with **no node transform**
-  (checked in `GlbExporter.Build`: the node has only `mesh` and `name`). The
+  (checked in `GlbWriter.TryExportObject`: the node has only `mesh` and `name`). The
   viewer places it from `scene.json`:
   - `position = (center.x, center.y, -center.z)`
   - `rotation.y = -yawDeg × π / 180` (mirroring Z flips the rotation sense)

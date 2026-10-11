@@ -5,7 +5,7 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 
 ## Current state
 
-**`R1` merged; its Unity test run is still to do. Next: run the suites, then `R2`.**
+**`R1` merged; its Unity test run is still to do. CI (`.github/workflows/tests.yml`) is ready to run it once the owner adds three secrets (`docs/ci.md`). Then `R2`.**
 
 | Task | What | State |
 | --- | --- | --- |
@@ -50,7 +50,13 @@ None in this repository. Hackathon suites last passed at `0b7a106`.
 
 ## Tests run
 
-None yet.
+| Date | Where | Suites | Result |
+| --- | --- | --- | --- |
+| 2026-10-11 | Agent cloud container | shared, viewer, scanner | **Not run.** The container has no Unity and its network policy blocks Unity's download and licensing hosts (`download.unity3d.com`, `public-cdn.cloud.unity3d.com`, `unity.com`); Unity also needs the owner's licence. Added GitHub Actions CI instead |
+| 2026-10-11 | Agent cloud container | Python tools job (`inspect_snapshot.py` on the three fixtures, `send_fixture.py --dry-run`, `bash -n tools/run_unity_tests.sh`) | Passed |
+
+No Unity count has been observed in this repository yet. Expected after `R1`:
+shared 202, viewer 548, scanner 577.
 
 ## Known risks
 
@@ -71,9 +77,15 @@ From reading the code, not from a failed run:
 
 ## Next safe task
 
-1. On a machine with Unity 6000.3.24f1, run `./tools/run_unity_tests.sh` and
-   record the three counts here. Expected: shared 202, viewer 548, scanner 577.
-2. Then **`R2`**: the first device session (plan section 18).
+1. **Owner, once:** add `UNITY_LICENSE`, `UNITY_EMAIL`, `UNITY_PASSWORD` as
+   repository secrets (`docs/ci.md`), then **Actions → tests → Run workflow**.
+   An agent then records the three counts here from the run. Expected: shared
+   202, viewer 548, scanner 577. Fallback: `./tools/run_unity_tests.sh` on the
+   Mac.
+2. Then **`R2`**: the first device session (`docs/tasks/R2-first-device-session.md`).
+3. In parallel, an agent can start **`R8`** (`docs/tasks/R8-browser-viewer.md`),
+   which needs neither Unity nor the iPhone, and the code parts of `R6` and
+   `R4`. See `docs/tasks/README.md`.
 
 ## Do not touch
 

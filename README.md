@@ -58,7 +58,10 @@ The roadmap is plan section 18; progress is tracked in
 ```text
 GhostMap/
 ├── AGENTS.md          working rules for every contributor: read first
-├── docs/              spec, plan, architecture, contracts, ADRs, status, handoffs, research
+├── CLAUDE.md          entry point for coding agents
+├── .github/           CI workflow (tests.yml) and PR template
+├── docs/              spec, plan, architecture, contracts, ADRs, status, handoffs,
+│                      onboarding guide, task briefs, research
 ├── shared/            com.ghostmap.shared, the one source of truth for contracts
 ├── apps/scanner/      iPhone capture app (AR Foundation + ARKit)
 ├── apps/web-viewer/   browser viewer source for room.html            (planned)
@@ -68,7 +71,8 @@ GhostMap/
 ```
 
 Each folder has a README. [`docs/README.md`](docs/README.md) says which
-document answers which question.
+document answers which question. New contributors, human or agent, start with
+[`docs/onboarding.md`](docs/onboarding.md).
 
 ## Getting started
 
@@ -82,7 +86,9 @@ document answers which question.
 1. Install Unity `6000.3.24f1` through Unity Hub (add iOS Build Support for the
    scanner).
 2. Build the scanner to an iPhone: see [`apps/scanner/README.md`](apps/scanner/README.md).
-3. Run the tests: `./tools/run_unity_tests.sh`.
+3. Run the tests: `./tools/run_unity_tests.sh` locally, or let GitHub Actions
+   run them on every push ([`docs/ci.md`](docs/ci.md); needs three secrets set
+   once).
 4. Optional developer tool: open `apps/viewer` and press Play on `Viewer.unity`
    to watch a scan live over TCP, or load a fixture with **Load Fixture** /
    `python3 tools/send_fixture.py --host 127.0.0.1`.

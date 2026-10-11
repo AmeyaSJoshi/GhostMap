@@ -47,6 +47,9 @@ numbered rules win.
 | Decisions | `docs/decisions/README.md` (index of `ADR-*.md`) |
 | Workstream status | `docs/status/*.md` |
 | Documentation map | `docs/README.md` |
+| Onboarding guide | `docs/onboarding.md` |
+| Task briefs (R2-R10) | `docs/tasks/README.md` |
+| CI | `docs/ci.md`, `.github/workflows/tests.yml` |
 
 ### Start of any work session
 

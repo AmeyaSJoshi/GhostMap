@@ -312,6 +312,9 @@ Do not decide these yourself; note them in your handoff if they block you.
 5. Whether furniture should arrive in Unity already placed. Today each
    `objects/<id>.glb` sits at the origin; placement is only in `scene.json`.
    Settle before `R6` (`docs/status/integration.md`, "Open decisions").
+6. Unity or native Swift for the phone app. Decided "Unity for now"; revisit
+   with the owner once `R2` shows whether the stand-in-place scan works on the
+   device (`CLAUDE.md`, "Where Unity fits, and why").
 
 ---
 

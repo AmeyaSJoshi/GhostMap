@@ -55,9 +55,40 @@ None in this repository. Hackathon suites last passed at `0b7a106`.
 | 2026-10-11 | Agent cloud container | shared, viewer, scanner | **Not run.** The container has no Unity and its network policy blocks Unity's download and licensing hosts (`download.unity3d.com`, `public-cdn.cloud.unity3d.com`, `unity.com`); Unity also needs the owner's licence. Added GitHub Actions CI instead |
 | 2026-10-11 | Agent cloud container | Python tools job (`inspect_snapshot.py` on the three fixtures, `send_fixture.py --dry-run`, `bash -n tools/run_unity_tests.sh`) | Passed |
 | 2026-10-11 | GitHub Actions, run 1 (`7859878`) | tools; Unity shared, viewer, scanner | tools **passed**. All three Unity jobs **stopped at "Unity licence secrets are missing"**, as designed: the secrets are not set yet. Unity never started |
+| 2026-10-11 | GitHub Actions, run 5 on `main` (`04550b9`, merge of PR #25) | tools; Unity shared, viewer, scanner | Same as run 1: tools **passed**, Unity jobs stopped at the missing-secrets check. Artifact upload now skips cleanly |
 
 No Unity count has been observed in this repository yet. Expected after `R1`:
 shared 202, viewer 548, scanner 577.
+
+## Open decisions for the owner
+
+1. **Unity licence secrets** for CI (`docs/ci.md`). Until they exist, no Unity
+   test result can be recorded.
+2. **Should furniture arrive in Unity already placed?** Each `objects/<id>.glb`
+   is written at the origin with no node transform (checked in
+   `GlbExporter.Build`), so dragged into Unity every piece lands at the room's
+   origin; its position and yaw are only in `scene.json`. `room.html` places
+   them from `scene.json` (`R8`). If the owner wants placed furniture in Unity,
+   `R6` must change, for example by also writing a `room-with-furniture.glb` or
+   giving each object node its translation and rotation. Decide before `R6`
+   starts.
+3. **20 stale remote branches.** Agent sessions cannot delete branches. From a
+   clone:
+
+   ```bash
+   git push origin --delete docs/one-button-computer-transfer \
+     feature/drag-drop-furniture feature/nl-asset-editing feature/peer-to-peer-transport \
+     integration/furniture-detect-and-export integration/sweep-and-furniture \
+     scanner/s1-unity-project-ar-smoke-test scanner/s2-floor-lock-coordinate-frame \
+     scanner/s3-corner-capture-closure scanner/s4-room-height-capture \
+     scanner/s5-openings-furniture scanner/s6-network-finalization scanner/sweep-wall-capture \
+     shared/status-docs-refresh \
+     viewer/v1-desktop-network-foundation viewer/v2-room-geometry viewer/v3-wall-openings \
+     viewer/v4-objects-camera viewer/v5-edit-measure viewer/v6-persistence-hud
+   ```
+
+   Their work is either on `main` already or was dropped on purpose during the
+   2026-10-10/11 cleanup; nothing on them is needed.
 
 ## Known risks
 

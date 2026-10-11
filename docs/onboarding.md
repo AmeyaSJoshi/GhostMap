@@ -307,7 +307,11 @@ Do not decide these yourself; note them in your handoff if they block you.
 1. Unity licence secrets for CI (`docs/ci.md`).
 2. Whether the AGPL-3.0 licence of YOLO-n is acceptable long term (ADR-0011).
 3. Whether to keep the developer TCP stream after `R10`.
-4. 20 stale remote branches still exist; only the owner can delete them.
+4. 20 stale remote branches still exist; only the owner can delete them (list
+   and command in `docs/status/integration.md`).
+5. Whether furniture should arrive in Unity already placed. Today each
+   `objects/<id>.glb` sits at the origin; placement is only in `scene.json`.
+   Settle before `R6` (`docs/status/integration.md`, "Open decisions").
 
 ---
 

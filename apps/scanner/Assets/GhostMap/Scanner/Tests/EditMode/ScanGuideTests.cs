@@ -276,11 +276,14 @@ namespace GhostMap.Scanner.Tests.EditMode
             Assert.IsTrue(workflow.FinishAddingObjects());
             Expect(7);
 
-            StringAssert.Contains("Connect to your computer", ScanGuide.Describe(workflow, Tracking).Instruction);
+            // ADR-0013: finishing needs no connection; the network is a developer live view.
+            ScanGuideStep ready = ScanGuide.Describe(workflow, Tracking);
+            StringAssert.Contains("Tap Finish to save it on this iPhone", ready.Instruction);
+            Assert.AreEqual(string.Empty, ready.Message);
 
             ScanGuideStep connected = ScanGuide.Describe(
                 workflow, new ScanGuideContext(true, FloorLockRejection.None, connectedToComputer: true));
-            StringAssert.Contains("Finish & Send", connected.Instruction);
+            Assert.AreEqual(ready.Instruction, connected.Instruction, "the instruction does not depend on the live view");
             Assert.AreEqual(GuideMessageKind.Success, connected.MessageKind);
         }
 

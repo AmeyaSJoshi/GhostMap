@@ -1,6 +1,7 @@
 using GhostMap.Scanner.AR;
 using GhostMap.Scanner.Capture;
 using GhostMap.Scanner.Export;
+using GhostMap.Scanner.Share;
 using GhostMap.Scanner.Workflow;
 using UnityEngine;
 using UnityEngine.UI;
@@ -121,7 +122,9 @@ namespace GhostMap.Scanner.UI
                 floorLockHud.LastAttemptRejection,
                 scannerHud != null && scannerHud.IsConnected,
                 export == null ? ExportState.None : export.Value.Succeeded ? ExportState.Saved : ExportState.Failed,
-                export?.Error);
+                export?.Error,
+                scannerHud != null ? scannerHud.CurrentShareState : ShareState.Idle,
+                scannerHud != null ? scannerHud.CurrentShareMessage : null);
 
             ScanGuideStep step = ScanGuide.Describe(workflow, context);
 

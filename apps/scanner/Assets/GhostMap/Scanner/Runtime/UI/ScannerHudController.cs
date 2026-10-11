@@ -5,6 +5,7 @@ using System.Threading;
 using GhostMap.Scanner.AR;
 using GhostMap.Scanner.Export;
 using GhostMap.Scanner.Networking;
+using GhostMap.Scanner.Share;
 using GhostMap.Scanner.Workflow;
 using GhostMap.Shared.Protocol;
 using UnityEngine;
@@ -53,6 +54,7 @@ namespace GhostMap.Scanner.UI
         [SerializeField] private InputField portInput;
         [SerializeField] private Button connectButton;
         [SerializeField] private Button sendToComputerButton;
+        [SerializeField] private Button shareButton;
         [SerializeField] private Text networkStatusText;
         [SerializeField] private Button resetButton;
         [SerializeField] private Button finalizeButton;
@@ -75,12 +77,15 @@ namespace GhostMap.Scanner.UI
         private ScanWorkflowController exportedWorkflow;
         private ExportResult lastExport;
 
+        // Task R7: Send to Computer through the share sheet.
+        private ShareController sharing;
+        private ScanWorkflowController sharedWorkflow;
+
         private Thread networkThread;
         private volatile bool networkThreadRunning;
 
         private float resetArmedUntil = -1f;
         private bool connectPanelOpen;
-        private bool connectPanelDismissed;
         private NetworkConnectionState lastState = NetworkConnectionState.Disconnected;
 
         /// <summary>True once the computer has accepted the connection.</summary>
@@ -101,6 +106,17 @@ namespace GhostMap.Scanner.UI
         /// <summary>Saved rooms on this phone, newest first.</summary>
         public SavedScanStore SavedScans => exporter?.Store;
 
+        /// <summary>Send to Computer (task R7): the share sheet and its last outcome.</summary>
+        public ShareController Sharing => sharing;
+
+        /// <summary>
+        /// Whether the finished-scan Send to Computer button is offered: only
+        /// once the scan is finalized and an export was attempted (a failed one
+        /// is retried by pressing it).
+        /// </summary>
+        public static bool ShouldOfferSend(ScanPhase phase, ExportResult? export)
+            => phase == ScanPhase.Finalized && export.HasValue;
+
         private void Awake()
         {
             client = new ScannerNetworkClient(
@@ -112,6 +128,7 @@ namespace GhostMap.Scanner.UI
             exporter = new ScanExporter(
                 LoadRoomTemplate,
                 new SavedScanStore(Path.Combine(Application.persistentDataPath, "scans")));
+            sharing = new ShareController(ShareSheets.CreateDefault());
             discovery = new PeerDiscoveryClient();
             RebindIfNeeded();
 
@@ -123,6 +140,11 @@ namespace GhostMap.Scanner.UI
             if (sendToComputerButton != null)
             {
                 sendToComputerButton.onClick.AddListener(OnSendToComputerPressed);
+            }
+
+            if (shareButton != null)
+            {
+                shareButton.onClick.AddListener(OnSharePressed);
             }
 
             if (resetButton != null)
@@ -160,6 +182,11 @@ namespace GhostMap.Scanner.UI
             if (sendToComputerButton != null)
             {
                 sendToComputerButton.onClick.RemoveListener(OnSendToComputerPressed);
+            }
+
+            if (shareButton != null)
+            {
+                shareButton.onClick.RemoveListener(OnSharePressed);
             }
 
             if (resetButton != null)
@@ -243,11 +270,17 @@ namespace GhostMap.Scanner.UI
                 finalizeButton.interactable = phase == ScanPhase.ReadyToFinalize;
             }
 
+            // Developer live view: find the desktop Viewer over the network.
             if (sendToComputerButton != null)
             {
-                sendToComputerButton.gameObject.SetActive(phase == ScanPhase.Finalized);
-                sendToComputerButton.interactable =
-                    phase == ScanPhase.Finalized && discovery.State != PeerDiscoveryState.Searching;
+                sendToComputerButton.interactable = discovery.State != PeerDiscoveryState.Searching;
+            }
+
+            if (shareButton != null)
+            {
+                bool offer = ShouldOfferSend(phase, CurrentExport);
+                shareButton.gameObject.SetActive(offer);
+                shareButton.interactable = offer && sharing.State != ShareState.Sharing;
             }
 
             if (resetLabel != null)
@@ -275,8 +308,8 @@ namespace GhostMap.Scanner.UI
             {
                 connectionChipLabel.text = state switch
                 {
-                    NetworkConnectionState.Connected => "Computer connected",
-                    NetworkConnectionState.Disconnected => "Connect computer",
+                    NetworkConnectionState.Connected => "Live view on",
+                    NetworkConnectionState.Disconnected => "Live view",
                     _ => "Connecting\u2026"
                 };
             }
@@ -304,24 +337,14 @@ namespace GhostMap.Scanner.UI
                 return;
             }
 
-            bool needsConnection =
-                (phase == ScanPhase.ReadyToFinalize || phase == ScanPhase.Finalized) && !IsConnected;
-
-            connectPanel.SetActive(connectPanelOpen || (needsConnection && !connectPanelDismissed));
+            // ADR-0013: the network connection is a developer tool, so the
+            // card opens only from the chip; Send to Computer needs no network.
+            connectPanel.SetActive(connectPanelOpen);
         }
 
         private void OnConnectionChipPressed()
         {
-            if (connectPanel != null && connectPanel.activeSelf)
-            {
-                connectPanelOpen = false;
-                connectPanelDismissed = true;
-            }
-            else
-            {
-                connectPanelOpen = true;
-                connectPanelDismissed = false;
-            }
+            connectPanelOpen = !(connectPanel != null && connectPanel.activeSelf);
         }
 
         private void OnConnectPressed()
@@ -344,26 +367,51 @@ namespace GhostMap.Scanner.UI
         }
 
         /// <summary>
-        /// The primary post-finalization path. It discovers a running Viewer
-        /// on the local Wi-Fi or phone hotspot, then hands its TCP endpoint to
-        /// the existing snapshot client. No scene data travels over UDP.
+        /// Developer live view (ADR-0013 section 5): discovers a running
+        /// desktop Viewer on the local network and hands its TCP endpoint to
+        /// the snapshot client. Not the product's Send to Computer.
         /// </summary>
         private void OnSendToComputerPressed()
+        {
+            discovery.Start();
+        }
+
+        /// <summary>
+        /// Task R7: Send to Computer. Opens the share sheet with this scan's
+        /// saved bundle. A failed export (for example a full disk) is retried
+        /// first, so a finished room is never stuck unsaved.
+        /// </summary>
+        private void OnSharePressed()
         {
             if (Workflow?.Phase != ScanPhase.Finalized)
             {
                 return;
             }
 
-            // A failed export (for example a full disk) is retried here, so a
-            // finished room is never stuck unsaved.
-            if (CurrentExport is ExportResult export && !export.Succeeded)
+            if (CurrentExport is ExportResult failed && !failed.Succeeded)
             {
                 ExportCurrentScan();
             }
 
-            discovery.Start();
+            if (CurrentExport is ExportResult export && export.Succeeded)
+            {
+                ShareSaved(export.Saved.Path);
+            }
         }
+
+        /// <summary>Opens the share sheet for any saved room (also used by the saved-rooms list).</summary>
+        public bool ShareSaved(string path)
+        {
+            sharedWorkflow = Workflow;
+            return sharing.TryShare(path);
+        }
+
+        /// <summary>The share outcome for the current scan, or Idle after Restart.</summary>
+        public ShareState CurrentShareState =>
+            sharedWorkflow != null && sharedWorkflow == Workflow ? sharing.State : ShareState.Idle;
+
+        public string CurrentShareMessage =>
+            sharedWorkflow != null && sharedWorkflow == Workflow ? sharing.Message : string.Empty;
 
         private void ConnectToDiscoveredViewerIfReady()
         {
@@ -388,7 +436,6 @@ namespace GhostMap.Scanner.UI
             }
 
             resetArmedUntil = -1f;
-            connectPanelDismissed = false;
             floorLockHud?.ResetScan();
         }
 

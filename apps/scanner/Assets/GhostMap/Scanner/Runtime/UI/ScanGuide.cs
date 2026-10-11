@@ -1,4 +1,5 @@
 using GhostMap.Scanner.Capture;
+using GhostMap.Scanner.Share;
 using GhostMap.Scanner.Workflow;
 using GhostMap.Shared.Validation;
 
@@ -24,13 +25,17 @@ namespace GhostMap.Scanner.UI
             FloorLockRejection lastFloorRejection,
             bool connectedToComputer,
             ExportState export = ExportState.None,
-            string exportError = null)
+            string exportError = null,
+            ShareState share = ShareState.Idle,
+            string shareMessage = null)
         {
             TrackingGood = trackingGood;
             LastFloorRejection = lastFloorRejection;
             ConnectedToComputer = connectedToComputer;
             Export = export;
             ExportError = exportError ?? string.Empty;
+            Share = share;
+            ShareMessage = shareMessage ?? string.Empty;
         }
 
         public bool TrackingGood { get; }
@@ -45,6 +50,12 @@ namespace GhostMap.Scanner.UI
 
         /// <summary>Why the export failed, when <see cref="Export"/> is <see cref="ExportState.Failed"/>.</summary>
         public string ExportError { get; }
+
+        /// <summary>Send to Computer's state for this scan (task R7).</summary>
+        public ShareState Share { get; }
+
+        /// <summary>What the share sheet reported, e.g. "Sent with AirDrop."</summary>
+        public string ShareMessage { get; }
     }
 
     /// <summary>The finalized room's export bundle (task R6).</summary>
@@ -149,12 +160,10 @@ namespace GhostMap.Scanner.UI
                 case ScanPhase.ReadyToFinalize:
                     return new ScanGuideStep(
                         7,
-                        "Send to computer",
-                        context.ConnectedToComputer
-                            ? "Your room is ready. Tap Finish & Send to hand it to your computer."
-                            : "Your room is ready. Connect to your computer above, then tap Finish & Send.",
+                        "Room ready",
+                        "Your room is ready. Tap Finish to save it on this iPhone.",
                         null,
-                        context.ConnectedToComputer ? "Connected to your computer." : string.Empty,
+                        context.ConnectedToComputer ? "Live view connected to your computer." : string.Empty,
                         context.ConnectedToComputer ? GuideMessageKind.Success : GuideMessageKind.None);
 
                 case ScanPhase.Finalized:
@@ -169,20 +178,35 @@ namespace GhostMap.Scanner.UI
                             GuideMessageKind.Warning);
                     }
 
-                    return new ScanGuideStep(
-                        7,
-                        "All done",
-                        context.Export == ExportState.Saved
-                            ? "Your room is saved on this iPhone. Tap Send to Computer to hand it over."
-                            : "Your room is saved. Open GhostMap on your computer to look around and edit it.",
-                        null,
-                        context.ConnectedToComputer
-                            ? "Sent to your computer."
-                            : "Not connected yet. Connect above and the room will be sent.",
-                        context.ConnectedToComputer ? GuideMessageKind.Success : GuideMessageKind.Warning);
+                    return DescribeFinished(context);
 
                 default:
                     return new ScanGuideStep(1, "Getting ready", string.Empty, null, string.Empty, GuideMessageKind.None);
+            }
+        }
+
+        /// <summary>
+        /// After Finish: the room is saved on the phone (task R6) and Send to
+        /// Computer opens the share sheet (task R7). The message line says what
+        /// the share sheet reported; a cancelled sheet says nothing.
+        /// </summary>
+        private static ScanGuideStep DescribeFinished(ScanGuideContext context)
+        {
+            string instruction = context.Export == ExportState.Saved
+                ? "Your room is saved on this iPhone. Tap Send to Computer and choose your Mac."
+                : "Your room is saved.";
+
+            switch (context.Share)
+            {
+                case ShareState.Sharing:
+                    return new ScanGuideStep(7, "Sending", instruction, null, context.ShareMessage, GuideMessageKind.None);
+                case ShareState.Sent:
+                    return new ScanGuideStep(7, "Sent", "Your room is on its way. Open room.html from the zip on your computer.",
+                        null, context.ShareMessage, GuideMessageKind.Success);
+                case ShareState.Failed:
+                    return new ScanGuideStep(7, "All done", instruction, null, context.ShareMessage, GuideMessageKind.Warning);
+                default:
+                    return new ScanGuideStep(7, "All done", instruction, null, string.Empty, GuideMessageKind.None);
             }
         }
 

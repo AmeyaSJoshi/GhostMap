@@ -43,14 +43,20 @@ The Editor's Play mode is never evidence for AR, device or network behavior
 3. Confirm or capture the height, then add doors and windows.
 4. Point at furniture; detected surfaces are offered with their measured size.
    Tap **Add**, **Skip**, **Next** or **Add All**, or place items by hand.
-5. Tap **Finalize GhostMap**. The phone builds `GhostMap-<room>-<time>.zip`
-   (`room.html`, `room.glb`, one `.glb` per object, `scene.json`, `README.txt`)
-   and keeps it in `persistentDataPath/scans/`; Xcode's console shows a
-   `GhostMap export:` line with the time taken.
+5. Tap **Finish**. The phone builds `GhostMap-<room>-<time>.zip` (`room.html`,
+   `room.glb`, one `.glb` per object, `scene.json`, `README.txt`) and keeps it
+   in `persistentDataPath/scans/`; Xcode's console shows a `GhostMap export:`
+   line with the time taken.
+6. Tap **Send to Computer**: the iOS share sheet opens with the zip. Pick your
+   Mac under AirDrop, or Save to Files, Mail. On the Mac, unzip it and
+   double-click `room.html`.
 
-Today Send to Computer still uses UDP discovery and the desktop Viewer (and
-retries a failed export). Roadmap task `R7` replaces it with the iOS share
-sheet over the saved bundle (ADR-0013).
+**Rooms** (top bar) lists the rooms saved on the phone, each with its own Send
+to Computer button. **Live view** (top bar) is a developer tool: it streams
+the scan to the desktop Viewer over the local network and is not needed to
+send a room. The share sheet is the native plugin
+`Assets/Plugins/iOS/GhostMapShare/GhostMapShare.mm`; in the Editor, Send to
+Computer reveals the zip in Finder instead.
 
 The browser viewer template ships as
 `Assets/GhostMap/Scanner/Resources/GhostMapRoomTemplate.html`, a copy of

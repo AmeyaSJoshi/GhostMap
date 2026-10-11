@@ -16,12 +16,12 @@
 | --- | --- | --- |
 | A — Foundation | `F0`-`F4` | Complete |
 | B — Assisted-capture MVP | `S1`-`S6`, `V1`-`V6` | Complete; scanner verified on a physical iPhone |
-| C — Stand-in-place GhostMap | `R1`-`R10` (section 18) | **Not started. Next: `R1`, bring in `GhostMapDublinHacks`** |
+| C — Stand-in-place GhostMap | `R1`-`R10` (section 18) | **`R1` merged 2026-10-11. Next: confirm the test suites, then `R2`** |
 
-Much of stage C is already written in the owner's hackathon repository
-`GhostMapDublinHacks` (automatic room scan, wall sweep, furniture surface
-detection, `.glb` export). It has never run on an iPhone. Task `R1` brings it
-into this repository.
+Task `R1` brought the owner's hackathon work into this repository: the guided
+scan UI, automatic room scan, wall sweep, furniture surface detection and
+per-object `.glb` export. All of it passed its EditMode suites; none of it has
+run on an iPhone.
 
 Section numbers in this plan are stable and are cited from code comments.
 Sections whose content lives in another canonical document are short pointers.
@@ -1189,6 +1189,8 @@ R2, R7, R8 -> R9 -> R10
 
 ## Task R1: Bring in `GhostMapDublinHacks`
 
+**Done 2026-10-11** (owner-approved merge of `0b7a106`). The merged code is byte-identical to the hackathon tree; the three suites still need one run in this repository. Research spikes moved to `docs/research/`. Record in `docs/status/integration.md`.
+
 The owner's hackathon repository is this repository at `f5a7d30` plus 31 commits:
 
 | Feature | ADR | Hackathon test result | Fate |
@@ -1684,7 +1686,7 @@ R2, R7, R8 -> R9 -> R10
 Section 18 defines each task. Use short-lived `integration/<task>` branches.
 
 **Progress:** Stage A complete (tag `shared-v1-ready`). Stage B complete
-(PRs #1-#12). Stage C not started; next is `R1`.
+(PRs #1-#12). Stage C: `R1` merged; next is `R2`.
 
 ---
 

@@ -15,7 +15,31 @@ namespace GhostMap.Scanner.Workflow
         WaitingForTracking,
         FindFloor,
         FloorLocked,
+
+        /// <summary>
+        /// The automatic room scan: the user stands, turns once, and GhostMap
+        /// derives the four walls from ARKit's planes. The default path. On
+        /// success it hands four corners to the same corner store the sweep and
+        /// walked paths use and moves on to height; "Help GhostMap" falls back
+        /// to <see cref="SweepWalls"/>.
+        /// </summary>
+        AutoScanRoom,
+
+        /// <summary>
+        /// ADR-0005: the user stands, turns, and sweeps each wall's floor
+        /// junction. Corners are derived from the four fitted walls. This is
+        /// the default capture path.
+        /// </summary>
+        SweepWalls,
+
+        /// <summary>
+        /// Task S3's walked capture: the user walks to each corner and taps.
+        /// Retained as the fallback from <see cref="SweepWalls"/> until the
+        /// swept path has accuracy numbers from Task I2. Both paths produce the
+        /// same four corners and converge on <see cref="VerifyClosure"/>.
+        /// </summary>
         CaptureCorners,
+
         VerifyClosure,
         CaptureHeight,
         AddOpenings,

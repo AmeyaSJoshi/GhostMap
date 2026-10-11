@@ -87,6 +87,56 @@ namespace GhostMap.Shared.Geometry
         }
 
         /// <summary>
+        /// True when a point lies inside the footprint in XZ. Y is ignored on
+        /// both the point and the corners.
+        ///
+        /// <para>Crossing-number test: cast a ray in +X from the point and count
+        /// edge crossings. Odd means inside. The half-open edge rule
+        /// (<c>a.z &gt; z</c> differs from <c>b.z &gt; z</c>) is what keeps a
+        /// point level with a shared vertex from being counted twice, which is
+        /// the classic way this test reports a point inside a convex room as
+        /// outside.</para>
+        ///
+        /// <para>Correct for concave footprints too, and independent of winding
+        /// direction, so it does not care which way the user captured the
+        /// corners. A point exactly on an edge is not guaranteed either way —
+        /// that is inherent to the test, and no caller should depend on it:
+        /// <c>ADR-0006</c> uses this to reject furniture detected through a
+        /// doorway, where the margin is tens of centimeters, not microns.</para>
+        /// </summary>
+        public static bool ContainsPointXZ(IReadOnlyList<Vector3> corners, Vector3 point)
+        {
+            if (corners == null || corners.Count < 3)
+            {
+                return false;
+            }
+
+            bool inside = false;
+            int count = corners.Count;
+
+            for (int i = 0, j = count - 1; i < count; j = i++)
+            {
+                Vector3 a = corners[i];
+                Vector3 b = corners[j];
+
+                if ((a.z > point.z) == (b.z > point.z))
+                {
+                    continue;
+                }
+
+                // X of the edge at the point's Z.
+                float crossingX = a.x + (((point.z - a.z) / (b.z - a.z)) * (b.x - a.x));
+
+                if (point.x < crossingX)
+                {
+                    inside = !inside;
+                }
+            }
+
+            return inside;
+        }
+
+        /// <summary>
         /// Derives the walls of a room from its consecutive corners, closing the
         /// loop from the last corner back to the first.
         /// </summary>

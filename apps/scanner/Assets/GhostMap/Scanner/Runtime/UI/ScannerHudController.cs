@@ -37,24 +37,46 @@ namespace GhostMap.Scanner.UI
     {
         private const int NetworkThreadPollIntervalMs = 100;
 
+        /// <summary>How long Restart waits for the confirming second tap.</summary>
+        private const float ResetConfirmSeconds = 3f;
+
+        private static readonly Color ConnectedDotColor = new Color(0.29f, 0.87f, 0.50f);
+        private static readonly Color ConnectingDotColor = new Color(1f, 0.71f, 0.28f);
+        private static readonly Color DisconnectedDotColor = new Color(1f, 1f, 1f, 0.45f);
+
         [SerializeField] private FloorLockHud floorLockHud;
         [SerializeField] private ArSpatialProvider spatialProvider;
         [SerializeField] private InputField hostInput;
         [SerializeField] private InputField portInput;
         [SerializeField] private Button connectButton;
+        [SerializeField] private Button sendToComputerButton;
         [SerializeField] private Text networkStatusText;
         [SerializeField] private Button resetButton;
         [SerializeField] private Button finalizeButton;
         [SerializeField] private Text statusText;
+        [SerializeField] private Text resetLabel;
+        [SerializeField] private Button connectionChipButton;
+        [SerializeField] private Text connectionChipLabel;
+        [SerializeField] private Graphic connectionChipDot;
+        [SerializeField] private GameObject connectPanel;
 
         private readonly StringBuilder builder = new StringBuilder();
 
         private ScannerNetworkClient client;
+        private PeerDiscoveryClient discovery;
         private ScannerSnapshotPublisher publisher;
         private ScanWorkflowController boundWorkflow;
 
         private Thread networkThread;
         private volatile bool networkThreadRunning;
+
+        private float resetArmedUntil = -1f;
+        private bool connectPanelOpen;
+        private bool connectPanelDismissed;
+        private NetworkConnectionState lastState = NetworkConnectionState.Disconnected;
+
+        /// <summary>True once the computer has accepted the connection.</summary>
+        public bool IsConnected => client != null && client.State == NetworkConnectionState.Connected;
 
         private ScanWorkflowController Workflow => floorLockHud != null ? floorLockHud.Workflow : null;
 
@@ -66,11 +88,17 @@ namespace GhostMap.Scanner.UI
                 SystemInfo.deviceName);
 
             publisher = new ScannerSnapshotPublisher(client);
+            discovery = new PeerDiscoveryClient();
             RebindIfNeeded();
 
             if (connectButton != null)
             {
                 connectButton.onClick.AddListener(OnConnectPressed);
+            }
+
+            if (sendToComputerButton != null)
+            {
+                sendToComputerButton.onClick.AddListener(OnSendToComputerPressed);
             }
 
             if (resetButton != null)
@@ -83,6 +111,11 @@ namespace GhostMap.Scanner.UI
                 finalizeButton.onClick.AddListener(OnFinalizePressed);
             }
 
+            if (connectionChipButton != null)
+            {
+                connectionChipButton.onClick.AddListener(OnConnectionChipPressed);
+            }
+
             networkThreadRunning = true;
             networkThread = new Thread(NetworkThreadLoop) { IsBackground = true, Name = "GhostMapScannerNetwork" };
             networkThread.Start();
@@ -93,10 +126,16 @@ namespace GhostMap.Scanner.UI
             networkThreadRunning = false;
             networkThread?.Join(NetworkThreadPollIntervalMs * 5);
             client?.Dispose();
+            discovery?.Dispose();
 
             if (connectButton != null)
             {
                 connectButton.onClick.RemoveListener(OnConnectPressed);
+            }
+
+            if (sendToComputerButton != null)
+            {
+                sendToComputerButton.onClick.RemoveListener(OnSendToComputerPressed);
             }
 
             if (resetButton != null)
@@ -107,6 +146,11 @@ namespace GhostMap.Scanner.UI
             if (finalizeButton != null)
             {
                 finalizeButton.onClick.RemoveListener(OnFinalizePressed);
+            }
+
+            if (connectionChipButton != null)
+            {
+                connectionChipButton.onClick.RemoveListener(OnConnectionChipPressed);
             }
         }
 
@@ -133,6 +177,7 @@ namespace GhostMap.Scanner.UI
 
             RebindIfNeeded();
             publisher.Tick();
+            ConnectToDiscoveredViewerIfReady();
 
             UpdateControls();
 
@@ -166,9 +211,92 @@ namespace GhostMap.Scanner.UI
 
         private void UpdateControls()
         {
+            ScanPhase phase = Workflow.Phase;
+
             if (finalizeButton != null)
             {
-                finalizeButton.interactable = Workflow.Phase == ScanPhase.ReadyToFinalize;
+                finalizeButton.gameObject.SetActive(phase == ScanPhase.ReadyToFinalize);
+                finalizeButton.interactable = phase == ScanPhase.ReadyToFinalize;
+            }
+
+            if (sendToComputerButton != null)
+            {
+                sendToComputerButton.gameObject.SetActive(phase == ScanPhase.Finalized);
+                sendToComputerButton.interactable =
+                    phase == ScanPhase.Finalized && discovery.State != PeerDiscoveryState.Searching;
+            }
+
+            if (resetLabel != null)
+            {
+                resetLabel.text = Time.unscaledTime < resetArmedUntil ? "Tap to confirm" : "Restart";
+            }
+
+            UpdateConnectionChip();
+            UpdateConnectPanel(phase);
+        }
+
+        private void UpdateConnectionChip()
+        {
+            NetworkConnectionState state = client.State;
+
+            // A fresh connection closes a panel the user opened: the job is done.
+            if (state == NetworkConnectionState.Connected && lastState != NetworkConnectionState.Connected)
+            {
+                connectPanelOpen = false;
+            }
+
+            lastState = state;
+
+            if (connectionChipLabel != null)
+            {
+                connectionChipLabel.text = state switch
+                {
+                    NetworkConnectionState.Connected => "Computer connected",
+                    NetworkConnectionState.Disconnected => "Connect computer",
+                    _ => "Connecting\u2026"
+                };
+            }
+
+            if (connectionChipDot != null)
+            {
+                connectionChipDot.color = state switch
+                {
+                    NetworkConnectionState.Connected => ConnectedDotColor,
+                    NetworkConnectionState.Disconnected => DisconnectedDotColor,
+                    _ => ConnectingDotColor
+                };
+            }
+        }
+
+        /// <summary>
+        /// The connect card opens by itself at the end of the scan if the
+        /// computer is not connected yet, because Finish & Send needs it; the
+        /// user can still open or close it at any time from the chip.
+        /// </summary>
+        private void UpdateConnectPanel(ScanPhase phase)
+        {
+            if (connectPanel == null)
+            {
+                return;
+            }
+
+            bool needsConnection =
+                (phase == ScanPhase.ReadyToFinalize || phase == ScanPhase.Finalized) && !IsConnected;
+
+            connectPanel.SetActive(connectPanelOpen || (needsConnection && !connectPanelDismissed));
+        }
+
+        private void OnConnectionChipPressed()
+        {
+            if (connectPanel != null && connectPanel.activeSelf)
+            {
+                connectPanelOpen = false;
+                connectPanelDismissed = true;
+            }
+            else
+            {
+                connectPanelOpen = true;
+                connectPanelDismissed = false;
             }
         }
 
@@ -191,13 +319,71 @@ namespace GhostMap.Scanner.UI
             client.RequestConnect(targetHost, targetPort);
         }
 
-        private void OnResetPressed() => floorLockHud?.ResetScan();
+        /// <summary>
+        /// The primary post-finalization path. It discovers a running Viewer
+        /// on the local Wi-Fi or phone hotspot, then hands its TCP endpoint to
+        /// the existing snapshot client. No scene data travels over UDP.
+        /// </summary>
+        private void OnSendToComputerPressed()
+        {
+            if (Workflow?.Phase != ScanPhase.Finalized)
+            {
+                return;
+            }
+
+            discovery.Start();
+        }
+
+        private void ConnectToDiscoveredViewerIfReady()
+        {
+            if (discovery.TryTakeResult(out string host, out int port, out _))
+            {
+                client.RequestConnect(host, port);
+                connectPanelOpen = false;
+            }
+        }
+
+        /// <summary>
+        /// Restart throws the whole scan away, so it takes a second tap within
+        /// <see cref="ResetConfirmSeconds"/>. One stray touch on a phone held
+        /// at arm's length must not cost a finished room.
+        /// </summary>
+        private void OnResetPressed()
+        {
+            if (Time.unscaledTime >= resetArmedUntil)
+            {
+                resetArmedUntil = Time.unscaledTime + ResetConfirmSeconds;
+                return;
+            }
+
+            resetArmedUntil = -1f;
+            connectPanelDismissed = false;
+            floorLockHud?.ResetScan();
+        }
 
         private void OnFinalizePressed() => Workflow?.TryFinalize(out _);
 
         private string BuildNetworkStatus()
         {
             builder.Clear();
+            if (discovery != null && discovery.State == PeerDiscoveryState.Searching)
+            {
+                builder.Append("Finding your computer…");
+                return builder.ToString();
+            }
+
+            if (discovery != null && discovery.State == PeerDiscoveryState.TimedOut)
+            {
+                builder.Append("No computer found. Check that GhostMap Viewer is open, then try again.");
+                return builder.ToString();
+            }
+
+            if (discovery != null && discovery.State == PeerDiscoveryState.Failed)
+            {
+                builder.Append("Could not search for a computer: ").Append(discovery.LastError);
+                return builder.ToString();
+            }
+
             builder.Append("Network: ").Append(client.State);
 
             if (!string.IsNullOrEmpty(client.Host))

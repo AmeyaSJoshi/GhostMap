@@ -54,6 +54,7 @@ namespace GhostMap.Scanner.UI
         private readonly List<GameObject> cornerMarkers = new List<GameObject>();
 
         private GameObject closureMarker;
+        private Text redoLabel;
 
         private void Awake()
         {
@@ -128,17 +129,22 @@ namespace GhostMap.Scanner.UI
         {
             CornerCaptureController capture = workflow.Corners;
 
-            bool canStart = workflow.Phase == ScanPhase.FloorLocked;
             bool canCapture = workflow.Phase == ScanPhase.CaptureCorners && capture.CanCapture;
             bool canVerify = workflow.Phase == ScanPhase.VerifyClosure && capture.CanVerifyClosure;
 
+            // FloorLocked no longer belongs to this HUD. ADR-0005 makes
+            // sweeping the default route out of it, and WallSweepHud owns the
+            // same on-screen slot there; the walked path is entered from the
+            // sweep phase via "Walk Corners Instead". The
+            // FloorLocked -> CaptureCorners transition itself is retained in
+            // the workflow, so the controller-level path is unchanged.
             if (primaryButton != null)
             {
                 primaryButton.gameObject.SetActive(
-                    canStart || workflow.Phase == ScanPhase.CaptureCorners
+                    workflow.Phase == ScanPhase.CaptureCorners
                     || workflow.Phase == ScanPhase.VerifyClosure);
 
-                primaryButton.interactable = canStart || canCapture || canVerify;
+                primaryButton.interactable = canCapture || canVerify;
             }
 
             if (primaryButtonLabel != null)
@@ -146,23 +152,34 @@ namespace GhostMap.Scanner.UI
                 primaryButtonLabel.text = PrimaryLabel(workflow);
             }
 
+            // Undoing one derived corner of a swept room would drop the user
+            // into walking corners, so Undo belongs to the walked path only.
             if (undoButton != null)
             {
                 undoButton.gameObject.SetActive(
                     workflow.Phase == ScanPhase.CaptureCorners
-                    || workflow.Phase == ScanPhase.VerifyClosure);
+                    || (workflow.Phase == ScanPhase.VerifyClosure && !workflow.RoomWasSwept));
 
                 undoButton.interactable = capture.CornerCount > 0;
             }
 
-            // Redo only appears once there is something to redo: a measured
-            // closure the user might want to reject, or one already rejected.
+            // Redo is offered as soon as there is a footprint to throw away,
+            // and returns to whichever path produced it (RedoRoom).
             if (redoButton != null)
             {
                 redoButton.gameObject.SetActive(
                     workflow.Phase == ScanPhase.VerifyClosure
-                        ? capture.HasClosureMeasurement
-                        : workflow.Phase == ScanPhase.CaptureHeight);
+                    || workflow.Phase == ScanPhase.CaptureHeight);
+
+                if (redoLabel == null)
+                {
+                    redoLabel = redoButton.GetComponentInChildren<Text>(includeInactive: true);
+                }
+
+                if (redoLabel != null)
+                {
+                    redoLabel.text = workflow.RoomWasSwept ? "Redo Walls" : "Redo Corners";
+                }
             }
         }
 
@@ -172,14 +189,11 @@ namespace GhostMap.Scanner.UI
 
             switch (workflow.Phase)
             {
-                case ScanPhase.FloorLocked:
-                    return "Start Corners";
-
                 case ScanPhase.CaptureCorners:
-                    return $"Capture Corner {capture.CornerCount + 1}/{CornerCaptureController.RequiredCornerCount}";
+                    return $"Capture Corner {capture.CornerCount + 1} of {CornerCaptureController.RequiredCornerCount}";
 
                 case ScanPhase.VerifyClosure:
-                    return "Verify First Corner";
+                    return "Check Corner";
 
                 default:
                     return "—";
@@ -197,23 +211,30 @@ namespace GhostMap.Scanner.UI
 
             switch (workflow.Phase)
             {
-                case ScanPhase.FloorLocked:
-                    workflow.BeginCornerCapture();
-                    break;
-
                 case ScanPhase.CaptureCorners:
                     workflow.TryCaptureCorner(out _);
                     break;
 
                 case ScanPhase.VerifyClosure:
                     workflow.TryVerifyClosure(out _, out _);
+
+                    if (workflow.Corners.HasClosureMeasurement)
+                    {
+                        Debug.Log(string.Format(
+                            "GhostMap closure: error {0:F3} m quality {1} ({2}) {3}",
+                            workflow.Corners.ClosureErrorM,
+                            workflow.Corners.LastClosureQuality,
+                            workflow.RoomWasSwept ? "swept" : "walked",
+                            DescribeFootprint(workflow.Corners)));
+                    }
+
                     break;
             }
         }
 
         private void OnUndoPressed() => Workflow?.TryUndoCorner(out _);
 
-        private void OnRedoPressed() => Workflow?.RedoCorners();
+        private void OnRedoPressed() => Workflow?.RedoRoom();
 
         // -------------------------------------------------------------------
         // Markers
@@ -281,6 +302,7 @@ namespace GhostMap.Scanner.UI
         private GameObject CreateMarker(string markerName, float diameterM)
         {
             GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            MarkerMaterials.MakeUnlit(marker);
             marker.name = markerName;
             marker.transform.SetParent(transform, worldPositionStays: false);
             marker.transform.localScale = Vector3.one * diameterM;
@@ -329,6 +351,41 @@ namespace GhostMap.Scanner.UI
         // Readout
         // -------------------------------------------------------------------
 
+        /// <summary>
+        /// Corner-to-corner wall lengths, c1→c2 first: the numbers a
+        /// tape-measure comparison needs, whichever path made the corners.
+        /// </summary>
+        public static string DescribeWallLengths(CornerCaptureController capture)
+        {
+            var lengths = new StringBuilder("Walls");
+            int count = capture.Corners.Count;
+
+            for (int i = 0; i < count; i++)
+            {
+                Vector3 a = capture.Corners[i].position.ToVector3();
+                Vector3 b = capture.Corners[(i + 1) % count].position.ToVector3();
+                float length = new Vector2(b.x - a.x, b.z - a.z).magnitude;
+
+                lengths.AppendFormat(" L{0} {1:F3}", i + 1, length);
+            }
+
+            return lengths.Append(" m").ToString();
+        }
+
+        /// <summary>Corners and wall lengths on one line, for the Xcode console.</summary>
+        public static string DescribeFootprint(CornerCaptureController capture)
+        {
+            var footprint = new StringBuilder();
+
+            for (int i = 0; i < capture.Corners.Count; i++)
+            {
+                Vector3 ghost = capture.Corners[i].position.ToVector3();
+                footprint.AppendFormat("c{0} ({1:F3},{2:F3}) ", i + 1, ghost.x, ghost.z);
+            }
+
+            return footprint.Append(DescribeWallLengths(capture)).ToString();
+        }
+
         private string BuildReadout(ScanWorkflowController workflow)
         {
             CornerCaptureController capture = workflow.Corners;
@@ -353,6 +410,11 @@ namespace GhostMap.Scanner.UI
 
                 builder.AppendFormat(
                     "  c{0} G({1:F2},{2:F2},{3:F2})\n", i + 1, ghost.x, ghost.y, ghost.z);
+            }
+
+            if (capture.IsComplete)
+            {
+                builder.Append(DescribeWallLengths(capture)).Append('\n');
             }
 
             AppendClosureLine(builder, capture);

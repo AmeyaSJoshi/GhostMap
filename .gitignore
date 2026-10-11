@@ -77,3 +77,23 @@ venv/
 # ---------------------------------------------------------------------------
 *.log
 *.tmp
+
+# ---------------------------------------------------------------------------
+# Generated scene output (ADR-0006 asset export, Task V6 persistence)
+#
+# Both land in Application.persistentDataPath — outside the repository on every
+# platform — so nothing generated normally reaches the working tree. These are
+# guards for the case where someone points FurnitureAssetExporter.TryExportOne
+# or the Viewer's save path at somewhere inside the repo while testing, which
+# both will happily accept.
+#
+# Deliberately NOT a blanket *.glb rule. Plan section 25's Stretch 1 adds an
+# authored furniture model library, and those assets must be committed; a rule
+# on the file type would silently drop them the day they arrive. Ignore the
+# generated output directory, never the format.
+#
+# Partial writes are already covered by *.tmp above.
+# ---------------------------------------------------------------------------
+ghostmap-assets/
+ghostmap-assets.meta
+ghostmap-scene.json

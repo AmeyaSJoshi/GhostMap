@@ -12,6 +12,7 @@ file for whatever you are about to touch.
 | What is the task order, and what is left? | [`plans/ghostmap-implementation-plan.md`](plans/ghostmap-implementation-plan.md) |
 | What works right now, and what is broken? | [`status/`](status/): `scanner.md`, `viewer.md`, `shared.md`, `integration.md` |
 | What happened in a specific task? | [`handoffs/`](handoffs/README.md) |
+| What experiments informed the design? | [`research/`](research/README.md) (not production) |
 
 ## Which document wins
 

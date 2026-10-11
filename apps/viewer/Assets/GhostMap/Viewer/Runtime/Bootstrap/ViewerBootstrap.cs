@@ -1,3 +1,4 @@
+using System;
 using GhostMap.Shared.Protocol;
 using GhostMap.Viewer.Interaction;
 using GhostMap.Viewer.Rendering;
@@ -38,10 +39,17 @@ namespace GhostMap.Viewer.Bootstrap
 
         public ViewerEditableScene EditableScene { get; private set; }
 
+        private Networking.ViewerDiscoveryResponder discoveryResponder;
+
         private void Awake()
         {
             Session = new ViewerSession(port);
             Session.Start();
+            discoveryResponder = new Networking.ViewerDiscoveryResponder(
+                PeerDiscoveryProtocol.Port,
+                Session.Server.Port,
+                Environment.MachineName);
+            discoveryResponder.Start();
 
             EditableScene = new ViewerEditableScene();
             EditableScene.Attach(Session.SceneStore);
@@ -89,6 +97,7 @@ namespace GhostMap.Viewer.Bootstrap
             roomRenderer?.Detach();
             cameraController?.Detach();
             EditableScene?.Detach();
+            discoveryResponder?.Dispose();
             Session?.Dispose();
         }
     }

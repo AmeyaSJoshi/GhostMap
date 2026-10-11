@@ -75,7 +75,7 @@ See `tools/README.md` for the Python tools.
 | --- | --- |
 | Scanner | `apps/scanner/**`, `docs/status/scanner.md` |
 | Viewer | `apps/web-viewer/**`, `apps/viewer/**` (frozen, retiring), `docs/status/viewer.md` |
-| Shared / Integration | `shared/**`, `fixtures/**`, `docs/contracts/**`, `docs/decisions/**`, `docs/status/shared.md`, `docs/status/integration.md`, `tools/**` |
+| Shared / Integration | `shared/**`, `fixtures/**`, `docs/contracts/**`, `docs/decisions/**`, `docs/research/**`, `docs/status/shared.md`, `docs/status/integration.md`, `tools/**` |
 
 ### Branch naming
 

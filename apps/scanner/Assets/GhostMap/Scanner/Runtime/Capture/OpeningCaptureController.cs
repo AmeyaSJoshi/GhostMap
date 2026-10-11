@@ -180,6 +180,18 @@ namespace GhostMap.Scanner.Capture
             CancelPendingCapture();
         }
 
+        /// <summary>
+        /// Discards every opening. Used when the room is re-scanned: openings
+        /// are addressed by corner ids, and a new footprint has new corners.
+        /// </summary>
+        public void ClearOpenings()
+        {
+            openings.Clear();
+            LastError = string.Empty;
+            LastRejection = OpeningCaptureRejection.None;
+            CancelPendingCapture();
+        }
+
         /// <summary>Chooses door or window. Rejects any other string.</summary>
         public bool SetType(string type)
         {
@@ -362,6 +374,41 @@ namespace GhostMap.Scanner.Capture
             ValidationResult validation = OpeningValidator.Validate(candidate, candidateRoom);
 
             CancelPendingCapture();
+
+            if (!validation.IsValid)
+            {
+                LastError = validation.Error;
+                rejection = OpeningCaptureRejection.ValidationFailed;
+                LastRejection = rejection;
+                return false;
+            }
+
+            openings.Add(candidate);
+            rejection = OpeningCaptureRejection.None;
+            LastRejection = rejection;
+            return true;
+        }
+
+        /// <summary>
+        /// Installs an opening that was detected rather than aimed at (the
+        /// automatic room scan's door/window planes). It goes through the same
+        /// <see cref="OpeningValidator"/> against the same candidate room as a
+        /// captured one, and into the same list, so downstream code cannot tell
+        /// how it arrived.
+        /// </summary>
+        public bool TryAdoptDetectedOpening(OpeningModel candidate, out OpeningCaptureRejection rejection)
+        {
+            LastError = string.Empty;
+
+            if (candidate == null || !corners.IsComplete)
+            {
+                rejection = OpeningCaptureRejection.ValidationFailed;
+                LastError = "No room to place the opening in.";
+                LastRejection = rejection;
+                return false;
+            }
+
+            ValidationResult validation = OpeningValidator.Validate(candidate, BuildCandidateRoom(candidate));
 
             if (!validation.IsValid)
             {

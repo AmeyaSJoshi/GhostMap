@@ -20,8 +20,9 @@ python3 tools/send_fixture.py --dry-run --fixture fixtures/room-with-door-window
 ```
 
 `run_unity_tests.sh` looks for Unity `6000.3.24f1` in the standard Hub paths;
-set `UNITY_PATH` to override. The scanner suite runs with `-buildTarget iOS`, so
-it needs the iOS Build Support module (macOS).
+set `UNITY_PATH` to override. All three suites run on macOS or Linux; the
+scanner's iOS post-build step is guarded by `UNITY_IOS`, so iOS Build Support is
+only needed to build the app.
 
 `inspect_snapshot.py` re-implements the shared validation rules in Python so it
 can answer "is the data bad or is the renderer bad?" without Unity. **Any change

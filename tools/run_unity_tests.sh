@@ -14,9 +14,10 @@
 #
 # Exit code is non-zero if any suite failed or did not run.
 #
-# The scanner suite runs with -buildTarget iOS, matching how it has always been
-# verified. That needs Unity's iOS Build Support module, so run it on macOS.
-# The viewer suite and the shared suite each embed the 156 shared tests.
+# All three suites run on macOS or Linux. ScannerIosPostBuild is guarded behind
+# UNITY_IOS, so the scanner suite compiles without the iOS Build Support module;
+# the iOS build itself still needs a Mac with Xcode. The viewer and scanner
+# suites each re-run the whole shared suite through "testables".
 
 set -uo pipefail
 
@@ -165,13 +166,10 @@ for suite in "${suites[@]}"; do
     log="$RESULTS_DIR/$suite.log"
     rm -f "$xml"
 
-    extra=()
-    [[ "$suite" == "scanner" ]] && extra=(-buildTarget iOS)
-
     printf '==> %s (%s)\n' "$suite" "$project"
 
     "$UNITY_BIN" -batchmode -nographics \
-        -projectPath "$REPO_ROOT/$project" ${extra[@]+"${extra[@]}"} \
+        -projectPath "$REPO_ROOT/$project" \
         -runTests -testPlatform EditMode \
         -testResults "$xml" -logFile "$log" >/dev/null 2>&1
     rc=$?

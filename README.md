@@ -39,15 +39,15 @@ Detail: [`docs/architecture/overview.md`](docs/architecture/overview.md).
 | --- | --- |
 | Foundation `F0`-`F4` | Complete |
 | Assisted-capture MVP: Scanner `S1`-`S6`, Viewer `V1`-`V6` | Complete; scanner verified on a physical iPhone |
-| Stand-in-place GhostMap `R1`-`R10` | **Not started. Next: `R1`** |
+| Stand-in-place GhostMap `R1`-`R10` | **`R1` merged; next: confirm the test suites, then `R2`** |
 
 What is where today:
 
 | Piece | Where it is |
 | --- | --- |
-| Walked-corner capture, manual height/openings/furniture | This repository, tested on an iPhone |
-| Desktop Unity Viewer and TCP live stream | This repository, tested; frozen and retiring (`R10`) |
-| Stand-in-place room scan, wall sweep, furniture surface measurement, per-object `.glb` exporter | `GhostMapDublinHacks`, tested there, never run on an iPhone. Task `R1` brings it here |
+| Walked-corner capture, manual height/openings/furniture | Built, verified on an iPhone |
+| Guided scan UI, stand-in-place room scan, wall sweep, furniture surface measurement, per-object `.glb` exporter | Built (imported from the hackathon repo in `R1`), never run on an iPhone |
+| Desktop Unity Viewer, TCP live stream, UDP discovery | Built; frozen and retiring (`R10`) |
 | YOLO-n identification, phone-built export bundle, share-sheet Send to Computer, `room.html` | Not built (`R4`, `R6`, `R7`, `R8`) |
 
 The roadmap is plan section 18; progress is tracked in
@@ -58,7 +58,7 @@ The roadmap is plan section 18; progress is tracked in
 ```text
 GhostMap/
 ├── AGENTS.md          working rules for every contributor: read first
-├── docs/              spec, plan, architecture, contracts, ADRs, status, handoffs
+├── docs/              spec, plan, architecture, contracts, ADRs, status, handoffs, research
 ├── shared/            com.ghostmap.shared, the one source of truth for contracts
 ├── apps/scanner/      iPhone capture app (AR Foundation + ARKit)
 ├── apps/web-viewer/   browser viewer source for room.html            (planned)

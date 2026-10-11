@@ -6,11 +6,30 @@ Full task-by-task history (V1-V6 design notes, visual captures, test breakdowns)
 
 ## Current state
 
-**V1-V6 complete. Frozen by ADR-0013.** The phone now builds the Unity files
-and a browser viewer (`room.html`) itself, so this desktop app is no longer part
-of the product. Bug fixes only; it stays as the developer tool for watching a
-scan live until roadmap task `R10` removes it. The Viewer workstream's new work
-is the browser viewer in `apps/web-viewer/` (task `R8`).
+**`R8` built: the browser viewer `room.html` (`apps/web-viewer/`).** A three.js
+app built into one self-contained template, `dist/room-template.html` (643 KB,
+no network access, CSP `default-src 'none'`). It reads the room the phone embeds
+(contract `docs/contracts/export-bundle-v1.md` section 2) and offers orbit, pan,
+zoom, Frame room (`F`), Dollhouse (`D`, hides the `ceiling` node), click or list
+to select an object (type, optional label, W × D × H in m and cm, id, outline),
+two-click Measure (`M`, 3D and along the floor, `Esc` cancels), a furniture list
+and a room summary. View and measure only. The phone does not fill it yet
+(`R6`); until then `npm run demo` fills it from a fixture.
+
+- Node tests: **41 pass** (`npm test`). Placement is checked against a bed
+  `.glb` written by the real C# `GlbExporter`, and a flipped yaw sign makes
+  that test fail.
+- Checked by an agent in headless Chrome 154 from `file://` (desktop 1280×800 and phone 390×844):
+  the demo loads with the page as its only request and no console errors;
+  select by click and from the list, Frame room, Dollhouse, Measure (bed top to
+  chair seat 2.30 m) and the unfilled-template message all work. **Not yet
+  opened by the owner in Safari, Firefox or Chrome by double-click**; that is the
+  manual check left in the `R8` brief.
+
+**Unity Viewer: V1-V6 complete, frozen by ADR-0013.** The phone now builds the
+Unity files and `room.html` itself, so this desktop app is no longer part of
+the product. Bug fixes only; it stays as the developer tool for watching a scan
+live until roadmap task `R10` removes it.
 
 | Task | What works |
 | --- | --- |
@@ -52,6 +71,17 @@ Editing, Save and Load are gated on a finalized scene (ADR-0003). A new scanner
 
 ## Tests run
 
+Browser viewer (`apps/web-viewer`):
+
+```bash
+npm ci && npm test && npm run build
+```
+
+2026-10-11, owner's Mac, Node 24: **41 tests, 41 passed**; rebuild
+byte-identical to the committed template. CI's `web-viewer` job runs the same.
+
+Unity Viewer:
+
 ```bash
 ./tools/run_unity_tests.sh viewer
 ```
@@ -70,6 +100,18 @@ From `com.ghostmap.shared`: `SceneSnapshot`, `RoomModel`, `OpeningModel`,
 `FurnitureValidator`.
 
 ## Known issues
+
+**Browser viewer**
+- Until `R6` there is no real `room.glb`; the demo and tests use a box stand-in
+  (`scripts/standin-glb.mjs`) whose walls are plain boxes without jambs.
+- Near walls can hide furniture standing against them from low angles, as in
+  the Unity Viewer; the start view is high to avoid it.
+- On a phone-width screen the panels sit below the 3D view, so the details of
+  a selected object need a scroll.
+- The browser pane in the Claude desktop app cannot open `file://` pages;
+  agents check the page with headless Chrome (see the `R8` handoff).
+
+**Unity Viewer**
 
 None blocking `R1`.
 
@@ -105,12 +147,16 @@ None blocking `R1`.
 
 ## Next safe task
 
-Roadmap tasks for the Viewer workstream, in order (plan section 18): `R6` move
-`GlbExporter`, `FurnitureFactory.BuildParts` and `WallSliceGenerator` into the
-shared package so the phone can export; `R8` build the three.js browser viewer
-in `apps/web-viewer/` (view, dollhouse, click for size, measure; no editing);
-`R10` remove this Unity app once `room.html` passes the acceptance test. See
-`docs/status/integration.md` for progress.
+1. **Owner:** `npm run demo` in `apps/web-viewer`, then double-click
+   `demo/room.html` in Safari (and Firefox if installed) with Wi-Fi off, and
+   check each tool. Record the result here.
+2. `R6` (Shared + Scanner): move `GlbExporter`, `FurnitureFactory.BuildParts`
+   and `WallSliceGenerator` into the shared package, write `room.glb` with a
+   `ceiling` node, and fill `dist/room-template.html` exactly as
+   `apps/web-viewer/scripts/fill.mjs` does.
+3. `R10`: remove the Unity Viewer once `room.html` passes the acceptance test.
+
+See `docs/status/integration.md` for progress.
 
 ## Do not touch
 

@@ -8,7 +8,7 @@ status file for whatever you are about to touch.
 | --- | --- |
 | What is GhostMap for, and what must it do? | [`specs/ghostmap-project-spec.md`](specs/ghostmap-project-spec.md) |
 | How is it built, and where is each class? | [`architecture/overview.md`](architecture/overview.md) |
-| What exactly goes on the wire and in a saved file? | [`contracts/scene-schema-v1.md`](contracts/scene-schema-v1.md), [`contracts/protocol-v1.md`](contracts/protocol-v1.md) |
+| What exactly goes on the wire and in a saved file? | [`contracts/scene-schema-v1.md`](contracts/scene-schema-v1.md), [`contracts/protocol-v1.md`](contracts/protocol-v1.md), [`contracts/export-bundle-v1.md`](contracts/export-bundle-v1.md) |
 | Why was it built this way? | [`decisions/`](decisions/README.md) |
 | I am new (human or agent). Where do I start? | [`onboarding.md`](onboarding.md) |
 | What is the task order, and what is left? | [`plans/ghostmap-implementation-plan.md`](plans/ghostmap-implementation-plan.md) |

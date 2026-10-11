@@ -1,5 +1,10 @@
 # R8: Browser viewer, `room.html`
 
+> **Built 2026-10-11** (`apps/web-viewer/`, handoff
+> `docs/handoffs/2026-10-11-viewer-r8-browser-viewer.md`). Left: the owner's
+> double-click check in Safari. Decisions taken while building it are in the
+> handoff; the data contract is `docs/contracts/export-bundle-v1.md`.
+
 **Decision:** ADR-0013 section 3. **Workstream:** Viewer (`apps/web-viewer/**`).
 **Who:** an agent, end to end. Everything here runs under Node; no Unity, no
 iPhone. The owner only double-clicks the result in Safari once.
@@ -69,7 +74,7 @@ The scanner replaces `__GHOSTMAP_DATA__` with one JSON object:
 }
 ```
 
-- The scanner must escape `<` as `<` in the JSON it inserts, so a label
+- The scanner must escape `<` as `\u003c` in the JSON it inserts, so a label
   containing `</script>` cannot end the tag. Test this on both sides.
 - When the placeholder is still present (opening the raw template), the page
   shows "This is the GhostMap template. Open a room.html from an export."

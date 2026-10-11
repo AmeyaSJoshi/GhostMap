@@ -94,6 +94,7 @@ numbered rules win.
 | Architecture overview | `docs/architecture/overview.md` |
 | Scene schema v1 | `docs/contracts/scene-schema-v1.md` |
 | Protocol v1 | `docs/contracts/protocol-v1.md` |
+| Export bundle v1 (`room.html` data; partial until `R6`) | `docs/contracts/export-bundle-v1.md` |
 | Decisions | `docs/decisions/README.md` (index of `ADR-*.md`) |
 | Workstream status | `docs/status/*.md` |
 | Documentation map | `docs/README.md` |

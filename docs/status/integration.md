@@ -5,7 +5,7 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 
 ## Current state
 
-**`R1` done: merged, and all three Unity suites pass in this repository (shared 202, viewer 548, scanner 577, run on the owner's Mac on 2026-10-11). Next: `R2` on the iPhone; `R8` can start in parallel.**
+**`R1` done: merged, and all three Unity suites pass in this repository (shared 202, viewer 548, scanner 577, run on the owner's Mac on 2026-10-11). `R8` (browser viewer) built, awaiting the owner's browser check. Next: `R2` on the iPhone.**
 
 | Task | What | State |
 | --- | --- | --- |
@@ -16,7 +16,7 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 | R5 | Optional `label` on `SceneObjectModel` (additive schema change) | Not started |
 | R6 | The phone builds the export bundle (`room.html`, `room.glb`, objects, `scene.json`) and keeps saved scans | Not started |
 | R7 | Send to Computer through the iOS share sheet | Not started |
-| R8 | Browser viewer `room.html` (three.js, view and measure) | Not started |
+| R8 | Browser viewer `room.html` (three.js, view and measure) | **Built** on `viewer/r8-browser-viewer`: template, 41 Node tests, CI job. Checked in headless Chrome; owner's double-click check in Safari still to do. The phone fills it in `R6` |
 | R9 | Failure hardening and one guided scan flow | Not started |
 | R10 | Retire the Unity Viewer and the discovery code | Not started |
 
@@ -57,6 +57,8 @@ How it was merged:
 | 2026-10-11 | GitHub Actions, run 1 (`7859878`) | tools; Unity shared, viewer, scanner | tools **passed**. All three Unity jobs **stopped at "Unity licence secrets are missing"**, as designed: the secrets are not set yet. Unity never started |
 | 2026-10-11 | GitHub Actions, run 5 on `main` (`04550b9`, merge of PR #25) | tools; Unity shared, viewer, scanner | Same as run 1: tools **passed**, Unity jobs stopped at the missing-secrets check. Artifact upload now skips cleanly |
 | 2026-10-11 | Owner's Mac, Unity 6000.3.24f1, `./tools/run_unity_tests.sh` at `69af8eb` | shared, viewer, scanner (EditMode) | **All passed: shared 202/202, viewer 548/548, scanner 577/577**, 0 failed, 0 skipped. First Unity run in this repository; confirms `R1` |
+| 2026-10-11 | Owner's Mac, Node 24, `viewer/r8-browser-viewer` | web-viewer (`npm ci`, `npm test`, `npm run build`) | **41 tests, 41 passed**; rebuilt template byte-identical to the committed one |
+| 2026-10-11 | Owner's Mac, headless Chrome 154, `file://` | `demo/room.html` (fixture room, real exported furniture, stand-in room shell) | Loads with one request (the page) and no console errors; select, list, Frame room, Dollhouse, Measure and the template message work at 1280×800 and 390×844 |
 | 2026-10-11 | Owner's Mac, `69af8eb` | Python tools checks (`inspect_snapshot.py --quiet` on the three fixtures, `send_fixture.py --dry-run`, `bash -n tools/run_unity_tests.sh`) | Passed: the two valid fixtures valid, the malformed one rejected on the height rule alone |
 
 The counts match those recorded in `GhostMapDublinHacks` at `0b7a106`. CI's Unity jobs still stop at the missing-secrets check, so for now the suites are confirmed only on the owner's Mac.
@@ -117,10 +119,13 @@ From reading the code, not from a failed run:
 1. **Owner: `R2`**, the first device session on the iPhone
    (`docs/tasks/R2-first-device-session.md`). The Unity suites are green at
    `69af8eb`, so the build is ready to try.
-2. **Agent, in parallel: `R8`** (`docs/tasks/R8-browser-viewer.md`), which
-   needs neither Unity nor the iPhone; then the code parts of `R6` and `R4`.
+2. **Owner, quick:** double-click a filled `room.html` in Safari to finish `R8`
+   (`apps/web-viewer/README.md`, "Manual check"); record it in
+   `docs/status/viewer.md`.
+3. **Agent, in parallel:** the code parts of `R6` (the phone fills
+   `room-template.html` per `docs/contracts/export-bundle-v1.md`) and `R4`.
    See `docs/tasks/README.md`.
-3. **Owner, when convenient:** add `UNITY_LICENSE`, `UNITY_EMAIL`,
+4. **Owner, when convenient:** add `UNITY_LICENSE`, `UNITY_EMAIL`,
    `UNITY_PASSWORD` as repository secrets (`docs/ci.md`) so CI can run the
    Unity suites on every push. Until then, run `./tools/run_unity_tests.sh` on
    the Mac before merging Unity changes.

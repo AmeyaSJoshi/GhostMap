@@ -78,7 +78,8 @@ the architecture overview's code map.
 
 - `R5`: optional `label` on `SceneObjectModel` (additive schema v1 change,
   ADR-0011) with contract doc, tests, `inspect_snapshot.py` and fixtures.
-- `R6`: new `Runtime/Export/` (moved from the Viewer: `GlbExporter`, furniture
+- `R6`: finish `docs/contracts/export-bundle-v1.md` (`R8` wrote section 2,
+  the `room.html` data, and 3.1, the `ceiling` node); new `Runtime/Export/` (moved from the Viewer: `GlbExporter`, furniture
   part table, `WallSliceGenerator`, plus a whole-room writer) and the new
   contract `docs/contracts/export-bundle-v1.md`.
 

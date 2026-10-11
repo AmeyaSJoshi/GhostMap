@@ -62,7 +62,8 @@ What is where today:
 | Walked-corner capture, manual height/openings/furniture | Built, verified on an iPhone |
 | Guided scan UI, stand-in-place room scan, wall sweep, furniture surface measurement, per-object `.glb` exporter | Built (imported from the hackathon repo in `R1`), never run on an iPhone |
 | Desktop Unity Viewer, TCP live stream, UDP discovery | Built; frozen and retiring (`R10`) |
-| YOLO-n identification, phone-built export bundle, share-sheet Send to Computer, `room.html` | Not built (`R4`, `R6`, `R7`, `R8`) |
+| `room.html` browser viewer (`apps/web-viewer`) | Built (`R8`), checked in Chrome; the phone fills it in `R6` |
+| YOLO-n identification, phone-built export bundle, share-sheet Send to Computer | Not built (`R4`, `R6`, `R7`) |
 
 The roadmap is plan section 18; progress is tracked in
 [`docs/status/integration.md`](docs/status/integration.md).
@@ -78,7 +79,7 @@ GhostMap/
 │                      onboarding guide, task briefs, research
 ├── shared/            com.ghostmap.shared, the one source of truth for contracts
 ├── apps/scanner/      iPhone capture app (AR Foundation + ARKit)
-├── apps/web-viewer/   browser viewer source for room.html            (planned)
+├── apps/web-viewer/   browser viewer: three.js source, builds the room.html template
 ├── apps/viewer/       desktop Unity viewer, frozen and retiring
 ├── fixtures/          canonical scene files for working without a phone
 └── tools/             test runner, snapshot inspector, fixture sender

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src data: blob:">
+<title>GhostMap room</title>
+<!--GHOSTMAP:STYLE-->
+</head>
+<body>
+<header class="toolbar">
+  <div class="brand"><span class="mark" aria-hidden="true"></span><h1 id="room-title">GhostMap</h1></div>
+  <div class="actions" role="toolbar" aria-label="View tools">
+    <button type="button" id="frame" title="Frame the whole room (F)">Frame room</button>
+    <button type="button" id="dollhouse" aria-pressed="false" title="Hide the ceiling to look in from above (D)">Dollhouse</button>
+    <button type="button" id="measure" aria-pressed="false" title="Click two points to measure (M)">Measure</button>
+  </div>
+</header>
+
+<main class="layout">
+  <div id="viewport" class="viewport">
+    <p id="status" class="status" role="status" hidden></p>
+    <dl id="measure-label" class="measure-label" hidden></dl>
+  </div>
+
+  <aside class="side">
+    <section class="card">
+      <h2>Room</h2>
+      <dl id="room-details" class="rows"></dl>
+      <ul id="warnings" class="warnings" hidden></ul>
+    </section>
+
+    <section id="selection" class="card selection" hidden>
+      <div class="card-head">
+        <h2 id="selection-title">Object</h2>
+        <button type="button" id="selection-close" class="icon" aria-label="Close details">×</button>
+      </div>
+      <dl id="selection-details" class="rows"></dl>
+    </section>
+
+    <section class="card">
+      <h2>Furniture</h2>
+      <ul id="object-list" class="list"></ul>
+    </section>
+
+    <p class="hint">Drag to orbit · right-drag or two fingers to pan · scroll to zoom</p>
+  </aside>
+</main>
+
+<div id="message" class="message" hidden><p></p></div>
+
+<script type="application/json" id="ghostmap-data">__GHOSTMAP_DATA__</script>
+<!--GHOSTMAP:SCRIPT-->
+</body>
+</html>

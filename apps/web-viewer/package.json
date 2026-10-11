@@ -1,0 +1,22 @@
+{
+  "name": "ghostmap-web-viewer",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Builds room-template.html, the self-contained browser viewer the GhostMap scanner fills in at export time (ADR-0013, task R8).",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test \"test/*.test.mjs\"",
+    "demo": "node scripts/make-demo.mjs"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

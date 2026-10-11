@@ -1,7 +1,7 @@
 # GhostMap Architecture Overview
 
 Status: **frozen for MVP**, amended by ADR-0012 (stand-in-place, on-device
-capture). Changing sections 1-11 requires an ADR in `docs/decisions/` per the
+capture) and ADR-0013 (phone-built export, share-sheet transfer, browser viewer). Changing sections 1-11 requires an ADR in `docs/decisions/` per the
 procedure in the implementation plan. Sections 12-13
 describe the code as built and are updated whenever the code changes.
 
@@ -28,30 +28,29 @@ Walls are **derived** from consecutive corners. They are never serialized.
 ## 2. Physical topology
 
 ```text
-┌────────────────────────┐          ┌────────────────────────┐
-│  STANDARD IPHONE       │          │  LAPTOP                │
-│  apps/scanner          │          │  apps/viewer           │
-│                        │          │                        │
-│  AR Foundation / ARKit │          │  TCP server :47831     │
-│  floor lock            │  TCP     │  ViewerSceneStore      │
-│  assisted capture      │ ───────► │  validation            │
-│  SceneSnapshot rev N   │  NDJSON  │  semantic renderer     │
-│                        │  full    │  edit / measure / save │
-│  TCP client            │ snapshots│                        │
-└────────────────────────┘          └────────────────────────┘
-             │                                   │
-             └───────────┬───────────────────────┘
-                         ▼
-              shared/com.ghostmap.shared
-              schema · protocol · geometry
-              validation · measurement math
+┌──────────────────────────────┐            ┌──────────────────────────────┐
+│  STANDARD IPHONE             │            │  ANY COMPUTER                │
+│  apps/scanner                │            │                              │
+│                              │  iOS share │  GhostMap-<room>.zip         │
+│  ARKit tracking + planes     │  sheet     │   room.html  -> any browser  │
+│  stand-in-place room scan    │ ─────────► │   room.glb   -> Unity        │
+│  YOLO-n furniture (Core ML)  │  AirDrop,  │   objects/   -> Unity        │
+│  validation                  │  Files,    │   scene.json                 │
+│  export bundle builder       │  iCloud    │                              │
+└──────────────────────────────┘            └──────────────────────────────┘
+               │
+               ▼
+     shared/com.ghostmap.shared
+     schema · geometry · validation · export · protocol
 ```
 
-Both apps are separate Unity projects. They share exactly one local package.
+Legacy developer path, retiring with task `R10`: the scanner can still stream
+snapshots over TCP to the desktop Unity Viewer (`apps/viewer`) for watching a
+scan live.
 
 ---
 
-## 3. The three modules
+## 3. Modules
 
 ### 3.1 `shared/com.ghostmap.shared`
 
@@ -69,16 +68,24 @@ shared change is made, tested, documented, and merged **first**.
 
 ### 3.2 `apps/scanner`
 
-Owns capture. Responsible for AR session lifecycle, floor lock, corner capture,
-closure verification, height capture, openings, furniture placement, and the TCP
-client that publishes snapshots.
+Owns everything the user does. AR session, floor lock, room capture (automatic,
+sweep, walked), height, openings, furniture identification and placement,
+finalization, building the export bundle, keeping saved scans, and the share
+sheet. The TCP client remains as a developer tool.
 
-### 3.3 `apps/viewer`
+### 3.3 `apps/web-viewer` (planned, task `R8`)
 
-Owns reconstruction and, after finalization, editing. Responsible for the TCP
-server, the scene store with revision arbitration, semantic rendering
-(floor/ceiling/segmented walls/parametric furniture), orbit + dollhouse camera,
-selection/drag/resize/rotate, measurement, and persistence.
+A three.js app built into one self-contained HTML template. At export time the
+scanner fills it with the room and furniture geometry and `scene.json` to make
+`room.html`. View and measure only; it never reimplements a shared rule.
+
+### 3.4 `apps/viewer` (frozen, retiring)
+
+The desktop Unity app from tasks V1-V6: TCP server, revision arbitration,
+rendering, orbit and dollhouse camera, editing, measurement, save/load. Frozen
+by ADR-0013 and removed in task `R10`. Its geometry code (`GlbExporter`,
+`FurnitureFactory.BuildParts`, `WallSliceGenerator`) moves to the shared
+package in task `R6`.
 
 Scene state flows through two layers. `ViewerSceneStore` holds the newest
 accepted scanner snapshot. `ViewerEditableScene` passes it through unchanged
@@ -166,9 +173,11 @@ v = Q.y                   height above floor
 
 ---
 
-## 6. Synchronization model
+## 6. Synchronization model (developer stream)
 
-See `docs/decisions/ADR-0002-snapshot-protocol.md`.
+See `docs/decisions/ADR-0002-snapshot-protocol.md`. Since ADR-0013 this is a
+developer tool for watching a scan live in the Unity Viewer, not the product
+transfer. Section 6.1 describes the product transfer.
 
 - Transport: **TCP**, port **47831**.
 - Framing: **UTF-8, one JSON object per line**, terminated with `\n`.
@@ -189,43 +198,37 @@ Required MVP message types: `hello`, `heartbeat`, `phone.pose`, `scene.snapshot`
 `scan.finalized`. `phone.pose` is debug/display only and capped at 5 Hz — the
 room is never reconstructed from pose messages.
 
-### 6.1 Connection setup sits above the transport
+### 6.1 Product transfer: export bundle and share sheet
 
-How the phone finds the computer is separate from what it sends. Per
-`docs/decisions/ADR-0010-one-button-computer-transfer.md`, the product flow is
-one-button **Send to Computer** after finalization, and a normal user never
-types an IP address or port.
+See `docs/decisions/ADR-0013-phone-export-and-browser-viewer.md`. One button,
+no IP typing (ADR-0010's requirement), no network code:
 
 ```text
-Discovery / pairing / Send UX      connection setup, user-facing
-              |
-        TCP connection
-              |
-protocol-v1 full SceneSnapshot messages
-              |
-Viewer scene store / editable scene / rendered room
+Finalize
+  -> scanner builds GhostMap-<room>-<yyyyMMdd-HHmm>.zip
+       room.html, room.glb, objects/<id>.glb, scene.json, README.txt
+  -> scan saved on the phone
+  -> Send to Computer: UIActivityViewController (native plugin)
+  -> AirDrop / Save to Files / iCloud / Mail
 ```
 
-Everything below the first line is unchanged by discovery. The first
-implementation is `GhostMapDublinHacks`' ADR-0009: the Viewer answers UDP
-discovery requests on port `47832`, and the phone connects to the first Viewer
-that answers. It arrives here with plan task `R1`; delivery confirmation and a
-remembered computer are task `R7`. Until then the scanner's Laptop IP field is
-the only way to connect on `main`. Live streaming while scanning stays
-supported but is optional.
+The bundle layout is a contract: `docs/contracts/export-bundle-v1.md` (task
+`R6`). The UDP discovery from `GhostMapDublinHacks` (ADR-0009) is superseded
+and is removed with the Unity Viewer.
 
 ---
 
 ## 7. Authority
 
-See `docs/decisions/ADR-0003-scanner-authority.md`.
+See `docs/decisions/ADR-0003-scanner-authority.md`, amended by ADR-0013.
 
-| Phase | Authoritative | Other side |
+| Phase | Authoritative | Notes |
 | --- | --- | --- |
-| During scanning | Scanner | Viewer renders snapshots, sends no scene edits |
-| After `scan.finalized` | Viewer | Scanner is read-only/finished for that session |
+| During scanning | Scanner | Developer stream, if connected, only renders |
+| After finalization | Nobody edits | The export bundle is the record. Furniture is edited in Unity, or the room is rescanned |
 
-Concurrent two-way editing is **not** implemented in the MVP.
+The legacy Unity Viewer still lets a developer edit after finalization until
+it is retired.
 
 ---
 
@@ -281,33 +284,34 @@ Bad scans are rejected, never silently rendered.
 
 ---
 
-## 10. Viewer rendering
+## 10. Room and furniture geometry
+
+These rules produce the walls and furniture in every output: the exported
+`.glb` files (on the phone, after task `R6`) and the legacy Unity Viewer.
 
 Walls support rectangular openings **without CSG or runtime mesh booleans**. For
 each wall, horizontal cuts (0, length, each opening start/end) and vertical cuts
 (0, room height, each opening sill/top) are collected, sorted and de-duplicated.
-Each resulting rectangular cell is rendered as a cuboid segment unless its center
+Each resulting rectangular cell becomes a cuboid segment unless its center
 falls inside an opening, in which case it is skipped.
 
 Furniture is built from clean parametric primitives (a bed has a mattress, base
 and headboard; a desk has a top and four legs; and so on), not anonymous boxes.
-Each furniture root carries exactly one collider covering its full bounding box.
 
----
-
-### 10.1 Export for Unity
-
-The Viewer writes one folder per room (ADR-0012):
+### 10.1 Export bundle
 
 ```text
-ghostmap-export/<room-name>/
+GhostMap-<room>-<yyyyMMdd-HHmm>.zip
+├── room.html           self-contained browser viewer, embedded geometry, no network
+├── room.glb            floor, ceiling and wall segments with openings
+├── objects/<id>.glb    one per furniture object
 ├── scene.json          the SceneSnapshot, schema v1
-├── room.glb            floor, ceiling and wall segments with openings     (task R6)
-└── objects/<id>.glb    one per furniture object, from FurnitureFactory      (ADR-0006, arrives with R1)
+└── README.txt          how to import into Unity with glTFast
 ```
 
-Files are glTF 2.0 binary in metres with +Y up. Unity imports them with the
-glTFast package; Blender opens them directly.
+`.glb` files are glTF 2.0 binary in metres with +Y up. Unity imports them with
+the glTFast package; Blender opens them directly. Built on the phone (task
+`R6`); the per-object exporter exists today in `GhostMapDublinHacks`' Viewer.
 
 ---
 
@@ -318,8 +322,9 @@ Not implemented, per ADR-0012 and `AGENTS.md` rule 6:
 dense RGB scanning · Gaussian splatting · NeRF reconstruction · LiDAR-like depth ·
 generative 3D models (TRELLIS and similar) · any cloud or off-device processing ·
 learned models other than the on-device YOLO-n detector · arbitrary curved rooms ·
-multi-room and multi-floor capture · survey-grade accuracy · simultaneous
-two-device editing.
+multi-room and multi-floor capture · survey-grade accuracy · editing on the
+computer outside Unity · any network transfer from the phone other than the iOS
+share sheet · simultaneous two-device editing.
 
 ---
 
@@ -356,7 +361,7 @@ Every runtime type, by project and folder. Tests mirror these names with a
 | `Editor` | `ScannerSceneBuilder` | Generates `Scanner.unity` (menu **GhostMap > Build Scanner Scene**) and verifies its wiring |
 | `Editor` | `ScannerBuild`, `ScannerXrSettings`, `ScannerInputSettings`, `ScannerIosPostBuild` | Two-step iOS build: **Configure Scanner XR (iOS)**, then **Build Scanner (iOS)** into `apps/scanner/Builds/iOS` |
 
-### 12.3 `apps/viewer/Assets/GhostMap/Viewer`
+### 12.3 `apps/viewer/Assets/GhostMap/Viewer` (frozen, retiring)
 
 | Folder | Types | Role |
 | --- | --- | --- |

@@ -1,5 +1,10 @@
 # GhostMap Viewer
 
+> **Frozen, retiring (ADR-0013).** The product no longer needs this app: the
+> phone builds the Unity files and a browser viewer (`room.html`) itself. Bug
+> fixes only; it is removed in roadmap task `R10`. Until then it is the
+> developer tool for watching a scan live.
+
 The desktop app that receives, renders, edits and saves a GhostMap room. Unity
 `6000.3.24f1`, no AR dependencies. Behavior and known issues:
 `docs/status/viewer.md`. Code map: `docs/architecture/overview.md` section 12.3.

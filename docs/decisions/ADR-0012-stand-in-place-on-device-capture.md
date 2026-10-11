@@ -1,6 +1,6 @@
 # ADR-0012: Stand in one spot, capture everything on the phone, deliver Unity-ready files
 
-- **Status:** Accepted (owner decision)
+- **Status:** Accepted (owner decision); delivery and export location superseded by ADR-0013 (the phone builds the export bundle; Send to Computer is the share sheet)
 - **Date:** 2026-10-10
 - **Supersedes:** parts of ADR-0004, as listed below
 - **Related:** ADR-0005 to ADR-0009 (in `GhostMapDublinHacks`, being imported),

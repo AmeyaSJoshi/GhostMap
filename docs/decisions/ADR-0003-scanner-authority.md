@@ -1,6 +1,6 @@
 # ADR-0003: Scanner owns scene state until finalization, then the viewer does
 
-- **Status:** Accepted
+- **Status:** Accepted; post-finalization editing superseded by ADR-0013 (the exported bundle is the record; editing happens in Unity)
 - **Date:** 2026-09-12
 - **Task:** F0
 

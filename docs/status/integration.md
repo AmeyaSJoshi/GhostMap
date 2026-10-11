@@ -1,7 +1,7 @@
 # Integration Status
 
 Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
-`R1`-`R8` in plan section 18 (direction: ADR-0012).
+`R1`-`R10` in plan section 18 (direction: ADR-0012 and ADR-0013).
 
 ## Current state
 
@@ -10,15 +10,17 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 | Task | What | State |
 | --- | --- | --- |
 | R1 | Bring `GhostMapDublinHacks` into this repository | Not started. Needs the owner's explicit approval to merge |
-| R2 | First device session: every path on a real iPhone with the Viewer on the Mac | Not started |
+| R2 | First device session: every capture path on a real iPhone | Not started |
 | R3 | Accuracy benchmark against a tape measure | Not started |
 | R4 | YOLO-n furniture identification on the phone (ADR-0011) | Not started |
 | R5 | Optional `label` on `SceneObjectModel` (additive schema change) | Not started |
-| R6 | Export for Unity: whole-room `.glb` and the export folder | Not started |
-| R7 | Send to Computer: delivery confirmation, remembered computer, Viewer liveness | Not started |
-| R8 | Failure hardening and one guided scan flow | Not started |
+| R6 | The phone builds the export bundle (`room.html`, `room.glb`, objects, `scene.json`) and keeps saved scans | Not started |
+| R7 | Send to Computer through the iOS share sheet | Not started |
+| R8 | Browser viewer `room.html` (three.js, view and measure) | Not started |
+| R9 | Failure hardening and one guided scan flow | Not started |
+| R10 | Retire the Unity Viewer and the discovery code | Not started |
 
-The scanner has never been connected to the Viewer. Its S6 network test used a
+Nothing has gone from the phone to a computer yet. The S6 network test used a
 Python listener.
 
 ### What `R1` brings in
@@ -27,9 +29,10 @@ Python listener.
 2026-10-03: the guided-scan UI overhaul, automatic room scan from ARKit planes,
 wall sweep (ADR-0005), furniture surface detection and per-object `.glb` export
 (ADR-0006), plane-label type guessing (ADR-0007, to be removed by `R4`),
-peer-to-peer scoping (ADR-0008), UDP quick-send discovery (ADR-0009), and two
-research spikes. Last recorded suites there: shared 202, viewer 548, scanner
-577, all passing; unsigned iOS build succeeded. None of it has run on an iPhone.
+peer-to-peer scoping (ADR-0008), UDP quick-send discovery (ADR-0009, superseded
+by ADR-0013, removed in `R10`), and two research spikes. Last recorded suites
+there: shared 202, viewer 548, scanner 577, all passing; unsigned iOS build
+succeeded. None of it has run on an iPhone.
 
 ## Last verified commit
 
@@ -48,12 +51,12 @@ From reading the code, not from a failed run:
   fallbacks exist for this.
 - **Standing in one spot means aiming far.** Floor-line error grows with
   distance; stand near the room centre (ADR-0005's error table).
-- **Viewer liveness.** The Viewer has no heartbeat timeout, so a phone that
-  drops off Wi-Fi without closing the socket leaves it on `Connected` (`R7`).
-- **No delivery confirmation.** The hackathon Send to Computer cannot tell the
-  phone the room arrived; protocol v1 has no Viewer-to-scanner message (`R7`).
-- **UDP discovery can be blocked** by some networks. Test on Wi-Fi and on the
-  iPhone hotspot (`R2`).
+- **Phone-side export cost.** Writing several `.glb` files and a ~1 MB
+  `room.html` at the end of a scan has not been measured on an iPhone (`R6`).
+- **AirDrop needs both devices' Bluetooth and Wi-Fi on** and receiving enabled;
+  Save to Files is the fallback (`R7`).
+- **Local `room.html` limits.** Browsers block a local page from reading files
+  beside it, so all geometry must be embedded (`R8`).
 - **Detector licence.** YOLO-n is AGPL-3.0 (ADR-0011).
 
 ## Next safe task

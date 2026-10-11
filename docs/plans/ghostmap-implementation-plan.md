@@ -2,11 +2,11 @@
 
 > **For agentic workers:** Execute this plan task-by-task. Do not skip the dependency gates or acceptance tests. Keep the status files and handoffs current so another worker can take over with no chat history.
 
-**Goal:** Stand in one spot in a room, point a standard non-LiDAR iPhone around it, and get a structured, editable 3D model of the room and its furniture. The phone measures the room, identifies the furniture on device, and with one button sends Unity-ready files to the user's computer.
+**Goal:** Stand in one spot in a room, point a standard non-LiDAR iPhone around it, and get a structured 3D model of the room and its furniture. The phone measures the room, identifies the furniture on device, builds Unity-ready files plus a browser viewer, and with one button sends them to the user's computer.
 
-**Architecture:** Two Unity projects in one repository, an iPhone **Scanner** and a desktop **Viewer**, sharing one local package for the scene schema, geometry, validation and network protocol. All capture and recognition run on the phone; the computer only receives, edits and exports. Direction: ADR-0012.
+**Architecture:** An iPhone **Scanner** (Unity) does all capture, recognition and export, using one shared local package for the scene schema, geometry, validation and export. **Send to Computer** is the iOS share sheet (AirDrop). On the computer, `room.html` opens in any browser and the `.glb` files go into Unity. The desktop Unity **Viewer** is frozen and retiring. Direction: ADR-0012 and ADR-0013.
 
-**Tech Stack:** Unity 6000.3.24f1, AR Foundation 6.3.x, Apple ARKit XR Plugin 6.3.x, C#, Core ML (YOLO11n via a native iOS plugin), Unity Test Framework, uGUI, TCP plus UDP discovery on the local network, newline-delimited JSON, glTF 2.0 binary export.
+**Tech Stack:** Unity 6000.3.24f1, AR Foundation 6.3.x, Apple ARKit XR Plugin 6.3.x, C#, Core ML (YOLO11n) and the iOS share sheet via small native plugins, Unity Test Framework, uGUI, glTF 2.0 binary, three.js for the browser viewer. TCP + newline-delimited JSON remains a developer tool.
 
 **Spec:** `docs/specs/ghostmap-project-spec.md`
 
@@ -16,12 +16,12 @@
 | --- | --- | --- |
 | A — Foundation | `F0`-`F4` | Complete |
 | B — Assisted-capture MVP | `S1`-`S6`, `V1`-`V6` | Complete; scanner verified on a physical iPhone |
-| C — Stand-in-place GhostMap | `R1`-`R8` (section 18) | **Not started. Next: `R1`, bring in `GhostMapDublinHacks`** |
+| C — Stand-in-place GhostMap | `R1`-`R10` (section 18) | **Not started. Next: `R1`, bring in `GhostMapDublinHacks`** |
 
 Much of stage C is already written in the owner's hackathon repository
 `GhostMapDublinHacks` (automatic room scan, wall sweep, furniture surface
-detection, `.glb` export, Send to Computer discovery). It has never run on an
-iPhone. Task `R1` brings it into this repository.
+detection, `.glb` export). It has never run on an iPhone. Task `R1` brings it
+into this repository.
 
 Section numbers in this plan are stable and are cited from code comments.
 Sections whose content lives in another canonical document are short pointers.
@@ -41,9 +41,10 @@ GhostMap must do this, on a standard non-LiDAR iPhone, with everything running o
 3. Capture the room height, from the ceiling plane when ARKit sees it, otherwise by aiming or typing.
 4. Capture doors and windows, automatically when ARKit labels them, otherwise by two-point aiming.
 5. **Identify the furniture on device** with a YOLO-n detector and measure each piece from the ARKit surface it sits on. The user confirms with one tap.
-6. Finalize, then **Send to Computer** with one button. No IP address or port for a normal user.
-7. On the computer, show the room in the GhostMap Viewer and let the user orbit, use dollhouse mode, select, move, resize, rotate, measure, save and reload.
-8. **Export Unity-ready files**: the scene JSON, one `.glb` per piece of furniture, and a whole-room `.glb`.
+6. Finalize. The phone **builds the export bundle**: `room.html`, a whole-room `room.glb`, one `.glb` per piece of furniture, and `scene.json`. It keeps every finalized scan so it can be sent again.
+7. **Send to Computer** with one button: the iOS share sheet, AirDrop to a Mac (or Files, iCloud, Mail). No IP address, port or network setup.
+8. On the computer, **double-click `room.html`** to orbit, use dollhouse mode, click an object for its name and size, and measure, in any browser, offline.
+9. **Drag the `.glb` files into Unity**; they arrive in metres with +Y up and the furniture standing on the floor.
 
 ## Does NOT promise
 
@@ -54,9 +55,11 @@ GhostMap must do this, on a standard non-LiDAR iPhone, with everything running o
 - arbitrary curved rooms, multi-room or multi-floor capture;
 - recognition of every object; only the detector's furniture-scale classes;
 - centimetre survey-grade accuracy;
+- editing on the computer outside Unity; the browser viewer is view-and-measure only;
+- a live view of the room on the computer while scanning (developer TCP tool only);
 - simultaneous editing from both devices.
 
-The project wins by producing **structured geometry that is editable and portable into Unity**, not by pretending an ordinary camera is a depth sensor.
+The project wins by producing **structured geometry that drops straight into Unity**, not by pretending an ordinary camera is a depth sensor.
 
 ---
 
@@ -187,6 +190,8 @@ Use package versions committed in `packages-lock.json`; once the scanner success
 
 ## 2.3 Viewer packages
 
+Legacy: the Unity Viewer is frozen (ADR-0013). The browser viewer (`apps/web-viewer/`, task `R8`) uses three.js, bundled into one HTML file, with no runtime network requests.
+
 Viewer project needs only:
 
 - Unity Test Framework;
@@ -246,9 +251,10 @@ GhostMap/
 │   └── TestProject/             host project that only runs the shared tests
 │
 ├── apps/
-│   ├── scanner/                 iOS Unity project
+│   ├── scanner/                 iOS Unity project: capture, recognition, export, share
 │   │   └── Assets/GhostMap/Scanner/{Runtime/{AR,Bootstrap,Capture,Networking,UI,Workflow},Editor,Tests/EditMode}
-│   └── viewer/                  desktop Unity project
+│   ├── web-viewer/              three.js source of room.html            (task R8)
+│   └── viewer/                  desktop Unity project, frozen, retiring (task R10)
 │       └── Assets/GhostMap/Viewer/{Runtime/{Bootstrap,Networking,Scene,Rendering,Interaction,Persistence,UI},Editor,Tests/EditMode}
 │
 ├── fixtures/                    valid-room-v1, room-with-door-window-v1, malformed-room-v1
@@ -910,6 +916,8 @@ The user can correct them.
 
 # 12. Viewer Rendering Rules
 
+> **Legacy (ADR-0013):** this section describes the desktop Unity Viewer, which is frozen and retires in task `R10`. Its geometry rules (walls, openings, furniture parts) carry over to the phone-side exporter in `R6`; the browser viewer (`R8`) only displays and measures.
+
 The viewer renders **semantic geometry**, not scanner camera imagery.
 
 ## 12.1 Floor
@@ -1007,6 +1015,8 @@ Every furniture root has one collider representing its full bounding box.
 
 # 13. Viewer Interaction Rules
 
+> **Legacy (ADR-0013):** this section describes the desktop Unity Viewer, which is frozen and retires in task `R10`. Its geometry rules (walls, openings, furniture parts) carry over to the phone-side exporter in `R6`; the browser viewer (`R8`) only displays and measures.
+
 ## 13.1 Camera
 
 Implement orbit camera:
@@ -1100,6 +1110,8 @@ Load:
 
 Never load invalid scene silently.
 
+**After ADR-0013:** the phone keeps every finalized scan and its export bundle; the bundle on the computer is the saved room. The Viewer behaviour below is legacy until the Viewer is retired.
+
 **As built:** V6 saves to one fixed slot,
 `Application.persistentDataPath/ghostmap-scene.json`, and each Save overwrites
 it. Save and Load are refused unless the scene is finalized and Viewer-owned
@@ -1161,132 +1173,140 @@ Current behavior and known issues: `docs/status/viewer.md`.
 
 # 18. Roadmap: Stand-in-Place GhostMap
 
-Replaces the original integration tasks `I1`-`I4`; their content is folded into `R2`, `R3`, `R7` and `R8`. Record every attempt in `docs/status/integration.md`, failures included.
+Replaces the original integration tasks `I1`-`I4`. Direction: ADR-0012 (capture) and ADR-0013 (export, transfer, browser viewer). Record every attempt in `docs/status/integration.md`, failures included.
 
 ```text
 R1 -> R2 -> R3
-        \-> R4 -> R5
-        \-> R6
-        \-> R7 -> R8
+   \      \-> R4 -> R5
+    \-> R6 -> R7
+          \-> R8
+R2, R7, R8 -> R9 -> R10
 ```
 
-`R3`, `R4`, `R6` and `R7` can run in parallel after `R2`.
+`R3`, `R4`, `R6` and `R8` can run in parallel once their inputs exist.
 
 ---
 
 ## Task R1: Bring in `GhostMapDublinHacks`
 
-The owner's hackathon repository is this repository at `f5a7d30` plus 31 commits. It contains:
+The owner's hackathon repository is this repository at `f5a7d30` plus 31 commits:
 
-| Feature | ADR | Hackathon test result |
-| --- | --- | --- |
-| Guided-scan UI overhaul and Simulator demo mode | — | passing |
-| Wall sweep capture | 0005 | passing |
-| Furniture surface detection and per-object `.glb` export | 0006 | passing |
-| Type from ARKit plane label | 0007 | passing, but superseded by 0011 |
-| Automatic room scan from ARKit planes (stand in place) | ADR-0012 | 27 tests passing |
-| Send to Computer: UDP discovery on port 47832 | 0009 | passing |
-| Footprint and perception research spikes | — | not production |
+| Feature | ADR | Hackathon test result | Fate |
+| --- | --- | --- | --- |
+| Guided-scan UI overhaul and Simulator demo mode | — | passing | keep |
+| Automatic room scan from ARKit planes (stand in place) | ADR-0012 | 27 tests passing | keep |
+| Wall sweep capture | 0005 | passing | keep |
+| Furniture surface detection and per-object `.glb` export | 0006 | passing | keep; exporter moves to shared in `R6` |
+| Type from ARKit plane label | 0007 | passing | remove in `R4` |
+| UDP quick-send discovery | 0009 | passing | superseded by ADR-0013; dormant, removed in `R10` |
+| Footprint and perception research spikes | — | not production | move under `docs/research/` or drop |
 
 Last recorded suites there: shared 202, viewer 548, scanner 577, all passing; unsigned iOS build succeeded. Nothing has run on an iPhone.
 
-Steps:
-
-1. Merge `GhostMapDublinHacks/main` into `main` on an `integration/import-dublinhacks` branch. **The owner must approve this merge explicitly**; it brings in another contributor's code.
-2. Keep its ADR numbers 0005-0009. This repository already reserves them (ADR index).
-3. Resolve documentation conflicts in favour of this repository's current docs, adding the imported features to the status pages.
-4. Move `Experiment/` research spikes under `docs/research/` or drop them; they are not production code.
-5. Regenerate both scenes, run all three suites, and record the counts.
-
-Done when: all three suites pass on `main` with the imported code and the docs describe it.
+1. Merge `GhostMapDublinHacks/main` on an `integration/import-dublinhacks` branch. **The owner must approve this merge explicitly**; it brings in another contributor's code.
+2. Keep its ADR numbers 0005-0009; this repository reserves them.
+3. Resolve documentation conflicts in favour of this repository's current docs.
+4. Regenerate both scenes, run all three suites, record the counts.
 
 ---
 
 ## Task R2: First device session
 
-Build to the owner's iPhone and run every imported path once, in a real room, with the Viewer on the Mac.
+Build to the owner's iPhone, in a real furnished room:
 
-1. Floor lock, then **Scan Room** while standing in one spot. Record how many walls ARKit found and whether the room closed.
+1. Floor lock, then **Scan Room** standing in one spot. Record how many walls ARKit found and whether the room closed.
 2. Repeat with the sweep fallback and the walked-corner fallback.
 3. Height from the ceiling plane, then the aim and typed fallbacks.
 4. Furniture surface detection on a bed, desk and table.
-5. Finalize, then **Send to Computer** on home Wi-Fi and again with the Mac on the iPhone hotspot. No typed IP.
-6. In the Viewer: dollhouse, select, move, measure, save, reload, **Export Assets**.
-7. Open one exported `.glb` in Blender and run `npx gltf-validator` on it.
+5. Record the scanner's frame rate during each step.
 
-Done when: every step has a recorded result in `docs/status/integration.md`, failures included.
+Done when every step has a recorded result in `docs/status/integration.md`, failures included.
 
 ---
 
 ## Task R3: Accuracy benchmark
 
-Tape-measure one test room: four walls, ceiling height, one door. Do five stand-in-place scans and record:
+Tape-measure one room: four walls, ceiling height, one door. Do five stand-in-place scans and record:
 
 ```text
 scan | wall A-D error | height error | door width error | walls found automatically | fallback used
 ```
 
-Targets: median wall absolute error <= 0.12 m, max wall error <= 0.20 m, height error <= 0.15 m, no self-crossing rooms, no Viewer crashes. Standing in one spot means aiming at distant walls; if the targets fail, coach the user to stand nearer the room centre before changing any threshold. Never hide errors to pass.
+Targets: median wall absolute error <= 0.12 m, max wall error <= 0.20 m, height error <= 0.15 m, no self-crossing rooms. If targets fail, coach the user to stand nearer the room centre before changing thresholds. Never hide errors to pass.
 
 ---
 
 ## Task R4: On-device furniture identification (ADR-0011)
 
 1. Export YOLO11n to Core ML with NMS (`yolo export model=yolo11n.pt format=coreml nms=True`); commit the `.mlpackage` and its SHA-256.
-2. Native iOS plugin (Swift, Vision + Core ML) that takes ARKit camera images about five times a second and returns class, confidence and box.
-3. `IObjectDetector` C# interface with a fake for EditMode tests, following the `ISpatialProvider` pattern.
-4. Pure C# pipeline: box bottom-centre ray to the floor plane, match to a measured ARKit surface, class-to-type mapping, multi-frame tracker (same class within 0.5 m; propose after 5 frames at >= 0.5 confidence).
-5. UI: "Found: ..." list, **Add All**, remove per item. Manual placement stays as fallback.
+2. Native iOS plugin (Swift, Vision + Core ML) taking ARKit camera images about five times a second, returning class, confidence and box.
+3. `IObjectDetector` C# interface with a fake for EditMode tests.
+4. Pure C# pipeline: box bottom-centre ray to the floor, match to a measured ARKit surface, class-to-type map, multi-frame tracker (same class within 0.5 m; propose after 5 frames at >= 0.5 confidence).
+5. UI: "Found: ..." list, **Add All**, remove per item; manual placement as fallback.
 6. Remove the ARKit-label type guesser (hackathon ADR-0007) and its tests.
-7. Device test: precision and recall on the R3 room's furniture; latency per frame on the owner's iPhone.
-
-Done when: EditMode tests cover the pipeline, and the device test is recorded.
+7. Device test: precision and recall on the `R3` room's furniture; latency per frame.
 
 ---
 
 ## Task R5: Keep the detector's label in the scene
 
-Shared-contract change (`AGENTS.md` rule 8): add an optional `label` string to `SceneObjectModel` so a `generic` object can carry `"potted plant"` or `"refrigerator"`. Additive within schema v1: older readers ignore it. Update `scene-schema-v1.md`, shared tests, `inspect_snapshot.py`, the fixtures, and show the label in the Viewer inspector.
+Shared-contract change (`AGENTS.md` rule 8): add an optional `label` string to `SceneObjectModel` so a `generic` object can carry `"potted plant"`. Additive within schema v1. Update `scene-schema-v1.md`, shared tests, `inspect_snapshot.py` and the fixtures. `room.html` shows the label.
 
 ---
 
-## Task R6: Unity-ready export
+## Task R6: The phone builds the export bundle (ADR-0013)
 
-1. Whole-room `.glb`: floor, ceiling and the wall segments from `WallSliceGenerator`, so openings are real holes.
-2. One export folder per room: `scene.json`, `room.glb`, `objects/<id>.glb` (ADR-0012).
-3. One Viewer button writes the whole folder; it opens in Finder when done.
-4. Verify: `npx gltf-validator` on every file, open in Blender, import into a fresh Unity 6 project with glTFast (`com.unity.cloud.gltfast`) and confirm scale (metres), orientation (+Y up) and that objects sit on the floor.
-
----
-
-## Task R7: Send to Computer, finished
-
-The hackathon quick-send finds the first Viewer on the network and sends the room. To make it a product flow (ADR-0010):
-
-1. **Delivery confirmation.** The phone must only say "Sent" after the Viewer accepted the room. That needs a Viewer-to-scanner acknowledgement, which is a protocol change: ADR, contract doc, tests.
-2. **Remembered computer** and a plain-language "can't find your computer, try again / choose another" flow.
-3. **Viewer liveness.** Use heartbeats to show "Disconnected" when the phone drops without closing the socket.
-4. Manual IP moves behind a developer setting.
-5. Device test on Wi-Fi and hotspot, three consecutive successes each.
+1. Move `GlbExporter`, `FurnitureFactory.BuildParts` (part table and colours only) and `WallSliceGenerator` from the Viewer into `shared/com.ghostmap.shared/Runtime/Export/`, with their tests. The Viewer uses them from there until it is retired.
+2. Add a whole-room `.glb` writer: floor, ceiling and wall segments, so openings are real holes.
+3. On finalize, write `GhostMap-<room>-<yyyyMMdd-HHmm>.zip` with `room.html` (from the `R8` template), `room.glb`, `objects/<id>.glb`, `scene.json` and `README.txt` (how to import into Unity with glTFast).
+4. Keep every finalized scan on the phone, listed on the start screen, so it can be sent again.
+5. Write `docs/contracts/export-bundle-v1.md`.
+6. Verify: `npx gltf-validator` on every `.glb`; open in Blender; import into a fresh Unity 6 project with glTFast (`com.unity.cloud.gltfast`) and check scale, +Y up, furniture on the floor. Measure export time on the iPhone.
 
 ---
 
-## Task R8: Hardening and demo polish
+## Task R7: Send to Computer through the share sheet (ADR-0013)
 
-Failure modes to test deliberately:
+1. Native iOS plugin that presents `UIActivityViewController` with the bundle zip. Written in this repository, no new package.
+2. **Send to Computer** button on the finish screen and on every saved scan.
+3. Device test: AirDrop to the owner's Mac three times in a row; also Save to Files and Mail. The zip opens and `room.html` works after unzipping.
+
+---
+
+## Task R8: Browser viewer, `room.html` (ADR-0013)
+
+1. three.js app in `apps/web-viewer/`: load the embedded room and objects, orbit/pan/zoom, frame room, dollhouse (hide ceiling), click an object for its name, type, label and dimensions, two-click measuring with 3D and horizontal distance, an object list.
+2. Build step that inlines everything (three.js, app code, styles) into one template HTML with placeholders for the embedded data; commit the built template where the scanner can ship it.
+3. No network requests; works by double-click in Safari, Chrome and Firefox from a local folder.
+4. Tests: the viewer's data loading and measuring logic run under Node; the template is checked for no external URLs.
+5. The viewer only displays what the phone exported. It must not reimplement any shared rule.
+
+---
+
+## Task R9: Hardening and the guided flow
 
 | Case | Expected |
 | --- | --- |
 | Poor light or fast motion | Capture blocked with a clear tracking message |
 | ARKit finds fewer than four walls | Scanner names the missing direction, offers sweep |
-| Network blocked or Viewer not running | Scanner keeps the scan; clear retry message |
-| Wi-Fi drop mid-send | Phone retries; Viewer keeps its last room |
-| App backgrounded | Tracking must recover before any capture |
-| Stale or malformed message at the Viewer | Ignored, current room kept |
+| Detector finds nothing | Manual placement offered |
+| Share sheet cancelled or AirDrop fails | Scan kept; Send to Computer can be tapped again |
+| App backgrounded mid-scan | Tracking must recover before any capture |
+| Phone storage nearly full | Export fails with a plain message, scan kept |
 
-Polish: one guided flow on the phone with no debug text (remove the S1 diagnostics block and the `S6 diag:` line), large reticle, haptics on capture, progress steps Floor → Room → Height → Openings → Furniture → Send. Viewer: clean lighting, readable labels, obvious selection.
+Polish: one guided flow on the phone with no debug text (remove the S1 diagnostics block and the `S6 diag:` line), large reticle, haptics on capture, progress steps Floor → Room → Height → Openings → Furniture → Send.
 
 Every reproducible software failure gets a regression test.
+
+---
+
+## Task R10: Retire the Unity Viewer
+
+Once the section 23 acceptance test passes with `room.html`:
+
+1. Remove `apps/viewer/`, its test suite, and the UDP discovery code from `GhostMapDublinHacks` (ADR-0009).
+2. Keep protocol v1 and the scanner's TCP client only if a developer still uses live streaming; otherwise remove them with an ADR.
+3. Update `tools/run_unity_tests.sh`, the README, the architecture overview and the status pages.
 
 ---
 
@@ -1359,43 +1379,45 @@ Room ready: 4.02 × 3.11 m, 2.58 m high
 
 ## Sending
 
+Tapping **Send to Computer** opens the iOS share sheet with
+`GhostMap-Bedroom-20261011-1430.zip`. The user picks their Mac under AirDrop;
+iOS shows the progress and "Sent".
+
+## Saved scans
+
 ```text
-Looking for your computer…
-Sent to MacBook ✓            (only after the Viewer confirms, R7)
+Your rooms
+Bedroom · 11 Oct, 14:30        [Send to Computer]
+Office  · 9 Oct, 10:05         [Send to Computer]
 ```
 
 ---
 
-# 20. Viewer UX Script
+# 20. Browser Viewer UX Script
 
-## Waiting
+On the Mac the zip arrives in Downloads; double-click unzips it.
 
-```text
-GhostMap Viewer
-Ready to receive. Open GhostMap on your phone and tap Send to Computer.
-```
-
-## Live preview (optional)
+## `room.html`
 
 ```text
-LIVE SCAN · Walls 3 / 4 · Revision 5
+Bedroom · 4.02 × 3.11 m · 2.58 m high
+
+[Frame]  [Dollhouse]  [Measure]
+
+Objects
+  Bed      1.52 × 2.03 × 0.60 m
+  Desk     1.40 × 0.70 × 0.75 m
+  Chair    0.50 × 0.50 × 0.90 m
+  Plant    (generic) 0.40 × 0.40 × 1.10 m
 ```
 
-## Received
+Click an object to highlight it and show its name and size. In Measure mode,
+two clicks show the 3D and horizontal distance.
 
-```text
-Bedroom received · 4 objects
+## Into Unity
 
-[Dollhouse]  [Measure]  [Save]  [Export for Unity]
-```
-
-Clicking an object opens:
-
-```text
-Desk  (detected: dining table)
-
-Position X / Z · Rotation · Width · Depth · Height
-```
+`README.txt` in the bundle: add glTFast to the Unity project, then drag
+`room.glb` and the `objects/` folder into the Assets window.
 
 ---
 
@@ -1413,17 +1435,15 @@ Before device run:
 
 - correct signing team;
 - bundle ID fixed;
-- camera/local-network usage strings present;
+- camera usage string present (local-network only while the developer TCP stream remains);
 - ARKit enabled;
 - physical iPhone selected.
 
-## Viewer build
+## Browser viewer build
 
-Hackathon may run Viewer directly in Unity Editor for faster iteration.
+`apps/web-viewer/` builds into one self-contained template HTML that the scanner ships and fills in at export time (task `R8`). Rebuild and commit the template after any viewer change.
 
-Still verify macOS standalone build once before demo day.
-
-No final presentation should depend on an untested last-minute standalone build.
+No final presentation should depend on an untested last-minute build of either the scanner or the template.
 
 ---
 
@@ -1450,26 +1470,25 @@ Run from a clean clone, on the owner's iPhone and Mac, in a furnished room.
 
 ## Setup
 
-- install the pinned Unity version;
-- open the scanner and viewer projects; packages resolve with the shared relative package;
-- build the scanner to the iPhone; launch the Viewer on the Mac;
+- install the pinned Unity version and build the scanner to the iPhone;
+- nothing is installed on the Mac except a browser and, for step 13, a Unity project with glTFast;
 - no IP address is typed anywhere.
 
 ## Test
 
 1. Start a scan and lock the floor.
-2. Stand in one spot and turn; the room's four walls are found, or found after the sweep fallback.
+2. Stand in one spot and turn; the four walls are found, or found after the sweep fallback.
 3. Room dimensions are within the section 18 `R3` targets of a tape measure.
 4. Height is captured.
 5. One door is captured.
 6. A bed, a desk and a chair are identified on the phone and added with one tap.
-7. Finalize.
-8. Tap **Send to Computer**; the phone confirms delivery.
-9. The Viewer shows the same room with the door and the three objects in roughly the right places.
-10. Enter dollhouse mode, select the desk, drag, rotate and resize it.
-11. Measure bed-to-desk distance.
-12. Save, close the Viewer, reopen it, and load the same room.
-13. **Export for Unity**, then import `room.glb` and the object files into a fresh Unity project; the room is to scale and the furniture sits on the floor.
+7. Finalize; the room appears in the phone's saved scans.
+8. Tap **Send to Computer** and AirDrop to the Mac; iOS reports it sent.
+9. Unzip and double-click `room.html`; the room shows the door and the three objects in roughly the right places, with no network connection.
+10. Dollhouse mode hides the ceiling.
+11. Clicking the desk shows its name and dimensions.
+12. Measure bed-to-desk distance.
+13. Drag `room.glb` and `objects/` into a fresh Unity project with glTFast; the room is to scale, +Y up, furniture on the floor.
 
 Pass requires all 13.
 
@@ -1485,18 +1504,16 @@ Scanner:
 - no per-frame JSON snapshot generation;
 - no scene-state mutation from background network thread.
 
-Viewer:
+Export and transfer:
 
-- room rebuild < 100 ms for typical MVP scene;
-- < 100 rendered primitive child objects for normal bedroom target;
-- no garbage-heavy rebuild every frame;
-- only rebuild on snapshot/edit.
+- export bundle written in under 2 seconds on the iPhone for a typical room;
+- `room.html` under 2 MB, opening in under 2 seconds on a laptop;
+- `room.glb` plus objects under 1 MB for a typical bedroom;
+- no dependency on internet at any step.
 
-Network:
+Developer TCP stream (legacy):
 
-- snapshot under 100 KB target;
-- local update visible within 500 ms target;
-- no dependency on internet.
+- snapshot under 100 KB; local update visible within 500 ms.
 
 ---
 
@@ -1545,16 +1562,13 @@ When room geometry looks wrong, diagnose in this order:
 
 Never start by randomly adjusting renderer code.
 
-When networking fails:
+When Send to Computer fails:
 
-1. Viewer running and listening (TCP 47831, discovery UDP 47832)?
-2. phone and computer on the same Wi-Fi, or the computer on the phone's hotspot?
-3. local-network permission granted on the phone?
-4. does Send to Computer find the Viewer? If not, try the developer IP field to separate discovery from transport;
-5. TCP port reachable?
-6. scanner retrying?
-7. line terminated with `\n`?
-8. protocol version correct?
+1. did the export bundle get written (saved scans list)?
+2. AirDrop on both devices, set to receive from contacts or everyone?
+3. Bluetooth and Wi-Fi on (AirDrop needs both, not the same network)?
+4. try Save to Files to separate export problems from AirDrop problems;
+5. does the zip open on the Mac, and does `room.html` load from the unzipped folder?
 
 When dimensions drift:
 
@@ -1661,9 +1675,10 @@ Both use fixture/shared package and do not wait on each other.
 
 ```text
 R1 -> R2 -> R3
-        \-> R4 -> R5
-        \-> R6
-        \-> R7 -> R8
+   \      \-> R4 -> R5
+    \-> R6 -> R7
+          \-> R8
+R2, R7, R8 -> R9 -> R10
 ```
 
 Section 18 defines each task. Use short-lived `integration/<task>` branches.
@@ -1740,12 +1755,13 @@ No one can guarantee camera-only reconstruction without testing the exact phone 
 
 - 5 stand-in-place scans of the demo room within the `R3` targets;
 - 3 scans in a second room;
-- 3 consecutive end-to-end runs (scan → Send to Computer → Viewer → export) with no restart;
-- Send to Computer tested on Wi-Fi and on the iPhone hotspot;
+- 3 consecutive end-to-end runs (scan → Send to Computer → `room.html` → Unity) with no restart;
+- AirDrop tested three times in a row, plus Save to Files;
 - fresh-install path tested (camera and local-network permission prompts);
+- `room.html` opened offline in Safari and Chrome;
 - exported files imported into a fresh Unity project;
 - average scan-to-computer time recorded;
-- a saved known-good room available in the Viewer in case hardware or network fails.
+- a known-good exported room on the Mac in case the live scan fails.
 
 The backup room is for presentation continuity, not for pretending it was scanned live.
 
@@ -1756,12 +1772,12 @@ The backup room is for presentation continuity, not for pretending it was scanne
 Before judges arrive:
 
 1. phone charged > 70%, laptop on power;
-2. Viewer already running;
-3. phone already granted camera and local-network permission;
-4. Mac on the same Wi-Fi as the phone, or on the phone's hotspot;
-5. one practice scan done in the demo room;
-6. room well lit, walls visible, nobody walking through;
-7. a saved known-good room ready to load.
+2. AirDrop on both devices and tested once;
+3. phone already granted camera permission;
+4. one practice scan done in the demo room;
+5. room well lit, walls visible, nobody walking through;
+6. Unity open with an empty scene and glTFast installed;
+7. a known-good exported room on the laptop.
 
 Demo:
 
@@ -1770,9 +1786,9 @@ Demo:
 3. Stand still and turn; show the walls appearing.
 4. Show height and the door.
 5. Point at the furniture; show "Found: bed, desk, chair", tap Add All.
-6. Tap Send to Computer; the room appears on the laptop.
-7. Dollhouse, move the desk, measure.
-8. Export for Unity and drop the room into a Unity scene.
+6. Finalize, Send to Computer, AirDrop to the laptop.
+7. Double-click `room.html`: orbit, dollhouse, click the desk, measure.
+8. Drag the room into Unity.
 
 Core line:
 
@@ -1798,7 +1814,7 @@ Historical; removed. See `git show f5a7d30:docs/plans/ghostmap-implementation-pl
 
 GhostMap is complete when a clean clone can be turned into this real demo:
 
-> A person stands in the middle of a normal room holding a standard non-Pro iPhone and turns around once. The phone finds the walls, identifies the furniture on device, and with one button sends the room to a computer, where it appears as an editable 3D model and exports as Unity-ready files.
+> A person stands in the middle of a normal room holding a standard non-Pro iPhone and turns around once. The phone finds the walls, identifies the furniture on device, and with one button sends the room to a computer, where it opens in a browser by double-click and drops straight into Unity.
 
 If that sequence does not work reliably, do not spend time on stretch features.
 

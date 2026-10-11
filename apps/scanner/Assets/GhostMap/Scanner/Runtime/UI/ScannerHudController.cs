@@ -1,6 +1,9 @@
+using System;
+using System.IO;
 using System.Text;
 using System.Threading;
 using GhostMap.Scanner.AR;
+using GhostMap.Scanner.Export;
 using GhostMap.Scanner.Networking;
 using GhostMap.Scanner.Workflow;
 using GhostMap.Shared.Protocol;
@@ -67,6 +70,11 @@ namespace GhostMap.Scanner.UI
         private ScannerSnapshotPublisher publisher;
         private ScanWorkflowController boundWorkflow;
 
+        // Task R6: the export bundle written on finalize.
+        private ScanExporter exporter;
+        private ScanWorkflowController exportedWorkflow;
+        private ExportResult lastExport;
+
         private Thread networkThread;
         private volatile bool networkThreadRunning;
 
@@ -80,6 +88,19 @@ namespace GhostMap.Scanner.UI
 
         private ScanWorkflowController Workflow => floorLockHud != null ? floorLockHud.Workflow : null;
 
+        /// <summary>Resources name of the browser viewer template (a copy of apps/web-viewer/dist/room-template.html).</summary>
+        public const string RoomTemplateResource = "GhostMapRoomTemplate";
+
+        /// <summary>
+        /// The export of the current scan, or <c>null</c> if it has not been
+        /// exported (not finalized yet, or Restart started a new scan).
+        /// </summary>
+        public ExportResult? CurrentExport =>
+            exportedWorkflow != null && exportedWorkflow == Workflow ? lastExport : (ExportResult?)null;
+
+        /// <summary>Saved rooms on this phone, newest first.</summary>
+        public SavedScanStore SavedScans => exporter?.Store;
+
         private void Awake()
         {
             client = new ScannerNetworkClient(
@@ -88,6 +109,9 @@ namespace GhostMap.Scanner.UI
                 SystemInfo.deviceName);
 
             publisher = new ScannerSnapshotPublisher(client);
+            exporter = new ScanExporter(
+                LoadRoomTemplate,
+                new SavedScanStore(Path.Combine(Application.persistentDataPath, "scans")));
             discovery = new PeerDiscoveryClient();
             RebindIfNeeded();
 
@@ -331,6 +355,13 @@ namespace GhostMap.Scanner.UI
                 return;
             }
 
+            // A failed export (for example a full disk) is retried here, so a
+            // finished room is never stuck unsaved.
+            if (CurrentExport is ExportResult export && !export.Succeeded)
+            {
+                ExportCurrentScan();
+            }
+
             discovery.Start();
         }
 
@@ -361,7 +392,53 @@ namespace GhostMap.Scanner.UI
             floorLockHud?.ResetScan();
         }
 
-        private void OnFinalizePressed() => Workflow?.TryFinalize(out _);
+        private void OnFinalizePressed()
+        {
+            if (Workflow != null && Workflow.TryFinalize(out _))
+            {
+                ExportCurrentScan();
+            }
+        }
+
+        /// <summary>
+        /// Task R6: builds the export bundle for the finalized scan and keeps it
+        /// on the phone. Logs one <c>GhostMap export:</c> line for the device
+        /// session (spec target: under 2 s).
+        /// </summary>
+        private void ExportCurrentScan()
+        {
+            ScanWorkflowController workflow = Workflow;
+
+            if (workflow == null || workflow.Phase != ScanPhase.Finalized)
+            {
+                return;
+            }
+
+            lastExport = exporter.Export(workflow.Snapshot);
+            exportedWorkflow = workflow;
+
+            if (lastExport.Succeeded)
+            {
+                Debug.Log($"GhostMap export: saved {lastExport.Saved.FileName} " +
+                          $"({lastExport.Saved.SizeBytes / 1024} KB) in {lastExport.ElapsedMs} ms");
+            }
+            else
+            {
+                Debug.LogWarning($"GhostMap export: failed after {lastExport.ElapsedMs} ms: {lastExport.Error}");
+            }
+        }
+
+        private static string LoadRoomTemplate()
+        {
+            var asset = Resources.Load<TextAsset>(RoomTemplateResource);
+
+            if (asset == null)
+            {
+                throw new InvalidOperationException($"Resources/{RoomTemplateResource} is missing from the build.");
+            }
+
+            return asset.text;
+        }
 
         private string BuildNetworkStatus()
         {

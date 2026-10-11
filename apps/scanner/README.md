@@ -43,11 +43,19 @@ The Editor's Play mode is never evidence for AR, device or network behavior
 3. Confirm or capture the height, then add doors and windows.
 4. Point at furniture; detected surfaces are offered with their measured size.
    Tap **Add**, **Skip**, **Next** or **Add All**, or place items by hand.
-5. Tap **Finalize GhostMap**.
+5. Tap **Finalize GhostMap**. The phone builds `GhostMap-<room>-<time>.zip`
+   (`room.html`, `room.glb`, one `.glb` per object, `scene.json`, `README.txt`)
+   and keeps it in `persistentDataPath/scans/`; Xcode's console shows a
+   `GhostMap export:` line with the time taken.
 
-Today Send to Computer uses UDP discovery and the desktop Viewer. Roadmap tasks
-`R6`-`R7` replace that with a phone-built export bundle and the iOS share sheet
-(ADR-0013).
+Today Send to Computer still uses UDP discovery and the desktop Viewer (and
+retries a failed export). Roadmap task `R7` replaces it with the iOS share
+sheet over the saved bundle (ADR-0013).
+
+The browser viewer template ships as
+`Assets/GhostMap/Scanner/Resources/GhostMapRoomTemplate.html`, a copy of
+`apps/web-viewer/dist/room-template.html`. Recopy it after rebuilding the web
+viewer; `ShippedTemplate_MatchesTheWebViewerBuild` fails while it is stale.
 
 ## Demo mode without a phone
 

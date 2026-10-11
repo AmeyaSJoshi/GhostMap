@@ -38,9 +38,9 @@ if the committed file is stale.
 | `src/style.css` | Styles, light and dark |
 | `build.mjs` | esbuild bundle, inlining, self-containment check |
 | `scripts/fill.mjs` | Reference fill: exactly what the phone must do with the template |
-| `scripts/standin-glb.mjs` | **Demo and test stand-in** for `room.glb` until `R6` writes the real one |
+| `scripts/standin-glb.mjs` | **Demo and test stand-in** for `room.glb`, so Node tests need no Unity. The phone writes the real one (`GlbWriter.TryExportRoom`, task `R6`) |
 | `scripts/make-demo.mjs` | Builds `demo/room.html` (git-ignored) |
-| `fixtures/objects/*.glb` | Furniture written by the real C# `GlbExporter`; see `fixtures/README.md` |
+| `fixtures/objects/*.glb` | Furniture written by the real C# `GlbWriter`; see `fixtures/README.md` |
 | `test/*.test.mjs` | The test suite |
 | `dist/room-template.html` | Built output, committed |
 
@@ -65,10 +65,17 @@ if the committed file is stale.
 
 ## Shipping the template to the phone
 
-The scanner ships a copy of `dist/room-template.html` as a Unity `TextAsset`.
-That copy lives in `apps/scanner/` and is made by `R6`, not here (`AGENTS.md`
-rule 7). After changing the viewer: `npm run build`, commit, and recopy into
-the scanner.
+The scanner ships a copy of `dist/room-template.html` as the Unity `TextAsset`
+`apps/scanner/Assets/GhostMap/Scanner/Resources/GhostMapRoomTemplate.html`
+(task `R6`). After changing the viewer: `npm run build`, then recopy:
+
+```bash
+cp apps/web-viewer/dist/room-template.html apps/scanner/Assets/GhostMap/Scanner/Resources/GhostMapRoomTemplate.html
+```
+
+The scanner test `ShippedTemplate_MatchesTheWebViewerBuild` fails while the
+copy is stale. The phone fills it in `ExportBundleBuilder.TryFillTemplate`,
+which follows `scripts/fill.mjs`.
 
 ## Manual check
 

@@ -2,11 +2,11 @@
 //
 // scene.json is in Ghost space: Unity axes, left-handed, metres, +Y up
 // (docs/contracts/scene-schema-v1.md). The .glb files and three.js are glTF:
-// right-handed, +Y up. GlbExporter converts by negating Z
-// (apps/viewer/.../Runtime/Export/GlbExporter.cs, MeshBuffers.AddBox).
+// right-handed, +Y up. GlbWriter converts by negating Z
+// (shared/com.ghostmap.shared/Runtime/Export/GlbWriter.cs, MeshBuffers).
 //
 // room.glb is already in room position. Each objects/<id>.glb is centred on the
-// origin with no node transform (GlbExporter.Build writes only "mesh" and
+// origin with no node transform (GlbWriter.TryExportObject writes only "mesh" and
 // "name"), so the viewer places it from scene.json:
 //
 //   position   = (center.x, center.y, -center.z)

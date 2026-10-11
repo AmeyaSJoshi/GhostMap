@@ -1,5 +1,6 @@
 using GhostMap.Scanner.AR;
 using GhostMap.Scanner.Capture;
+using GhostMap.Scanner.Export;
 using GhostMap.Scanner.Workflow;
 using UnityEngine;
 using UnityEngine.UI;
@@ -113,10 +114,14 @@ namespace GhostMap.Scanner.UI
 
             bool trackingGood = spatialProvider.IsTrackingGood;
 
+            ExportResult? export = scannerHud != null ? scannerHud.CurrentExport : null;
+
             var context = new ScanGuideContext(
                 trackingGood,
                 floorLockHud.LastAttemptRejection,
-                scannerHud != null && scannerHud.IsConnected);
+                scannerHud != null && scannerHud.IsConnected,
+                export == null ? ExportState.None : export.Value.Succeeded ? ExportState.Saved : ExportState.Failed,
+                export?.Error);
 
             ScanGuideStep step = ScanGuide.Describe(workflow, context);
 

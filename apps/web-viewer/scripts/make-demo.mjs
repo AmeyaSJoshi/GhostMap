@@ -1,8 +1,8 @@
 // npm run demo  ->  demo/room.html, filled from the repository's fixture room.
 //
 // Furniture comes from fixtures/objects/*.glb, written by the real C#
-// GlbExporter. The room shell is a stand-in (standin-glb.mjs) until task R6
-// adds the phone's whole-room writer.
+// GlbWriter. The room shell is a stand-in (standin-glb.mjs) so the demo needs
+// no Unity; a bundle built on the phone carries the real room.glb.
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';

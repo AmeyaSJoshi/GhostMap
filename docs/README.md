@@ -1,7 +1,8 @@
 # Documentation Map
 
-Start with [`AGENTS.md`](../AGENTS.md) for the working rules, then the status
-file for whatever you are about to touch.
+Start with [`AGENTS.md`](../AGENTS.md) for the working rules, then
+[`onboarding.md`](onboarding.md) for how everything fits together, then the
+status file for whatever you are about to touch.
 
 | Question | Read |
 | --- | --- |
@@ -9,7 +10,10 @@ file for whatever you are about to touch.
 | How is it built, and where is each class? | [`architecture/overview.md`](architecture/overview.md) |
 | What exactly goes on the wire and in a saved file? | [`contracts/scene-schema-v1.md`](contracts/scene-schema-v1.md), [`contracts/protocol-v1.md`](contracts/protocol-v1.md) |
 | Why was it built this way? | [`decisions/`](decisions/README.md) |
+| I am new (human or agent). Where do I start? | [`onboarding.md`](onboarding.md) |
 | What is the task order, and what is left? | [`plans/ghostmap-implementation-plan.md`](plans/ghostmap-implementation-plan.md) |
+| How do I do task `R`n? | [`tasks/`](tasks/README.md): one implementation brief per roadmap task |
+| How are the tests run automatically? | [`ci.md`](ci.md) |
 | What works right now, and what is broken? | [`status/`](status/): `scanner.md`, `viewer.md`, `shared.md`, `integration.md` |
 | What happened in a specific task? | [`handoffs/`](handoffs/README.md) |
 | What experiments informed the design? | [`research/`](research/README.md) (not production) |

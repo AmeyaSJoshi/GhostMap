@@ -63,8 +63,8 @@ shared 202, viewer 548, scanner 577.
 ## Open decisions for the owner
 
 1. **Unity or native Swift for the phone app: decided "Unity for now",
-   revisit after `R2`** (owner, 2026-10-11). Reasoning in `CLAUDE.md`, "Where
-   Unity fits, and why". When `R2` is recorded, put the question back to the
+   revisit after `R2`** (owner, 2026-10-11). Reasoning in `docs/onboarding.md`,
+   "Where Unity fits, and why"; rule in `AGENTS.md` rule 15. When `R2` is recorded, put the question back to the
    owner with the result.
 2. **Unity licence secrets** for CI (`docs/ci.md`). Until they exist, no Unity
    test result can be recorded.

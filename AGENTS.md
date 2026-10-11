@@ -3,7 +3,7 @@
 1. Read the project spec, implementation plan, shared contract docs, and your workstream status before modifying code.
 2. Do not invent alternate scene schemas or network messages inside an app.
 3. `shared/com.ghostmap.shared` is the only source of truth for domain models, geometry utilities, validation, and wire contracts.
-4. During scanning, the scanner owns scene state. After finalization, the viewer owns editable scene state.
+4. During scanning, the scanner owns scene state. After finalization, the scene is read-only and the phone's export bundle is the record; furniture is edited in Unity or by rescanning (`docs/decisions/ADR-0013-phone-export-and-browser-viewer.md`).
 5. Protocol v1 sends full scene snapshots after structural changes. Do not replace it with delta/event replay without an ADR and contract tests.
 6. All capture and recognition run on the phone. Do not add LiDAR, dense depth reconstruction, Gaussian splatting, NeRFs, generative 3D models, or any cloud or off-device inference. The only learned model allowed is the on-device YOLO-n furniture detector (`docs/decisions/ADR-0011-on-device-yolo-furniture-identification.md`); it may name objects but must never set geometry. Anything beyond that needs a new ADR (see `docs/decisions/ADR-0012-stand-in-place-on-device-capture.md`).
 7. Do not edit another workstream's directory unless the task explicitly requires integration.
@@ -22,10 +22,10 @@
    - create a handoff file,
    - commit.
 14. GhostMap's primary transfer UX is one-button **Send to Computer** after
-    finalization. Normal users must not be required to type IP addresses or
-    ports; manual addressing is a developer/debug fallback. Preserve the existing
-    TCP/full-snapshot transport beneath automatic discovery/pairing unless an ADR
-    explicitly replaces it. See `docs/decisions/ADR-0010-one-button-computer-transfer.md`.
+    finalization: the phone builds the export bundle (`room.html`, `room.glb`,
+    one `.glb` per object, `scene.json`) and opens the iOS share sheet. Normal
+    users never type IP addresses or ports. The TCP snapshot stream is a
+    developer tool only. See `docs/decisions/ADR-0013-phone-export-and-browser-viewer.md`.
 
 ---
 
@@ -74,7 +74,7 @@ See `tools/README.md` for the Python tools.
 | Workstream | Owns |
 | --- | --- |
 | Scanner | `apps/scanner/**`, `docs/status/scanner.md` |
-| Viewer | `apps/viewer/**`, `docs/status/viewer.md` |
+| Viewer | `apps/web-viewer/**`, `apps/viewer/**` (frozen, retiring), `docs/status/viewer.md` |
 | Shared / Integration | `shared/**`, `fixtures/**`, `docs/contracts/**`, `docs/decisions/**`, `docs/status/shared.md`, `docs/status/integration.md`, `tools/**` |
 
 ### Branch naming

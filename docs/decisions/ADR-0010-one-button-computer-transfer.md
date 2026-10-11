@@ -6,7 +6,7 @@
 > Its ADR-0009 (local quick-send discovery) is the first implementation of this
 > decision.
 
-- **Status:** Accepted
+- **Status:** Accepted; transport superseded by ADR-0013 (the phone builds the files and sends them through the iOS share sheet). The one-button, no-IP requirement stands
 - **Date:** 2026-10-03
 - **Task:** Pre-I1 architecture alignment (docs only)
 

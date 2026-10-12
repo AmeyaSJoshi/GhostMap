@@ -323,6 +323,20 @@ namespace GhostMap.Scanner.Workflow
             return true;
         }
 
+        /// <summary>
+        /// Task R9 fix: labelled door and window planes from the automatic
+        /// scan need the room height to be placed. When ARKit did not see the
+        /// ceiling they used to be dropped; now they are added as soon as the
+        /// height is measured or typed. Only once, and only if none exist yet.
+        /// </summary>
+        private void AdoptDetectedOpeningsAfterHeight()
+        {
+            if (autoScan != null && RoomWasAutoScanned && openingCapture.OpeningCount == 0)
+            {
+                AdoptDetectedOpenings();
+            }
+        }
+
         private void AdoptDetectedOpenings()
         {
             List<OpeningModel> proposals = autoScan.ProposeOpenings(openingCapture.Walls, height.HeightM);
@@ -780,6 +794,7 @@ namespace GhostMap.Scanner.Workflow
             }
 
             TransitionTo(ScanPhase.AddOpenings);
+            AdoptDetectedOpeningsAfterHeight();
             Publish();
             return true;
         }
@@ -805,6 +820,7 @@ namespace GhostMap.Scanner.Workflow
             }
 
             TransitionTo(ScanPhase.AddOpenings);
+            AdoptDetectedOpeningsAfterHeight();
             Publish();
             return true;
         }
@@ -1137,6 +1153,14 @@ namespace GhostMap.Scanner.Workflow
                 return false;
             }
 
+            // Task R9: like every other capture, refused while tracking is
+            // lost; the surface's position may no longer match the room.
+            if (!furnitureDetection.Provider.IsTrackingGood)
+            {
+                detectionRejection = FurnitureDetectionRejection.TrackingNotGood;
+                return false;
+            }
+
             TrackableId surfaceId = default;
             bool hasSurface = furnitureDetection.HasSelection;
 
@@ -1187,7 +1211,7 @@ namespace GhostMap.Scanner.Workflow
         /// </summary>
         public int TryAcceptAllDetectedFurniture()
         {
-            if (Phase != ScanPhase.AddObjects)
+            if (Phase != ScanPhase.AddObjects || !furnitureDetection.Provider.IsTrackingGood)
             {
                 return 0;
             }

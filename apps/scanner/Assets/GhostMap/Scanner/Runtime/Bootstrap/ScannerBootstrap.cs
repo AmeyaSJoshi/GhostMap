@@ -82,6 +82,14 @@ namespace GhostMap.Scanner.Bootstrap
                 return;
             }
 
+            // Task R9: developer readouts only (DeveloperMode); empty text is
+            // hidden by the guide HUD, so a normal scan shows none of this.
+            if (!UI.DeveloperMode.Enabled)
+            {
+                diagnosticsText.text = string.Empty;
+                return;
+            }
+
             builder.Clear();
             AppendXrDiagnostics(builder);
             AppendSessionDiagnostics(builder);

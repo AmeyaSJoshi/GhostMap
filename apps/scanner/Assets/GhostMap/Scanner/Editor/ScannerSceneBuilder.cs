@@ -41,6 +41,14 @@ namespace GhostMap.Scanner.Editor
     /// </summary>
     public static class ScannerSceneBuilder
     {
+        /// <summary>Task R9: the crosshair ring's diameter (it was 84).</summary>
+        public const float ReticleDiameter = 108f;
+
+        /// <summary>Task R9: the centre dot's diameter (it was 14).</summary>
+        public const float ReticleCenterDiameter = 18f;
+
+        private static readonly Color ReticleHalo = new Color(0f, 0f, 0f, 0.45f);
+
         private const string ScenePath = "Assets/GhostMap/Scanner/Scanner.unity";
 
         [MenuItem("GhostMap/Build Scanner Scene")]
@@ -90,9 +98,16 @@ namespace GhostMap.Scanner.Editor
             // Outside the safe area on purpose: the raycast fires through the
             // exact screen center (ISpatialProvider.CenterScreenPoint), so the
             // crosshair must sit there regardless of notch or home indicator.
-            Image crosshair = ScannerUiKit.Dot(canvas, "Crosshair", 84f, Color.white, ScannerUiKit.Ring);
+            //
+            // Task R9: larger, with a dark halo behind the ring and the centre
+            // dot so it stays visible on a white wall or a bright window.
+            Image crosshairHalo = ScannerUiKit.Dot(canvas, "CrosshairHalo", ReticleDiameter + 12f, ReticleHalo, ScannerUiKit.Ring);
+            Center(crosshairHalo.rectTransform, Vector2.zero);
+            Image crosshair = ScannerUiKit.Dot(canvas, "Crosshair", ReticleDiameter, Color.white, ScannerUiKit.Ring);
             Center(crosshair.rectTransform, Vector2.zero);
-            Image crosshairCenter = ScannerUiKit.Dot(crosshair.transform, "CrosshairCenter", 14f, Color.white);
+            Image crosshairCenterHalo = ScannerUiKit.Dot(crosshair.transform, "CrosshairCenterHalo", ReticleCenterDiameter + 8f, ReticleHalo);
+            Center(crosshairCenterHalo.rectTransform, Vector2.zero);
+            Image crosshairCenter = ScannerUiKit.Dot(crosshair.transform, "CrosshairCenter", ReticleCenterDiameter, Color.white);
             Center(crosshairCenter.rectTransform, Vector2.zero);
 
             RectTransform bubble = ScannerUiKit.Rect("CoachBubble", canvas);
@@ -750,6 +765,12 @@ namespace GhostMap.Scanner.Editor
                     "detailsPanel");
                 RequireArray(guide, "progressSegments", ScanGuide.StepCount);
                 RequireArray(guide, "collapsibleRows", 1);
+
+                // Task R9: the larger, haloed reticle.
+                Image reticle = FindNamedInScene<Image>(scene, "Crosshair");
+                Require(reticle != null && Mathf.Approximately(reticle.rectTransform.sizeDelta.x, ReticleDiameter),
+                    $"the crosshair is not {ReticleDiameter} px");
+                Require(FindNamedInScene<Image>(scene, "CrosshairHalo") != null, "the crosshair has no halo");
             }
             finally
             {
@@ -792,6 +813,22 @@ namespace GhostMap.Scanner.Editor
             {
                 Require(property.GetArrayElementAtIndex(i).objectReferenceValue != null, $"{name}[{i}] is not assigned");
             }
+        }
+
+        private static T FindNamedInScene<T>(Scene scene, string name) where T : Component
+        {
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                foreach (T found in root.GetComponentsInChildren<T>(includeInactive: true))
+                {
+                    if (found.name == name)
+                    {
+                        return found;
+                    }
+                }
+            }
+
+            return null;
         }
 
         private static T FindInScene<T>(Scene scene) where T : Component

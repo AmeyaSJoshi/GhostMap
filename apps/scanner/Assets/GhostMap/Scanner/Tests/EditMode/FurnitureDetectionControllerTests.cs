@@ -125,10 +125,11 @@ namespace GhostMap.Scanner.Tests.EditMode
         {
             Vector3 worldCenter = frame.GhostToWorld(new Vector3(ghostX, ghostY, ghostZ));
 
-            // The spanning axis is specified as a Ghost-space yaw, so build it
-            // there and take it to world. Ghost +Z is yaw 0, matching how
-            // SceneObjectModel.yawDeg is applied as a rotation about +Y.
-            Vector3 ghostAxis = Quaternion.Euler(0f, yawDeg, 0f) * Vector3.forward;
+            // The yaw is the object's: its width runs along
+            // Euler(0, yaw, 0) * right, as SceneObjectModel applies it, so that
+            // is the plane's spanning axis (and widthM its extent along it).
+            // (Task R9: this used forward, which hid a quarter-turn error.)
+            Vector3 ghostAxis = Quaternion.Euler(0f, yawDeg, 0f) * Vector3.right;
             Vector3 worldAxis = frame.GhostDirectionToWorld(ghostAxis);
 
             // DetectedSurface documents the plane's local +X as the spanning

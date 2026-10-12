@@ -36,6 +36,14 @@ namespace GhostMap.Scanner.UI
 
         [SerializeField] private FloorLockHud floorLockHud;
         [SerializeField] private ArSpatialProvider spatialProvider;
+
+        private readonly SecretTapCounter developerTaps = new SecretTapCounter();
+        private readonly CaptureHaptics captureHaptics = new CaptureHaptics(new IosHaptics());
+
+        // Task R9: how long the scan has been in its phase, for the guide.
+        private ScanWorkflowController phaseWorkflow;
+        private ScanPhase lastPhase;
+        private float phaseStartedAt;
         [SerializeField] private ScannerHudController scannerHud;
 
         [Header("Header")]
@@ -91,6 +99,12 @@ namespace GhostMap.Scanner.UI
 
         private void ToggleDetails()
         {
+            // Task R9: five quick taps on Details toggles developer readouts.
+            if (developerTaps.Register(Time.unscaledTime))
+            {
+                DeveloperMode.Toggle();
+            }
+
             detailsOpen = !detailsOpen;
 
             if (detailsPanel != null)
@@ -115,6 +129,15 @@ namespace GhostMap.Scanner.UI
 
             bool trackingGood = spatialProvider.IsTrackingGood;
 
+            captureHaptics.Observe(workflow);
+
+            if (workflow != phaseWorkflow || workflow.Phase != lastPhase)
+            {
+                phaseWorkflow = workflow;
+                lastPhase = workflow.Phase;
+                phaseStartedAt = Time.unscaledTime;
+            }
+
             ExportResult? export = scannerHud != null ? scannerHud.CurrentExport : null;
 
             var context = new ScanGuideContext(
@@ -124,7 +147,10 @@ namespace GhostMap.Scanner.UI
                 export == null ? ExportState.None : export.Value.Succeeded ? ExportState.Saved : ExportState.Failed,
                 export?.Error,
                 scannerHud != null ? scannerHud.CurrentShareState : ShareState.Idle,
-                scannerHud != null ? scannerHud.CurrentShareMessage : null);
+                scannerHud != null ? scannerHud.CurrentShareMessage : null,
+                Time.unscaledTime - phaseStartedAt,
+                workflow.FurnitureIdentification != null && workflow.FurnitureIdentification.FramesProcessed > 0,
+                spatialProvider.IsRecoveringFromBackground);
 
             ScanGuideStep step = ScanGuide.Describe(workflow, context);
 
@@ -170,7 +196,7 @@ namespace GhostMap.Scanner.UI
             // outranks whatever else the step wanted to say.
             if (!trackingGood && workflow.Frame != null && workflow.Phase != ScanPhase.Finalized)
             {
-                message = "Tracking lost. Move the phone slowly and point it at the room.";
+                message = ScanGuide.TrackingLostMessage(spatialProvider.IsRecoveringFromBackground);
                 kind = GuideMessageKind.Warning;
             }
 

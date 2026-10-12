@@ -50,6 +50,10 @@ namespace GhostMap.Scanner.AR
 
         private SimulatedRoom simulatedRoom;
 
+        // Task R9: tracking is not trusted after the app returns from the
+        // background until ARKit has tracked well for a moment.
+        private readonly TrackingResumeGate resumeGate = new TrackingResumeGate();
+
         public Camera ArCamera => arCamera;
 
         /// <summary>True when answering from the demo room rather than ARKit.</summary>
@@ -68,11 +72,28 @@ namespace GhostMap.Scanner.AR
                 ? (simulatedRoom.IsTrackingGood ? NotTrackingReason.None : NotTrackingReason.Initializing)
                 : ARSession.notTrackingReason;
 
-        public bool IsTrackingGood =>
+        public bool IsTrackingGood => resumeGate.Allows(
             IsSimulated
                 ? simulatedRoom.IsTrackingGood
                 : ARSession.state == ARSessionState.SessionTracking &&
-                  ARSession.notTrackingReason == NotTrackingReason.None;
+                  ARSession.notTrackingReason == NotTrackingReason.None,
+            Time.unscaledTime);
+
+        /// <summary>True while tracking is being re-established after the app was in the background.</summary>
+        public bool IsRecoveringFromBackground => resumeGate.IsRecovering;
+
+        private void OnApplicationPause(bool pausing)
+        {
+            if (pausing)
+            {
+                resumeGate.Pause();
+                Debug.Log("GhostMap: app paused; captures wait for tracking to settle on return.");
+            }
+            else
+            {
+                resumeGate.Resume();
+            }
+        }
 
         public Vector2 CenterScreenPoint => new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
 
@@ -196,6 +217,13 @@ namespace GhostMap.Scanner.AR
             }
 
             into.Clear();
+
+            // Task R9: demo mode has no ARKit planes; the demo room supplies them.
+            if (IsSimulated)
+            {
+                simulatedRoom.CopyDetectedSurfaces(into);
+                return true;
+            }
 
             if (planeManager == null || planeManager.trackables.count == 0)
             {

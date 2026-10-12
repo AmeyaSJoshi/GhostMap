@@ -114,7 +114,7 @@ end to end from iPhone to computer yet.
 | FR-14 | **Saved scans.** The phone keeps every finalized room and can send it again. | Built (`R6` keeps, `R7` lists and sends again); not run on a device |
 | FR-15 | **Browser viewer.** `room.html` opens by double-click, offline, in any browser: orbit, dollhouse, click an object for its name and size, measure 3D and horizontal distance. View and measure only. | Built (`R8`, filled by the phone in `R6`), checked in Chrome |
 | FR-16 | **Unity-ready files.** `.glb` in metres, +Y up, furniture on the floor; imports into Unity with glTFast. | Built (`R6`); imports with glTFast 6.20.0 (turned 180° about Y; furniture placement rule in `README.txt`) |
-| FR-17 | **Detector label kept.** A `generic` object keeps the detector's class name, such as "potted plant". | Not built (`R5`, additive schema change) |
+| FR-17 | **Detector label kept.** A `generic` object keeps the detector's class name, such as "potted plant". | Built (`R5`); additive schema change) |
 | FR-18 | **Developer live stream.** The Unity Viewer shows the room while the phone scans, over TCP with a typed IP. | Built; developer tool only, retires with the Unity Viewer (`R10`) |
 | FR-19 | Editing on the computer, delete/hide objects, floor-plan view. | Not planned; edit in Unity |
 | FR-20 | **A photo of each object.** The phone keeps a photo of each piece of furniture (the detector's best crop, or the camera view when it was added) and exports it; `room.html` shows it when the object is selected. Pictures only, never geometry. | Built (`R11`); checked in Chrome, not run on a device |

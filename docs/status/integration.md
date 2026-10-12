@@ -13,7 +13,7 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 | R2 | First device session: every capture path on a real iPhone | Not started |
 | R3 | Accuracy benchmark against a tape measure | Not started |
 | R4 | YOLO-n furniture identification on the phone (ADR-0011) | **Built** on `scanner/r4-yolo-identification`: YOLO11n Core ML model (SHA-256s in ADR-0011), native Vision plugin, `FurnitureIdentificationController`, "Found: ..." and Add All; ARKit-label guessing removed. EditMode-tested, compiled for iPhone with Core ML linked and the model inside. Device check is the owner's (`R2`) |
-| R5 | Optional `label` on `SceneObjectModel` (additive schema change) | Not started |
+| R5 | Optional `label` on `SceneObjectModel` (additive schema change) | **Built** on `shared/r5-detector-label`: field, 64-character rule, inspector, fixture label, scanner fills it with the COCO class name, `room.html` shows it (title only for `generic`). All suites green |
 | R6 | The phone builds the export bundle (`room.html`, `room.glb`, objects, `scene.json`) and keeps saved scans | **Built** on `integration/r6-export-bundle`: shared `Runtime/Export/`, whole-room `.glb`, zip on Finalize, saved scans, contract complete. All `.glb` pass the Khronos validator; imports into Unity with glTFast verified. Not run on the iPhone; saved-scans list UI moves to `R7` |
 | R7 | Send to Computer through the iOS share sheet | **Built** on `scanner/r7-share-sheet`: native share-sheet plugin, `ShareController`, **Send to Computer** after Finish, **Rooms** list. EditMode-tested and compiled for iPhone; the AirDrop device check is the owner's (`R2`) |
 | R8 | Browser viewer `room.html` (three.js, view and measure) | **Built** on `viewer/r8-browser-viewer`: template, 41 Node tests, CI job. Checked in headless Chrome; owner's double-click check in Safari still to do. The phone fills it in `R6` |
@@ -75,6 +75,9 @@ How it was merged:
 | 2026-10-11 | Owner's Mac, `integration/r11-object-photos` | `ConfigureXr`, `BuildScanner`, unsigned `xcodebuild` Release iphoneos | `BUILD SUCCEEDED`; `GhostMapDetector_CropJpeg` is in `UnityFramework` and called from its IL2CPP stub; Core Image linked |
 | 2026-10-11 | Owner's Mac, Node 24, `integration/r11-object-photos` | web-viewer | **46/46** (+5); rebuilt template copied to the scanner |
 | 2026-10-11 | Owner's Mac, headless Chrome 154, `file://` | `room.html` filled with the fixture room and a real JPEG for the bed | Selecting the bed shows the 810×1080 photo above its sizes ("Photo of the bed, taken by the phone"); selecting the desk (no photo) hides it; no console errors |
+| 2026-10-11 | Owner's Mac, Unity 6000.3.24f1, `shared/r5-detector-label` | shared, viewer, scanner (EditMode) | **All passed: shared 303/303, viewer 580/580, scanner 821/821** (+11 shared label tests in each; scanner +5 label workflow tests) |
+| 2026-10-11 | Owner's Mac, Node 24, `shared/r5-detector-label` | web-viewer | **48/48** (+2: a typed object keeps its type as the title; the fixture carries a label) |
+| 2026-10-11 | Owner's Mac, `shared/r5-detector-label` | `inspect_snapshot.py` on the three fixtures, and on a copy with a 65-character label and a newline in another | Fixtures as before (two valid, malformed rejected on height alone; the desk now prints `"dining table"`); the copy rejected on exactly those two labels |
 | 2026-10-11 | Owner's Mac, `69af8eb` | Python tools checks (`inspect_snapshot.py --quiet` on the three fixtures, `send_fixture.py --dry-run`, `bash -n tools/run_unity_tests.sh`) | Passed: the two valid fixtures valid, the malformed one rejected on the height rule alone |
 
 The counts match those recorded in `GhostMapDublinHacks` at `0b7a106`. CI's Unity jobs still stop at the missing-secrets check, so for now the suites are confirmed only on the owner's Mac.
@@ -146,7 +149,7 @@ From reading the code, not from a failed run:
    chairs; note what "Found:" says, the `GhostMap yolo:` frame time, and the
    added sizes against a tape. Then `R11`'s: open the exported `room.html` and
    check each object's photo shows that object.
-4. **Agent, in parallel:** `R5` (detector label in the schema), then `R9`.
+4. **Agent, in parallel:** `R9` (hardening) parts that need no device.
    See `docs/tasks/README.md`.
 5. **Owner, when convenient:** add `UNITY_LICENSE`, `UNITY_EMAIL`,
    `UNITY_PASSWORD` as repository secrets (`docs/ci.md`) so CI can run the

@@ -14,7 +14,7 @@ and the ADRs win; fix the brief.
 | R2 | [First device session](R2-first-device-session.md) | R1 | **Owner** on an iPhone; an agent prepares the checklist |
 | R3 | [Accuracy benchmark](R3-accuracy-benchmark.md) | R2 | **Owner** with a tape measure |
 | R4 | [YOLO-n furniture identification](R4-yolo-furniture-identification.md) | R2 | Built 2026-10-11; owner's device check in `R2` |
-| R5 | [Detector label in the schema](R5-detector-label.md) | R4 design | Agent; CI runs tests |
+| R5 | [Detector label in the schema](R5-detector-label.md) | R4 design | Built 2026-10-11 |
 | R6 | [Phone-built export bundle](R6-export-bundle.md) | R1 | Built 2026-10-11; owner checks it on the iPhone in `R2` |
 | R7 | [Share-sheet Send to Computer](R7-share-sheet.md) | R6 | Built 2026-10-11; owner's AirDrop check in `R2` |
 | R8 | [Browser viewer `room.html`](R8-browser-viewer.md) | — (template), R6 (embedding) | Built 2026-10-11; owner's Safari check left |
@@ -22,5 +22,5 @@ and the ADRs win; fix the brief.
 | R10 | [Retire the Unity Viewer](R10-retire-unity-viewer.md) | Acceptance test passes | Agent |
 | R11 | [A photo of each object](R11-object-photos.md) | R4, R6, R8 | Built 2026-10-11; owner's device check in `R2` |
 
-**Can start right now without the owner:** R5 (the class list is settled in
-ADR-0011; `IdentifiedFurniture.ClassName` already holds the label to store).
+**Can start right now without the owner:** the parts of R9 that need no
+device.

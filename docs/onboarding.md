@@ -83,8 +83,8 @@ native Swift. Do not start a rewrite, or argue for one mid-task (`AGENTS.md` rul
 | `room.html` browser viewer | Built (`R8`), filled by the phone (`R6`); checked in headless Chrome, owner's Safari check left | n/a |
 | A photo of each object, shown in `room.html` | Built (`R11`); the phone crops it from the camera; no photos in demo mode | No |
 
-Test suites: shared 292, viewer 569, scanner 805, all passing in this
-repository (owner's Mac, 2026-10-11, after `R11`); web viewer 46 (Node). CI's Unity jobs still wait
+Test suites: shared 303, viewer 580, scanner 821, all passing in this
+repository (owner's Mac, 2026-10-11, after `R5`); web viewer 48 (Node). CI's Unity jobs still wait
 for the owner's licence secrets (`docs/ci.md`); until then run
 `./tools/run_unity_tests.sh` on a Mac with Unity.
 

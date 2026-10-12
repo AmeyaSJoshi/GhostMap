@@ -14,11 +14,13 @@ zoom, Frame room (`F`), Dollhouse (`D`, hides the `ceiling` node), click or list
 to select an object (type, optional label, W × D × H in m and cm, id, outline),
 two-click Measure (`M`, 3D and along the floor, `Esc` cancels), a furniture list
 and a room summary. Since `R11`, the selected object's panel shows the photo the
-phone took of it, when there is one (`objectPhotos`, contract section 5). View
+phone took of it, when there is one (`objectPhotos`, contract section 5). Since
+`R5`, an object's detector label shows as "Detected as", and titles a `generic`
+object ("Potted plant"). The Unity Viewer's edit clone keeps `label` too. View
 and measure only. The phone does not fill it yet
 (`R6`); until then `npm run demo` fills it from a fixture.
 
-- Node tests: **46 pass** (`npm test`; 41 after `R8`, +5 for photos in `R11`). Placement is checked against a bed
+- Node tests: **48 pass** (`npm test`; 41 after `R8`, +5 for photos in `R11`, +2 for labels in `R5`). Placement is checked against a bed
   `.glb` written by the real C# exporter (now the shared `GlbWriter`), and a flipped yaw sign makes
   that test fail.
 - Checked by an agent in headless Chrome 154 from `file://` (desktop 1280×800 and phone 390×844):

@@ -18,6 +18,9 @@ namespace GhostMap.Scanner.Capture
         PointAtWalls,
         MoreDetail,
         MissingWall,
+
+        /// <summary>R2: the turn is done, some walls were found; tap the bottom of each missing one.</summary>
+        TapMissingWalls,
         WeakWall,
         Ready,
         NeedHelp
@@ -67,6 +70,15 @@ namespace GhostMap.Scanner.Capture
         /// </summary>
         public const float FewWallsHelpAfterS = 6f;
 
+        /// <summary>
+        /// The observed width given to a wall placed by a tap (R2). Above the
+        /// trust bar and the per-wall minimum in a room, so a tapped wall counts.
+        /// </summary>
+        public const float TappedWallWidthM = 1.0f;
+
+        /// <summary>A tap nearer than this to where the user stands is not a wall.</summary>
+        public const float MinTapDistanceM = 0.4f;
+
         /// <summary>Without any vertical plane for this long, suggest pointing at something detailed.</summary>
         public const float NoDetailAfterS = 8f;
 
@@ -95,6 +107,8 @@ namespace GhostMap.Scanner.Capture
         private float lastSelectAt = float.NegativeInfinity;
         private float firstVerticalAt = float.NaN;
         private float coveredAt = float.NaN;
+        private readonly List<WallCluster> tappedWalls = new List<WallCluster>();
+        private readonly List<WallCluster> allWalls = new List<WallCluster>();
         private Vector2 centerSum;
         private int centerCount;
         private float headingDeg;
@@ -174,6 +188,8 @@ namespace GhostMap.Scanner.Capture
             lastSelectAt = float.NegativeInfinity;
             firstVerticalAt = float.NaN;
             coveredAt = float.NaN;
+            tappedWalls.Clear();
+            LastTapError = string.Empty;
             centerSum = Vector2.zero;
             centerCount = 0;
             CurrentTurnRateDegPerS = 0f;
@@ -220,7 +236,7 @@ namespace GhostMap.Scanner.Capture
             if (now - lastSelectAt >= SelectIntervalS)
             {
                 lastSelectAt = now;
-                LastResult = RoomFromWalls.Select(accumulator.Clusters, ScanCenter);
+                LastResult = RoomFromWalls.Select(AllWalls(), ScanCenter);
             }
 
             UpdateGuidance(tracking, now);
@@ -429,13 +445,165 @@ namespace GhostMap.Scanner.Capture
             return proposals;
         }
 
+        // -------------------------------------------------------------------
+        // R2: walls ARKit cannot see, placed by a tap
+        // -------------------------------------------------------------------
+
+        /// <summary>Why the last tap was refused; empty after a tap that placed a wall.</summary>
+        public string LastTapError { get; private set; } = string.Empty;
+
+        /// <summary>Walls the user placed by tapping their bottom.</summary>
+        public IReadOnlyList<WallCluster> TappedWalls => tappedWalls;
+
+        /// <summary>
+        /// True once the turn is done, the room is not found, and at least one
+        /// wall is trusted to take the missing walls' directions from.
+        /// </summary>
+        public bool CanAddTappedWall =>
+            IsActive && Frame != null && !LastResult.Success
+            && CoverageFraction >= ReadyCoverage && ReferenceWall() != null;
+
+        /// <summary>
+        /// R2 (first iPhone session): ARKit on a phone without LiDAR found no
+        /// plane at all on plain side walls, so no threshold could find them.
+        /// The user points the crosshair at the bottom of a missing wall and
+        /// taps. Assuming square corners (a four-wall room), the wall runs
+        /// parallel or perpendicular to the strongest wall found, whichever
+        /// faces the tap; it passes through the tapped floor point. The wall is
+        /// the user's measurement, not an invented one (ADR-0012).
+        /// </summary>
+        public bool TryAddTappedWall(out string error)
+        {
+            bool added = TryAddTappedWallCore(out error);
+            LastTapError = error;
+            return added;
+        }
+
+        private bool TryAddTappedWallCore(out string error)
+        {
+            if (!CanAddTappedWall)
+            {
+                error = "Finish turning around first.";
+                return false;
+            }
+
+            if (!provider.IsTrackingGood)
+            {
+                error = "Tracking lost. Move the phone slowly.";
+                return false;
+            }
+
+            Ray ghostRay = Frame.WorldRayToGhost(provider.GetScreenRay(provider.CenterScreenPoint));
+            if (!RayPlaneMath.TryIntersectHorizontalPlane(ghostRay, 0f, out Vector3 hit))
+            {
+                error = "Point the dot down at the bottom of the wall, where it meets the floor.";
+                return false;
+            }
+
+            return TryAddTappedWallAt(new Vector2(hit.x, hit.z), out error);
+        }
+
+        /// <summary>The same, for a floor point already in Ghost XZ. Tested directly.</summary>
+        public bool TryAddTappedWall(Vector2 floorPoint, out string error)
+        {
+            bool added = TryAddTappedWallAt(floorPoint, out error);
+            LastTapError = error;
+            return added;
+        }
+
+        private bool TryAddTappedWallAt(Vector2 floorPoint, out string error)
+        {
+            WallCluster reference = ReferenceWall();
+            if (reference == null)
+            {
+                error = "No wall found yet to line the others up with. Tap Help GhostMap.";
+                return false;
+            }
+
+            Vector2 fromCenter = floorPoint - ScanCenter;
+            if (fromCenter.magnitude < MinTapDistanceM)
+            {
+                error = "That is where you are standing. Point at the bottom of a wall.";
+                return false;
+            }
+
+            Vector2 n0 = reference.Normal.normalized;
+            Vector2 n1 = new Vector2(-n0.y, n0.x);
+            Vector2 normal = Mathf.Abs(Vector2.Dot(fromCenter, n0)) >= Mathf.Abs(Vector2.Dot(fromCenter, n1)) ? n0 : n1;
+            float offset = Vector2.Dot(normal, floorPoint);
+
+            foreach (WallCluster wall in AllWalls())
+            {
+                if (!WallPlaneAccumulator.IsTrusted(wall))
+                {
+                    continue;
+                }
+
+                float alignment = Vector2.Dot(normal, wall.Normal);
+                if (Mathf.Abs(alignment) < Mathf.Cos(WallPlaneAccumulator.SameWallAngleDeg * Mathf.Deg2Rad))
+                {
+                    continue;
+                }
+
+                // Same side of the scan centre and close: the same wall.
+                float wallOffset = wall.Offset * Mathf.Sign(alignment);
+                float wallSide = wallOffset - Vector2.Dot(normal, ScanCenter);
+                float tapSide = offset - Vector2.Dot(normal, ScanCenter);
+                if (Mathf.Sign(wallSide) == Mathf.Sign(tapSide) && Mathf.Abs(wallOffset - offset) < 0.5f)
+                {
+                    error = "That wall is already found. Point at a missing one.";
+                    return false;
+                }
+            }
+
+            tappedWalls.Add(new WallCluster
+            {
+                Normal = normal,
+                Offset = offset,
+                ObservedWidthM = TappedWallWidthM,
+                MaxHeightM = 0f,
+                HasWallLabel = true,
+                MemberCount = 0,
+                UserPlaced = true,
+                Score = TappedWallWidthM
+            });
+
+            Reselect();
+            DebugSummary = BuildDebug();
+            error = string.Empty;
+            return true;
+        }
+
+        /// <summary>The highest-scoring trusted wall measured from planes, else a tapped one.</summary>
+        private WallCluster ReferenceWall()
+        {
+            WallCluster best = null;
+            foreach (WallCluster wall in accumulator.Clusters)
+            {
+                if (WallPlaneAccumulator.IsTrusted(wall) && (best == null || wall.Score > best.Score))
+                {
+                    best = wall;
+                }
+            }
+
+            return best ?? (tappedWalls.Count > 0 ? tappedWalls[0] : null);
+        }
+
+        private List<WallCluster> AllWalls()
+        {
+            allWalls.Clear();
+            allWalls.AddRange(accumulator.Clusters);
+            allWalls.AddRange(tappedWalls);
+            return allWalls;
+        }
+
         /// <summary>
         /// Refreshes the wall selection immediately, so Finish uses the freshest walls
         /// rather than the last periodic result.
         /// </summary>
         public RoomFromWallsResult Reselect()
         {
-            LastResult = RoomFromWalls.Select(accumulator.Clusters, ScanCenter);
+            LastResult = RoomFromWalls.Select(AllWalls(), ScanCenter);
             return LastResult;
         }
 
@@ -474,25 +642,28 @@ namespace GhostMap.Scanner.Capture
                 coveredAt = now;
             }
 
-            if (now - startedAt >= OfferHelpAfterS)
+            int trusted = LastResult.TrustedWallCount;
+
+            // R2: walls ARKit could not see are placed by a tap at their
+            // bottom. With three found, say which way the last one is.
+            if (trusted >= 3 && !float.IsNaN(LastResult.MissingBearingDeg))
             {
-                State = AutoScanState.NeedHelp;
-                Message = "Having trouble? Tap Help GhostMap.";
+                State = AutoScanState.MissingWall;
+                Message = DescribeBearing(LastResult.MissingBearingDeg - headingDeg) + " Point at its bottom and tap Add Wall.";
                 return;
             }
 
-            int trusted = LastResult.TrustedWallCount;
-            if (trusted < 3 && now - coveredAt >= FewWallsHelpAfterS)
+            if (trusted >= 1)
             {
-                State = AutoScanState.NeedHelp;
+                State = AutoScanState.TapMissingWalls;
                 Message = DescribeFewWalls(trusted);
                 return;
             }
 
-            if (LastResult.TrustedWallCount >= 3 && !float.IsNaN(LastResult.MissingBearingDeg))
+            if (now - startedAt >= OfferHelpAfterS || now - coveredAt >= FewWallsHelpAfterS)
             {
-                State = AutoScanState.MissingWall;
-                Message = DescribeBearing(LastResult.MissingBearingDeg - headingDeg);
+                State = AutoScanState.NeedHelp;
+                Message = DescribeFewWalls(0);
                 return;
             }
 
@@ -522,7 +693,7 @@ namespace GhostMap.Scanner.Capture
         {
             return trustedWalls <= 0
                 ? "No walls found yet. Tap Help GhostMap to trace them by hand."
-                : $"Found {trustedWalls} of 4 walls. Tap Help GhostMap to trace them by hand.";
+                : $"Found {trustedWalls} of 4 walls. Point the dot at the bottom of a missing wall and tap Add Wall.";
         }
 
         /// <summary>Turns a bearing relative to where the camera faces into a short instruction.</summary>
@@ -618,6 +789,12 @@ namespace GhostMap.Scanner.Capture
                     "  wall {0}: width {1:F1} m height {2:F1} m members {3} label {4} trusted {5} bearing {6:F0} deg dist {7:F2} m\n",
                     i, c.ObservedWidthM, c.MaxHeightM, c.MemberCount, c.HasWallLabel, WallPlaneAccumulator.IsTrusted(c),
                     bearingDeg, distanceM);
+            }
+
+            for (int i = 0; i < tappedWalls.Count; i++)
+            {
+                WallBearing(tappedWalls[i], ScanCenter, out float tapBearing, out float tapDistance);
+                sb.AppendFormat("  tapped wall {0}: bearing {1:F0} deg dist {2:F2} m\n", i, tapBearing, tapDistance);
             }
 
             if (TryGetCeilingHeight(out float h))

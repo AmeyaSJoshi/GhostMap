@@ -8,7 +8,9 @@ detail in `git show 0b7a106:docs/status/scanner.md` and the hackathon handoffs
 ## Current state
 
 > **Blocker (2026-10-11):** on the owner's iPhone the stand-in-place scan
-> finds only two trusted walls, so it cannot build the room. Read
+> finds only two walls (ARKit reports no plane on plain side walls). Since
+> 2026-10-12 the user taps the bottom of each missing wall (**Add Wall**);
+> device run 4 pending. Read
 > `docs/tasks/R2-auto-scan-walls.md` (code map, device logs, hypotheses, next
 > steps). Fixes so far are on `fix/scanner-r2-wall-planes`.
 

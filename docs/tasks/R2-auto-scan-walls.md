@@ -24,6 +24,7 @@ tried yet.
 | --- | --- | --- | --- | --- | --- |
 | 1 | `scanner/r9-hardening` | unknown (no counter yet) | **0** for the whole turn | 0 | No room |
 | 2 | `fix/scanner-r2-wall-planes` `1a5c025` | 7 vertical planes, 4 labelled "wall" by ARKit | 7 | **2** (2.6 m and 1.8 m wide, labelled, full height) | No room |
+| 3 | `e80e02e` (labelled trust bar 0.5 m, bearings logged) | 7 vertical planes, 4 labelled | 5, all on **two lines** | **2**: ahead (bearing 23 deg, 0.8 m away, 2.3 m wide) and **behind** (bearing ~203 deg, 0.3-0.5 m away, 0.9 m wide) | No room |
 
 Run 2's untrusted candidates:
 
@@ -31,10 +32,30 @@ Run 2's untrusted candidates:
 - labelled 0.6 m x 0.7 m and 0.3 m x 1.8 m patches;
 - unlabelled 0.5-0.7 m wide patches under 1 m tall (bar: 2.5 m).
 
-Run 2 did not log where each wall is, so it is unknown whether the small planes
-are the third and fourth walls, the same walls again, or furniture. Every
-summary line now ends with `bearing <deg> deg dist <m> m`; the next device run
-answers that.
+Run 2 did not log where each wall is. **Run 3 did, and settles the
+question:** every kept plane lies on two opposite lines, the wall ahead and the
+wall behind. **ARKit reported no plane at all on the two side walls during a
+full turn**, so no threshold change can find them. Without LiDAR, ARKit
+detects planes from tracked texture; plain painted walls give it none. Apple's
+RoomPlan requires LiDAR for this reason.
+
+**Answer (2026-10-12): tap the missing walls.** After the turn, if at least one
+wall was found, the guide says "Found 2 of 4 walls. Point the dot at the bottom
+of a missing wall and tap Add Wall." The main button becomes **Add Wall**. Each
+tap places a wall through the tapped floor point, parallel or perpendicular to
+the strongest wall found (square corners), whichever faces the tap
+(`AutoRoomScanController.TryAddTappedWall`, `WallCluster.UserPlaced`). With
+two walls found, that is two taps; you stay in one spot. The room then builds
+and finishes as usual. A tap near a found wall, at your feet, or before the
+turn is done is refused, with the reason in the guide. With no wall found,
+Help GhostMap (the sweep) is still the way. ADR-0012 records the amendment.
+
+Also from run 3: the user stood 0.30-0.38 m from the wall behind, at the old
+0.3 m `MinCenterToWallM` edge; that is now 0.2 m.
+
+Still open: run 3's two found walls are only about 1.2 m apart. Either the
+room really is that narrow at that spot, or the "wall" behind is a wardrobe or
+headboard. The next run's tapped room size answers it.
 
 ## How the scan decides (code map)
 
@@ -56,7 +77,8 @@ ArSpatialProvider.TryGetDetectedSurfaces          ARPlaneManager.trackables -> D
 | Same wall | `SameWallAngleDeg` / `SameWallOffsetM` | 12 deg, 0.30 m | Planes merge into one cluster |
 | **Trusted wall** | `TrustedLabelledWidthM` / `TrustedUnlabelledWidthM` | **0.5 m labelled** (was 1.0 m until run 3's build), 2.5 m unlabelled, observed width along the line | **This is what failed in run 2** |
 | Room | `RoomFromWalls.Select` | at least 3 trusted to name the missing direction, **4 trusted** that enclose the scan centre (no angular gap over 170 deg, centre at least 0.3 m from each wall, each wall at least 0.5 m observed (`MinObservedPerWallM`, was 0.8 m), observed length at least 25% of the perimeter) | ADR-0012: never invents a wall |
-| Help offer | `AutoRoomScanController.OfferHelpAfterS` / `FewWallsHelpAfterS` | 30 s; 6 s after a full turn with 0-2 trusted | |
+| Help offer | `AutoRoomScanController.OfferHelpAfterS` / `FewWallsHelpAfterS` | 30 s; 6 s after a full turn with 0 trusted | With 1-2 trusted the scan asks for taps instead (`TapMissingWalls`) |
+| Tapped wall | `AutoRoomScanController.TryAddTappedWall`, `TappedWallWidthM`, `MinTapDistanceM` | counts as a 1.0 m labelled wall; a tap at least 0.4 m from you; refused within 0.5 m of a found wall on the same side | R2 run 3 answer |
 
 ## Hypotheses, most likely first
 
@@ -95,7 +117,16 @@ Unlabelled walls still need 2.5 m. **Risk:** a small plane that ARKit labels
 requires four walls enclosing the user, and the shared room validator still
 applies. The next device run (it logs bearings) shows whether this worked.
 
-## Next steps
+## Next steps (after run 3)
+
+1. **Owner:** press Run, Lock Floor, Scan Room, turn once. When it says "Found
+   N of 4 walls", point at the bottom of each missing wall and tap **Add Wall**.
+   If it fails, paste the log.
+2. **Agent:** if the tapped room's size looks wrong (for example about 1.2 m
+   deep), the "wall" behind was furniture. Then add a way to tap over a wrong
+   wall, or prefer the farther of two parallel walls on the same side.
+
+## Earlier next steps (before run 3; kept for the record)
 
 1. **Owner:** run the scan once more with the current build (it logs bearing and
    distance), using wireless debugging (Xcode > Window > Devices and

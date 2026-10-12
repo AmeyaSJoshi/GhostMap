@@ -17,6 +17,12 @@ namespace GhostMap.Scanner.Capture
         /// <summary>Unit normal in Ghost XZ (x, z). Sign is arbitrary.</summary>
         public Vector2 Normal;
 
+        /// <summary>
+        /// R2: placed by the user's tap on the wall's bottom (ARKit reported no
+        /// plane there), not measured from planes.
+        /// </summary>
+        public bool UserPlaced;
+
         /// <summary><c>dot(Normal, p)</c> for any point <c>p</c> on the wall line.</summary>
         public float Offset;
 

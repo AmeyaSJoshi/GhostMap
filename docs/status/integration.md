@@ -6,8 +6,9 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 ## Current state
 
 > **Current blocker (2026-10-11): the stand-in-place room scan does not find
-> the room on the owner's iPhone.** ARKit sees the walls but only two are big
-> enough to be trusted. Everything about it, including the device logs, the
+> the room on the owner's iPhone.** Run 3 showed ARKit finds no plane at all on
+> plain side walls; the build now asks the user to tap the bottom of each
+> missing wall (run 4 pending). Everything about it, including the device logs, the
 > code map, hypotheses and next steps, is in
 > [`docs/tasks/R2-auto-scan-walls.md`](../tasks/R2-auto-scan-walls.md). Start there.
 
@@ -97,6 +98,7 @@ The counts match those recorded in `GhostMapDublinHacks` at `0b7a106`. CI's Unit
 | 2026-10-11 | `scanner/r9-hardening`, owner's iPhone (A19, iOS 26.6.2) | Lock Floor | Worked | — |
 | 2026-10-11 | same (run 1) | Scan Room, one full turn (coverage 100%, 11-16 deg/s) | **Failed: "planes 0 walls 0" for the whole turn**, ended at "Help GhostMap". ARKit logged "World tracking performance is being affected by resource constraints" as the YOLO model compiled at floor lock. YOLO ran at 9-14 ms per frame (one 22 ms) | `fix/scanner-r2-wall-planes`: wall patches down to 0.5 m wide (0.3 m if labelled) now count and add up along their wall, but an unlabelled patch must reach 1.3 m high (furniture fronts stop lower); trust thresholds unchanged. YOLO model loads at launch and runs at 2 fps until the furniture step. The log now prints raw vertical planes before filtering, so a retry says what ARKit reported |
 | 2026-10-11 | `fix/scanner-r2-wall-planes` at `1a5c025` (run 2) | Scan Room, one full turn | **Failed again, but ARKit sees walls now:** 7 raw vertical planes (4 labelled "wall" by ARKit), 7 kept, **2 trusted** (2.6 m and 1.8 m, labelled, full height). Untrusted: labelled 0.8 x 2.0 m (bar 1.0 m), labelled 0.6 x 0.7 and 0.3 x 1.8 m, unlabelled 0.5-0.7 m under 1 m tall. Needs 3 trusted to point at the missing wall, 4 to build. The "resource constraints" warning still appeared with YOLO loaded at launch. Full log: `docs/research/r2-device-logs/2026-10-11-auto-scan.md` | Each wall's bearing and distance from the scan centre are now logged, to tell walls from furniture. The owner declined further measuring, so the agent lowered the labelled-wall trust bar (1.0 to 0.5 m) and the per-wall minimum in a room (0.8 to 0.5 m) from run 2's numbers; a test with the device's wall sizes now builds a room. Next: run 3 on the device |
+| 2026-10-12 | `e80e02e` (run 3) | Scan Room, one full turn, with wall bearings logged | **Failed: only two opposite walls exist in ARKit's data** (ahead at 23 deg, 0.8 m; behind at ~203 deg, 0.3-0.5 m). The side walls produced **no plane at all** in a full turn | **Tap the missing walls:** after the turn the guide asks to point at the bottom of each missing wall and tap **Add Wall** (two taps here). `MinCenterToWallM` 0.3 to 0.2 m (the owner stood 0.30 m from the wall behind). ADR-0012 amended. Next: run 4 |
 
 ## Open decisions for the owner
 

@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using GhostMap.Scanner.AR;
 using GhostMap.Scanner.Capture;
 using GhostMap.Scanner.UI;
@@ -396,6 +398,145 @@ namespace GhostMap.Scanner.Tests.EditMode
             Assert.AreEqual(4, workflow.Snapshot.room.corners.Length);
         }
 
+        // -------------------------------------------------------------------
+        // R2 run 3: ARKit found the walls ahead and behind, nothing at the
+        // sides (plain walls give a camera nothing to track). The user taps
+        // the bottom of each missing wall.
+        // -------------------------------------------------------------------
+
+        private static ScanWorkflowController TurnedWithWalls(FakeSpatialProvider provider, params Func<GhostCoordinateFrame, DetectedSurface>[] walls)
+        {
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+            var surfaces = new List<DetectedSurface>();
+            foreach (Func<GhostCoordinateFrame, DetectedSurface> wall in walls)
+            {
+                surfaces.Add(wall(workflow.Frame));
+            }
+
+            Feed(provider, surfaces);
+            workflow.BeginAutoScan(0f);
+            TurnOnce(provider, workflow);
+            return workflow;
+        }
+
+        private static ScanWorkflowController RunThreeRoom(FakeSpatialProvider provider)
+            => TurnedWithWalls(
+                provider,
+                f => Patch(f, 0.2f, 1.5f, 0f, -1f, 2.3f, 2.6f, 1.3f, PlaneClassifications.WallFace),
+                f => Patch(f, -0.3f, -1.0f, 0f, 1f, 0.9f, 2.3f, 1.2f, PlaneClassifications.WallFace));
+
+        private static void AimAtFloor(FakeSpatialProvider provider, GhostCoordinateFrame frame, float x, float z)
+        {
+            Vector3 eye = frame.GhostToWorld(new Vector3(0f, 1.5f, 0f));
+            Vector3 target = frame.GhostToWorld(new Vector3(x, 0f, z));
+            provider.ScreenRay = new Ray(eye, (target - eye).normalized);
+        }
+
+        [Test]
+        public void RunThree_TwoTapsOnTheSideWalls_BuildTheRoom()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = RunThreeRoom(provider);
+            Assert.AreEqual(2, workflow.Auto.LastResult.TrustedWallCount);
+            Assert.IsFalse(workflow.Auto.IsReadyToFinish);
+
+            AimAtFloor(provider, workflow.Frame, 1.6f, 0.3f);
+            Assert.IsTrue(workflow.TryAddTappedWall(out string error), error);
+            AimAtFloor(provider, workflow.Frame, -1.4f, -0.2f);
+            Assert.IsTrue(workflow.TryAddTappedWall(out error), error);
+
+            Assert.IsTrue(workflow.Auto.IsReadyToFinish, workflow.Auto.DebugSummary);
+            Assert.IsTrue(workflow.TryFinishAutoScan(out AutoScanRejection rejection), rejection.ToString());
+
+            float[] xs = workflow.Snapshot.room.corners.Select(c => c.position.x).ToArray();
+            float[] zs = workflow.Snapshot.room.corners.Select(c => c.position.z).ToArray();
+            Assert.AreEqual(3.0f, xs.Max() - xs.Min(), 0.02f, "between the two taps");
+            Assert.AreEqual(2.5f, zs.Max() - zs.Min(), 0.02f, "between the two walls ARKit found");
+            StringAssert.Contains("tapped wall 1", workflow.Auto.DebugSummary);
+        }
+
+        [Test]
+        public void RunThree_TheGuideAsksForTheMissingWalls()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = RunThreeRoom(provider);
+
+            ScanGuideStep step = ScanGuide.Describe(workflow, new ScanGuideContext(true, FloorLockRejection.None, false));
+
+            Assert.AreEqual("Add the missing walls", step.Title);
+            Assert.AreEqual("Bottom of a missing wall", step.AimHint);
+            StringAssert.Contains("Found 2 of 4 walls", step.Message);
+        }
+
+        [Test]
+        public void ATapNearAWallAlreadyFound_IsRefused()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = RunThreeRoom(provider);
+
+            Assert.IsFalse(workflow.Auto.TryAddTappedWall(new Vector2(0.1f, 1.4f), out string error));
+
+            StringAssert.Contains("already found", error);
+            Assert.AreEqual(0, workflow.Auto.TappedWalls.Count);
+            Assert.AreEqual(error, workflow.Auto.LastTapError);
+        }
+
+        [Test]
+        public void ATapAtYourFeet_IsRefused()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = RunThreeRoom(provider);
+
+            Assert.IsFalse(workflow.Auto.TryAddTappedWall(new Vector2(0.1f, 0.1f), out string error));
+
+            StringAssert.Contains("standing", error);
+        }
+
+        [Test]
+        public void TappingIsRefusedBeforeTheTurnIsDone_AndOutsideTheScan()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+            Assert.IsFalse(workflow.TryAddTappedWall(out string error), "not scanning");
+
+            Feed(provider, new[] { Patch(workflow.Frame, 0f, 1.5f, 0f, -1f, 2.3f, 2.6f, 1.3f, PlaneClassifications.WallFace) });
+            workflow.BeginAutoScan(0f);
+            workflow.TickAutoScan(0.1f);
+
+            Assert.IsFalse(workflow.Auto.CanAddTappedWall);
+            Assert.IsFalse(workflow.TryAddTappedWall(out error));
+            StringAssert.Contains("turning", error);
+        }
+
+        [Test]
+        public void WithOneWall_TapsBehindAndAtTheSides_LineUpWithIt()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = TurnedWithWalls(
+                provider,
+                f => Patch(f, 0f, 1.5f, 0f, -1f, 2.3f, 2.6f, 1.3f, PlaneClassifications.WallFace));
+            Assert.AreEqual(AutoScanState.TapMissingWalls, workflow.Auto.State);
+
+            Assert.IsTrue(workflow.Auto.TryAddTappedWall(new Vector2(0.2f, -1.2f), out string error), error);
+            Assert.IsTrue(workflow.Auto.TryAddTappedWall(new Vector2(1.8f, 0.4f), out error), error);
+            Assert.IsTrue(workflow.Auto.TryAddTappedWall(new Vector2(-1.5f, -0.3f), out error), error);
+
+            Assert.IsTrue(workflow.Auto.IsReadyToFinish, workflow.Auto.DebugSummary);
+            Assert.AreEqual(1f, Mathf.Abs(workflow.Auto.TappedWalls[0].Normal.y), 1e-4f, "behind: parallel to the wall found");
+            Assert.AreEqual(1f, Mathf.Abs(workflow.Auto.TappedWalls[1].Normal.x), 1e-4f, "at the side: perpendicular");
+        }
+
+        [Test]
+        public void WithNoWallFound_TappingIsNotOffered()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = TurnedWithWalls(provider);
+
+            Assert.IsFalse(workflow.Auto.CanAddTappedWall);
+            Assert.IsFalse(workflow.Auto.TryAddTappedWall(new Vector2(1.5f, 0f), out string error));
+            StringAssert.Contains("Help GhostMap", error);
+        }
+
         [Test]
         public void DoorAndWindowFramePlanes_AreNotWalls()
         {
@@ -620,7 +761,7 @@ namespace GhostMap.Scanner.Tests.EditMode
         }
 
         [Test]
-        public void AutoScan_WithTwoWalls_OffersTheSweepSoonAfterTheTurn()
+        public void AutoScan_WithTwoWalls_AsksForTheMissingWallsByTap()
         {
             FakeSpatialProvider provider = Provider();
             ScanWorkflowController workflow = LockedWorkflow(provider);
@@ -629,15 +770,11 @@ namespace GhostMap.Scanner.Tests.EditMode
             Feed(provider, surfaces);
 
             workflow.BeginAutoScan(0f);
-            float now = TurnOnce(provider, workflow);
-            Assert.AreNotEqual(AutoScanState.NeedHelp, workflow.Auto.State, "not straight after the turn");
+            TurnOnce(provider, workflow);
 
-            Wait(workflow, now, AutoRoomScanController.FewWallsHelpAfterS + 0.5f);
-
-            Assert.AreEqual(AutoScanState.NeedHelp, workflow.Auto.State);
-            Assert.AreEqual("Found 2 of 4 walls. Tap Help GhostMap to trace them by hand.", workflow.Auto.Message);
-            Assert.Less(now + AutoRoomScanController.FewWallsHelpAfterS + 0.5f, AutoRoomScanController.OfferHelpAfterS,
-                "sooner than the general offer");
+            Assert.AreEqual(AutoScanState.TapMissingWalls, workflow.Auto.State);
+            Assert.AreEqual("Found 2 of 4 walls. Point the dot at the bottom of a missing wall and tap Add Wall.", workflow.Auto.Message);
+            Assert.IsTrue(workflow.Auto.CanAddTappedWall);
         }
 
         [Test]
@@ -673,8 +810,8 @@ namespace GhostMap.Scanner.Tests.EditMode
         }
 
         [TestCase(0, "No walls found yet. Tap Help GhostMap to trace them by hand.")]
-        [TestCase(1, "Found 1 of 4 walls. Tap Help GhostMap to trace them by hand.")]
-        [TestCase(2, "Found 2 of 4 walls. Tap Help GhostMap to trace them by hand.")]
+        [TestCase(1, "Found 1 of 4 walls. Point the dot at the bottom of a missing wall and tap Add Wall.")]
+        [TestCase(2, "Found 2 of 4 walls. Point the dot at the bottom of a missing wall and tap Add Wall.")]
         public void DescribeFewWalls_CountsTheWallsFound(int walls, string expected)
         {
             Assert.AreEqual(expected, AutoRoomScanController.DescribeFewWalls(walls));

@@ -334,6 +334,18 @@ namespace GhostMap.Scanner.UI
                 kind = GuideMessageKind.Success;
             }
 
+            // R2: walls ARKit could not see are placed by aiming and tapping.
+            if (auto.CanAddTappedWall && !auto.IsReadyToFinish)
+            {
+                return new ScanGuideStep(
+                    2,
+                    "Add the missing walls",
+                    "Point the dot at the bottom of a wall GhostMap missed, where it meets the floor, and tap Add Wall.",
+                    "Bottom of a missing wall",
+                    !string.IsNullOrEmpty(auto.LastTapError) ? auto.LastTapError : auto.Message,
+                    !string.IsNullOrEmpty(auto.LastTapError) ? GuideMessageKind.Error : GuideMessageKind.Tip);
+            }
+
             return new ScanGuideStep(
                 2,
                 "Scan the room",

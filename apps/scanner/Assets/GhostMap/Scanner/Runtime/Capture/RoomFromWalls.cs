@@ -52,8 +52,11 @@ namespace GhostMap.Scanner.Capture
         /// <summary>The scan center must have walls on all sides: no gap wider than this.</summary>
         public const float MaxAngularGapDeg = 170f;
 
-        /// <summary>The scan center must not sit on a wall.</summary>
-        public const float MinCenterToWallM = 0.3f;
+        /// <summary>
+        /// The scan center must not sit on a wall. R2 run 3: the owner stood
+        /// 0.30-0.38 m from the wall behind them, at the old 0.3 m edge.
+        /// </summary>
+        public const float MinCenterToWallM = 0.2f;
 
         /// <summary>Every chosen wall must have at least this much observed length.</summary>
         public const float MinObservedPerWallM = 0.5f;

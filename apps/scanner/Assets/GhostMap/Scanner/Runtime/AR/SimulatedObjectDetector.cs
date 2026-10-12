@@ -49,6 +49,18 @@ namespace GhostMap.Scanner.AR
             return true;
         }
 
+        /// <summary>
+        /// No photos in demo mode: encoding a JPEG in Unity needs the Image
+        /// Conversion module, which this project does not include (adding it
+        /// is a dependency change, AGENTS.md rule 10). On the phone the native
+        /// plugin encodes them.
+        /// </summary>
+        public bool TryCapturePhoto(Rect screenBox, out byte[] jpeg)
+        {
+            jpeg = null;
+            return false;
+        }
+
         private bool TryProject(Bounds bounds, out Rect box)
         {
             var min = new Vector2(float.MaxValue, float.MaxValue);
@@ -87,6 +99,12 @@ namespace GhostMap.Scanner.AR
         public bool TryGetLatest(List<ObjectDetection> into, out double timestamp)
         {
             timestamp = 0;
+            return false;
+        }
+
+        public bool TryCapturePhoto(Rect screenBox, out byte[] jpeg)
+        {
+            jpeg = null;
             return false;
         }
     }

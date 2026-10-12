@@ -26,6 +26,7 @@ but none of it has run on an iPhone.**
 | Furniture identification (ADR-0011, task `R4`) | YOLO11n (Core ML, plugin `Assets/Plugins/iOS/GhostMapDetector/GhostMapDetector.mm`, model in `StreamingAssets/GhostMap/`) reads the camera image five times a second **from floor lock until furniture is done**, so what the camera passes while the user turns to scan the room is already found at the furniture step. `FurnitureIdentificationController` takes each box's bottom-centre to the floor, ignores points over 8 m away, outside the room once it exists, or on furniture already added, matches the ARKit surface it sits under, maps the COCO class (`FurnitureClassMap`), and proposes an item after 5 frames at >= 0.5 confidence (same type within 0.5 m is one item). A sighting not yet proposed is forgotten after 3 s unseen; a proposal is kept until added, or dropped when the closed room shows it is outside; a proposal seen before surfaces were measured takes its surface (and desk-or-table type) once they are. The guide says "Found: bed, desk, 2 chairs. Tap Add All."; **Add All** adds surfaces with their identified type and the rest at their floor position with default sizes, one revision each. A surface the detector has not named is offered as `generic`. Logs `GhostMap yolo: <ms> ms` every 25 frames and `GhostMap identify: <list>` when the list changes | Not run on a device. Model checked with Vision on the Mac; app compiled with Core ML and Vision linked and the model inside |
 | Export bundle (ADR-0013, task `R6`) | **Finish** (was Finalize GhostMap) builds `GhostMap-<room>-<time>.zip` (`room.html`, `room.glb`, `objects/<id>.glb`, `scene.json`, `README.txt`) with `ExportBundleBuilder` and keeps it via `SavedScanStore` in `persistentDataPath/scans/`. The guide says "saved on this iPhone" or shows the error; **Send to Computer** retries a failed export. Logs `GhostMap export: saved <file> (<KB>) in <ms>`. On the Mac: 27 ms, 182 KB for the fixture room | Not run on a device |
 | Send to Computer and Your rooms (ADR-0013, task `R7`) | After **Finish**, **Send to Computer** opens the iOS share sheet (`UIActivityViewController`, native plugin `Assets/Plugins/iOS/GhostMapShare/GhostMapShare.mm`) with the saved zip: AirDrop, Save to Files, Mail. The guide reports "Sent with AirDrop.", "Saved to Files." or the error; a cancel says nothing and the button works again. **Rooms** (top bar) lists the five newest saved rooms ("Bedroom · 11 Oct, 14:30"), each with its own Send button. The network chip is now **Live view**, a developer tool that no longer opens by itself. Logic in `ShareController` behind `IShareSheet`; the Editor reveals the zip in Finder instead | Not run on a device. Simulator: share sheet, Save to Files and the callback work |
+| A photo of each object (task `R11`) | The detector plugin keeps its last analysed camera frame and crops JPEGs from it (at most 480 px). Identified furniture keeps the crop of its most confident sighting; anything else gets a crop of the camera view around it when added, if mostly on screen. `ScanWorkflowController.ObjectPhotos` holds them by object id (dropped on undo, never published); the export writes `photos/<id>.jpg` and `objectPhotos` in `room.html`. No photos in demo mode (the project has no Image Conversion module) | Not run on a device. Compiled for iPhone |
 | Quick-send discovery (ADR-0009) — now the developer **Live view** card | Finds the Viewer over UDP 47832 after finalize | Superseded by ADR-0013; dormant, removed in `R10` |
 
 ### Scan flow
@@ -59,6 +60,9 @@ validation and the snapshot are identical however the room was captured.
 - Export bundle: branch `integration/r6-export-bundle`; EditMode 694/694,
   `ScannerBuild.BuildScanner` and unsigned `xcodebuild` on the owner's Mac,
   2026-10-11. Not device-verified.
+- Object photos: branch `integration/r11-object-photos`; EditMode 805/805,
+  iOS build and unsigned `xcodebuild` on the owner's Mac, 2026-10-11. Not
+  device-verified.
 - Furniture identification: branch `scanner/r4-yolo-identification`; EditMode
   779/779 (773 before identification moved to floor lock), `ScannerBuild.BuildScanner` and unsigned `xcodebuild` on the
   owner's Mac, 2026-10-11. Not device-verified.
@@ -77,7 +81,7 @@ unsigned `xcodebuild` (Release, iphoneos) succeeded there.
 
 **Confirmed in this repository on 2026-10-11 at `69af8eb`: 577 tests, 577
 passed**. **After `R6`: 694 tests, 694 passed** (+90 embedded shared, +27 export), 0 failed (owner's Mac, Unity 6000.3.24f1).
-**After `R7`: 710. After `R4`: 779 tests, 779 passed** (773 at the first `R4` commit, +6 for identification from floor lock; +73
+**After `R7`: 710. After `R4`: 779 tests, 779 passed** **After `R11`: 805** (+26 photo tests). For `R4`: 773 at its first commit, +6 for identification from floor lock; +73
 `FurnitureIdentificationTests` cases, +2 guide tests, +2 detection tests with
 the six ADR-0007 suggestion tests rewritten for identified types, -14
 `FurnitureTypeSuggesterTests` removed); the iOS
@@ -134,6 +138,10 @@ messages, `ProtocolSerializer` and `PeerDiscoveryProtocol`.
   only). Items without a surface are added facing +Z at default size.
 - In demo mode the virtual furniture is "seen" through the walls (the
   simulated detector does not test occlusion).
+- Object photos (`R11`): none in demo mode; an object off screen when added
+  gets none; a photo can include neighbouring furniture. The plugin holds one
+  ARKit camera buffer between frames, which could in theory make ARKit drop a
+  frame.
 
 **Build**
 - iOS build: **GhostMap > Configure Scanner XR (iOS)**, then **GhostMap > Build

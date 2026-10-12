@@ -942,6 +942,139 @@ namespace GhostMap.Scanner.Tests.EditMode
         }
 
         // -------------------------------------------------------------------
+        // Task R11: photos
+        // -------------------------------------------------------------------
+
+        private static byte[] Jpeg(byte marker) => new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, marker };
+
+        [Test]
+        public void AFirstSighting_AsksForAPhotoOfItsBox()
+        {
+            FurnitureIdentificationController identifier = Identifier(Provider());
+
+            Repeat(identifier, Frame(Seen("chair", 1f, 1f, 0.6f)), 1);
+
+            IReadOnlyList<IdentifiedFurniture> wanting = identifier.WantingPhotos();
+            Assert.AreEqual(1, wanting.Count);
+            Assert.AreEqual(Seen("chair", 1f, 1f).ScreenBox, wanting[0].PhotoBox);
+            Assert.IsTrue(identifier.SetPhoto(wanting[0].Id, Jpeg(1)));
+            Assert.AreEqual(0.6f, identifier.Tracked[0].PhotoConfidence, Tolerance);
+            Assert.AreEqual(0, identifier.WantingPhotos().Count);
+        }
+
+        [Test]
+        public void ANewPhoto_IsWantedOnlyForAClearlyBetterSighting()
+        {
+            FurnitureIdentificationController identifier = Identifier(Provider());
+            Repeat(identifier, Frame(Seen("chair", 1f, 1f, 0.6f)), 1);
+            Assert.IsTrue(identifier.SetPhoto(identifier.Tracked[0].Id, Jpeg(1)));
+
+            Repeat(identifier, Frame(Seen("chair", 1f, 1f, 0.64f)), 1, start: 0.1f);
+            Assert.AreEqual(0, identifier.WantingPhotos().Count, "0.04 better is not worth a photo");
+
+            Repeat(identifier, Frame(Seen("chair", 1f, 1f, 0.7f)), 1, start: 0.2f);
+            Assert.AreEqual(1, identifier.WantingPhotos().Count);
+            Assert.IsTrue(identifier.SetPhoto(identifier.Tracked[0].Id, Jpeg(2)));
+            Assert.AreEqual(Jpeg(2), identifier.Tracked[0].Photo);
+        }
+
+        [Test]
+        public void AFailedCapture_IsAskedForAgainNextFrame()
+        {
+            FurnitureIdentificationController identifier = Identifier(Provider());
+            Repeat(identifier, Frame(Seen("chair", 1f, 1f)), 1);
+
+            Repeat(identifier, Frame(Seen("chair", 1f, 1f)), 1, start: 0.1f);
+
+            Assert.AreEqual(1, identifier.WantingPhotos().Count);
+        }
+
+        [Test]
+        public void SetPhoto_RefusesNonJpegs_AndTracksThatDidNotAsk()
+        {
+            FurnitureIdentificationController identifier = Identifier(Provider());
+            Repeat(identifier, Frame(Seen("chair", 1f, 1f)), 1);
+            int id = identifier.Tracked[0].Id;
+
+            Assert.IsFalse(identifier.SetPhoto(id, new byte[] { 0x89, 0x50, 0x4E, 0x47, 0 }));
+            Assert.IsFalse(identifier.SetPhoto(id + 100, Jpeg(1)));
+
+            Repeat(identifier, Frame(), 1, start: 0.1f);
+            Assert.IsFalse(identifier.SetPhoto(id, Jpeg(1)), "not seen this frame");
+        }
+
+        [Test]
+        public void Workflow_AddAll_KeepsEachIdentifiedPhoto_WithItsObject()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = AddObjectsWorkflow(provider);
+            See(workflow, Frame(Seen("bed", 1f, 0.4f), Seen("chair", 3f, 1f)), 1);
+            foreach (IdentifiedFurniture item in workflow.FurnitureIdentification.WantingPhotos())
+            {
+                Assert.IsTrue(workflow.FurnitureIdentification.SetPhoto(item.Id, Jpeg((byte)item.Id)));
+            }
+
+            See(workflow, Frame(Seen("bed", 1f, 0.4f), Seen("chair", 3f, 1f)), 4, 0.1f);
+            Assert.AreEqual(2, workflow.TryAcceptAllDetectedFurniture());
+
+            Assert.AreEqual(2, workflow.ObjectPhotos.Count);
+            foreach (SceneObjectModel model in workflow.Objects.Objects)
+            {
+                Assert.IsTrue(workflow.ObjectPhotos.ContainsKey(model.id), model.type);
+            }
+        }
+
+        [Test]
+        public void Workflow_AnIdentifiedSurface_KeepsItsPhoto()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = AddObjectsWorkflow(provider);
+            provider.DetectedSurfaces.Add(DeskPlane(workflow.Frame, 2f, 1.5f));
+            Assert.IsTrue(workflow.TryRefreshFurnitureDetection(out _));
+            See(workflow, Frame(Seen("dining table", 2f, 1.1f)), 1);
+            Assert.IsTrue(workflow.FurnitureIdentification.SetPhoto(workflow.FurnitureIdentification.Tracked[0].Id, Jpeg(7)));
+            See(workflow, Frame(Seen("dining table", 2f, 1.1f)), 4, 0.1f);
+
+            Assert.AreEqual(1, workflow.TryAcceptAllDetectedFurniture());
+
+            CollectionAssert.AreEqual(Jpeg(7), workflow.ObjectPhotos[workflow.Objects.Objects[0].id]);
+        }
+
+        [Test]
+        public void Workflow_SetObjectPhoto_OnlyForAPlacedObject_AndUndoDropsIt()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = AddObjectsWorkflow(provider);
+            provider.ScreenRayAt = null;
+            AimAtGhost(provider, workflow.Frame, 3f, 2f);
+            Assert.IsTrue(workflow.SetObjectType("dresser"));
+            Assert.IsTrue(workflow.TryPlaceObject(out _));
+            string id = workflow.Objects.Objects[0].id;
+            int revision = workflow.Revision;
+
+            Assert.IsFalse(workflow.SetObjectPhoto("no-such-object", Jpeg(1)));
+            Assert.IsFalse(workflow.SetObjectPhoto(id, new byte[] { 1, 2, 3, 4 }));
+            Assert.IsTrue(workflow.SetObjectPhoto(id, Jpeg(1)));
+            Assert.AreEqual(revision, workflow.Revision, "a photo is not scene state");
+
+            Assert.IsTrue(workflow.TryUndoLastObject(out _));
+            Assert.AreEqual(0, workflow.ObjectPhotos.Count);
+        }
+
+        [Test]
+        public void Workflow_SetObjectPhoto_IsRefusedOnceFurnitureIsDone()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = AddObjectsWorkflow(provider);
+            provider.ScreenRayAt = null;
+            AimAtGhost(provider, workflow.Frame, 3f, 2f);
+            Assert.IsTrue(workflow.TryPlaceObject(out _));
+            Assert.IsTrue(workflow.FinishAddingObjects());
+
+            Assert.IsFalse(workflow.SetObjectPhoto(workflow.Objects.Objects[0].id, Jpeg(1)));
+        }
+
+        // -------------------------------------------------------------------
 
         private static void AssertNear(Vector2 expected, Vector2 actual)
         {

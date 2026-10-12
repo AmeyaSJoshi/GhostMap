@@ -38,7 +38,14 @@ async function start() {
     return;
   }
 
-  const { scene: snapshot, warnings } = parsed;
+  const { scene: snapshot, warnings, objectPhotos } = parsed;
+
+  // Task R11: each object's photo, as a blob URL made once (the page's CSP
+  // allows img-src blob:).
+  const photoUrls = new Map();
+  for (const [id, bytes] of objectPhotos) {
+    photoUrls.set(id, URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' })));
+  }
   const room = snapshot.room;
   const objects = Array.isArray(room.objects) ? room.objects : [];
 
@@ -202,6 +209,19 @@ async function start() {
 
     el('selection-title').textContent = objectTitle(object);
     fillRows(el('selection-details'), objectDetails(object));
+
+    const photo = el('selection-photo');
+    const photoUrl = photoUrls.get(id);
+    if (photoUrl) {
+      photo.src = photoUrl;
+      photo.alt = `Photo of the ${objectTitle(object).toLowerCase()}, taken by the phone`;
+      photo.hidden = false;
+    } else {
+      photo.removeAttribute('src');
+      photo.alt = '';
+      photo.hidden = true;
+    }
+
     panel.hidden = false;
 
     const root = objectRoots.get(id);

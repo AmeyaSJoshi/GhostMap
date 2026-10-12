@@ -48,5 +48,13 @@ namespace GhostMap.Scanner.AR
         /// detector frame once.
         /// </summary>
         bool TryGetLatest(List<ObjectDetection> into, out double timestamp);
+
+        /// <summary>
+        /// Task R11: a JPEG of part of the camera image from the frame last
+        /// returned by <see cref="TryGetLatest"/> (screen pixels, bottom-left
+        /// origin), at most <c>ObjectPhotoRules.MaxSidePx</c> on its longest
+        /// side. False when there is no frame or the box is off the image.
+        /// </summary>
+        bool TryCapturePhoto(Rect screenBox, out byte[] jpeg);
     }
 }

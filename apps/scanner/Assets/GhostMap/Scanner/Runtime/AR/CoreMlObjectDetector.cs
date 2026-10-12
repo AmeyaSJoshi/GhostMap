@@ -43,6 +43,9 @@ namespace GhostMap.Scanner.AR
 
         private readonly NativeDetection[] native = new NativeDetection[MaxDetections];
         private readonly float[] transform6 = new float[6];
+        private readonly byte[] photoBuffer = new byte[ObjectPhotoRules.MaxBytes];
+        private DisplayTransform lastDisplay = DisplayTransform.Identity;
+        private Vector2 lastScreen;
         private string[] labels = Array.Empty<string>();
 
         private ARCameraManager cameraManager;
@@ -60,6 +63,8 @@ namespace GhostMap.Scanner.AR
         [DllImport("__Internal")] private static extern int GhostMapDetector_Submit(IntPtr nativeFrame, float viewportWidth, float viewportHeight);
         [DllImport("__Internal")] private static extern int GhostMapDetector_Latest(
             [Out] NativeDetection[] detections, int maxCount, out long frameId, [Out] float[] transform6, out float elapsedMs);
+        [DllImport("__Internal")] private static extern int GhostMapDetector_CropJpeg(
+            float x, float y, float width, float height, int maxSide, float quality, [Out] byte[] buffer, int capacity);
         private const bool NativeAvailable = true;
 #else
         private static int GhostMapDetector_State() => -1;
@@ -74,6 +79,8 @@ namespace GhostMap.Scanner.AR
             elapsedMs = 0f;
             return 0;
         }
+        private static int GhostMapDetector_CropJpeg(
+            float x, float y, float width, float height, int maxSide, float quality, byte[] buffer, int capacity) => 0;
         private const bool NativeAvailable = false;
 #endif
 
@@ -158,6 +165,8 @@ namespace GhostMap.Scanner.AR
 
             var display = new DisplayTransform(transform6[0], transform6[1], transform6[2], transform6[3], transform6[4], transform6[5]);
             var screen = new Vector2(Screen.width, Screen.height);
+            lastDisplay = display;
+            lastScreen = screen;
 
             for (int i = 0; i < count; i++)
             {
@@ -178,6 +187,35 @@ namespace GhostMap.Scanner.AR
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Task R11: crops the frame last returned by <see cref="TryGetLatest"/>
+        /// (the plugin keeps that one image) and encodes it as JPEG.
+        /// </summary>
+        public bool TryCapturePhoto(Rect screenBox, out byte[] jpeg)
+        {
+            jpeg = null;
+
+            if (!IsAvailable || lastFrameId == 0
+                || !DetectionGeometry.TryScreenToVisionBox(screenBox, lastDisplay, lastScreen, out Rect upright))
+            {
+                return false;
+            }
+
+            int length = GhostMapDetector_CropJpeg(
+                upright.x, upright.y, upright.width, upright.height,
+                ObjectPhotoRules.MaxSidePx, ObjectPhotoRules.JpegQuality / 100f,
+                photoBuffer, photoBuffer.Length);
+
+            if (length <= 0)
+            {
+                return false;
+            }
+
+            jpeg = new byte[length];
+            Buffer.BlockCopy(photoBuffer, 0, jpeg, 0, length);
+            return ObjectPhotoRules.IsAcceptable(jpeg);
         }
 
         private static string[] ReadLabels()

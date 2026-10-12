@@ -90,3 +90,20 @@ test('a room.glb with a node named "ceiling" exposes it to the dollhouse toggle'
   assert.ok(ceiling, 'ceiling node found');
   assert.ok(gltf.scene.getObjectByName('floor'), 'floor node found');
 });
+
+test('a filled template carries object photos back intact, and its CSP lets them show (task R11)', async () => {
+  const scene = await readFixture('room-with-door-window-v1.json');
+  const objectGlbs = {};
+  for (const object of scene.room.objects) {
+    objectGlbs[object.id] = await readObjectGlb(object.id);
+  }
+  const photo = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
+
+  const html = fillTemplate(built, { scene, roomGlb: standInRoomGlb(scene), objectGlbs, objectPhotos: { 'bed-1': photo } });
+
+  const result = parseRoomData(dataTag(html));
+  assert.equal(result.ok, true, result.error);
+  assert.deepEqual(result.objectPhotos.get('bed-1'), photo);
+  assert.match(built, /img-src[^;"]*blob:/);
+  assert.match(built, /id="selection-photo"/);
+});

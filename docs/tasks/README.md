@@ -20,6 +20,7 @@ and the ADRs win; fix the brief.
 | R8 | [Browser viewer `room.html`](R8-browser-viewer.md) | — (template), R6 (embedding) | Built 2026-10-11; owner's Safari check left |
 | R9 | [Hardening and guided flow](R9-hardening.md) | R2, R7, R8 | Agent plus owner device checks |
 | R10 | [Retire the Unity Viewer](R10-retire-unity-viewer.md) | Acceptance test passes | Agent |
+| R11 | [A photo of each object](R11-object-photos.md) | R4, R6, R8 | Built 2026-10-11; owner's device check in `R2` |
 
 **Can start right now without the owner:** R5 (the class list is settled in
 ADR-0011; `IdentifiedFurniture.ClassName` already holds the label to store).

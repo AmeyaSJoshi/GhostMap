@@ -15,8 +15,8 @@ The Unity jobs use GameCI's `unity-test-runner` with its Unity `6000.3.24f1`
 Linux image. Results appear as check runs named **EditMode results (...)** on the
 commit and as downloadable `test-results-*` artifacts.
 
-Expected counts after task `R4`: **shared 292, viewer 569, scanner 779**.
-Web viewer after task `R8`: **41**.
+Expected counts after task `R11`: **shared 292, viewer 569, scanner 805**.
+Web viewer after task `R11`: **46**.
 
 ## Why CI and not the agent's container
 

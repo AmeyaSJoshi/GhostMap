@@ -53,7 +53,7 @@ revisited after the first device session (`R2`); the reasoning is in
 | --- | --- |
 | Foundation `F0`-`F4` | Complete |
 | Assisted-capture MVP: Scanner `S1`-`S6`, Viewer `V1`-`V6` | Complete; scanner verified on a physical iPhone |
-| Stand-in-place GhostMap `R1`-`R10` | **`R1`, `R4`, `R6`, `R7`, `R8` built; suites green (292 / 569 / 779); next: `R2` on the iPhone** |
+| Stand-in-place GhostMap `R1`-`R10` | **`R1`, `R4`, `R6`, `R7`, `R8`, `R11` built; suites green (292 / 569 / 805); next: `R2` on the iPhone** |
 
 What is where today:
 
@@ -63,6 +63,7 @@ What is where today:
 | Guided scan UI, stand-in-place room scan, wall sweep, furniture surface measurement, per-object `.glb` exporter | Built (imported from the hackathon repo in `R1`), never run on an iPhone |
 | Desktop Unity Viewer, TCP live stream, UDP discovery | Built; frozen and retiring (`R10`) |
 | `room.html` browser viewer (`apps/web-viewer`) | Built (`R8`), checked in Chrome |
+| A photo of each piece of furniture, shown in `room.html` | Built (`R11`), checked in Chrome; never run on an iPhone |
 | Phone-built export bundle (`room.html`, `room.glb`, furniture `.glb`, `scene.json`), saved on the phone | Built (`R6`), verified on the Mac; never run on an iPhone |
 | Share-sheet Send to Computer, saved-rooms list | Built (`R7`), compiled for iPhone; never run on an iPhone |
 | YOLO-n furniture identification ("Found: bed, desk, 2 chairs", Add All) | Built (`R4`), compiled for iPhone with the model inside; never run on an iPhone |

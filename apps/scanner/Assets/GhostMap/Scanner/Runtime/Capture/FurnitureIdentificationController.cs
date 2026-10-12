@@ -39,6 +39,24 @@ namespace GhostMap.Scanner.Capture
 
         /// <summary>Seen often enough to offer (<see cref="FurnitureIdentificationController.MinHits"/>).</summary>
         public bool IsProposed => Hits >= FurnitureIdentificationController.MinHits;
+
+        /// <summary>Task R11: a JPEG crop of the best sighting so far, or null.</summary>
+        public byte[] Photo { get; internal set; }
+
+        /// <summary>The detector's confidence in the sighting <see cref="Photo"/> shows.</summary>
+        public float PhotoConfidence { get; internal set; }
+
+        /// <summary>
+        /// True when this frame's sighting is clearly better than the photo:
+        /// photograph <see cref="PhotoBox"/> now and hand it to
+        /// <see cref="FurnitureIdentificationController.SetPhoto"/>.
+        /// </summary>
+        public bool WantsPhoto { get; internal set; }
+
+        /// <summary>This frame's screen box for the photo it wants.</summary>
+        public Rect PhotoBox { get; internal set; }
+
+        internal float WantedPhotoConfidence { get; set; }
     }
 
     /// <summary>
@@ -78,6 +96,9 @@ namespace GhostMap.Scanner.Capture
 
         /// <summary>A detection within this distance of a surface's footprint is that surface.</summary>
         public const float SurfaceMatchMarginM = 0.3f;
+
+        /// <summary>A new photo is taken only when a sighting beats the current one by this much confidence.</summary>
+        public const float PhotoImprovement = 0.05f;
 
         /// <summary>How far a smoothed position moves toward each new sighting.</summary>
         private const float Smoothing = 0.3f;
@@ -148,6 +169,11 @@ namespace GhostMap.Scanner.Capture
             FramesProcessed++;
             bool hasRoom = RebuildFootprint();
             updatedThisFrame.Clear();
+
+            foreach (IdentifiedFurniture track in tracks)
+            {
+                track.WantsPhoto = false;
+            }
 
             Vector3 forward = FlatForward(frame);
             bool hasEye = TryGetEye(frame, out Vector3 eye);
@@ -245,6 +271,62 @@ namespace GhostMap.Scanner.Capture
             model = built;
             error = string.Empty;
             return true;
+        }
+
+        /// <summary>Task R11: tracks whose sighting this frame should be photographed.</summary>
+        public IReadOnlyList<IdentifiedFurniture> WantingPhotos()
+        {
+            var wanting = new List<IdentifiedFurniture>();
+            foreach (IdentifiedFurniture track in tracks)
+            {
+                if (track.WantsPhoto)
+                {
+                    wanting.Add(track);
+                }
+            }
+
+            return wanting;
+        }
+
+        /// <summary>
+        /// Task R11: keeps the photo taken of a track's sighting this frame.
+        /// Refused for anything but an acceptable JPEG
+        /// (<see cref="ObjectPhotoRules.IsAcceptable"/>) or a track that did
+        /// not ask for one.
+        /// </summary>
+        public bool SetPhoto(int id, byte[] jpeg)
+        {
+            if (!ObjectPhotoRules.IsAcceptable(jpeg))
+            {
+                return false;
+            }
+
+            foreach (IdentifiedFurniture track in tracks)
+            {
+                if (track.Id == id && track.WantsPhoto)
+                {
+                    track.Photo = jpeg;
+                    track.PhotoConfidence = track.WantedPhotoConfidence;
+                    track.WantsPhoto = false;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>The proposal sitting on a measured surface, if any.</summary>
+        public IdentifiedFurniture ProposalOn(TrackableId surfaceId)
+        {
+            foreach (IdentifiedFurniture track in tracks)
+            {
+                if (track.IsProposed && track.Surface.HasValue && track.Surface.Value.SurfaceId == surfaceId)
+                {
+                    return track;
+                }
+            }
+
+            return null;
         }
 
         /// <summary>The identified type for each matched surface, for the surface candidates' type.</summary>
@@ -460,6 +542,14 @@ namespace GhostMap.Scanner.Capture
 
             match.Hits++;
             match.BestConfidence = Mathf.Max(match.BestConfidence, detection.Confidence);
+
+            float photoBar = match.Photo == null ? 0f : match.PhotoConfidence + PhotoImprovement;
+            if (detection.Confidence >= photoBar && (!match.WantsPhoto || detection.Confidence > match.WantedPhotoConfidence))
+            {
+                match.WantsPhoto = true;
+                match.PhotoBox = detection.ScreenBox;
+                match.WantedPhotoConfidence = detection.Confidence;
+            }
             match.LastSeenSeconds = now;
             updatedThisFrame.Add(match);
         }

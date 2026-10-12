@@ -13,10 +13,12 @@ no network access, CSP `default-src 'none'`). It reads the room the phone embeds
 zoom, Frame room (`F`), Dollhouse (`D`, hides the `ceiling` node), click or list
 to select an object (type, optional label, W × D × H in m and cm, id, outline),
 two-click Measure (`M`, 3D and along the floor, `Esc` cancels), a furniture list
-and a room summary. View and measure only. The phone does not fill it yet
+and a room summary. Since `R11`, the selected object's panel shows the photo the
+phone took of it, when there is one (`objectPhotos`, contract section 5). View
+and measure only. The phone does not fill it yet
 (`R6`); until then `npm run demo` fills it from a fixture.
 
-- Node tests: **41 pass** (`npm test`). Placement is checked against a bed
+- Node tests: **46 pass** (`npm test`; 41 after `R8`, +5 for photos in `R11`). Placement is checked against a bed
   `.glb` written by the real C# exporter (now the shared `GlbWriter`), and a flipped yaw sign makes
   that test fail.
 - Checked by an agent in headless Chrome 154 from `file://` (desktop 1280×800 and phone 390×844):
@@ -80,6 +82,8 @@ npm ci && npm test && npm run build
 
 2026-10-11, owner's Mac, Node 24: **41 tests, 41 passed**; rebuild
 byte-identical to the committed template. CI's `web-viewer` job runs the same.
+After `R11` (2026-10-11): **46 tests, 46 passed**; headless Chrome showed an
+embedded JPEG in the bed's panel and no photo for the desk, which had none.
 
 Unity Viewer:
 

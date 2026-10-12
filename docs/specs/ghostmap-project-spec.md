@@ -117,6 +117,7 @@ end to end from iPhone to computer yet.
 | FR-17 | **Detector label kept.** A `generic` object keeps the detector's class name, such as "potted plant". | Not built (`R5`, additive schema change) |
 | FR-18 | **Developer live stream.** The Unity Viewer shows the room while the phone scans, over TCP with a typed IP. | Built; developer tool only, retires with the Unity Viewer (`R10`) |
 | FR-19 | Editing on the computer, delete/hide objects, floor-plan view. | Not planned; edit in Unity |
+| FR-20 | **A photo of each object.** The phone keeps a photo of each piece of furniture (the detector's best crop, or the camera view when it was added) and exports it; `room.html` shows it when the object is selected. Pictures only, never geometry. | Built (`R11`); checked in Chrome, not run on a device |
 
 ## 8. Non-functional requirements
 

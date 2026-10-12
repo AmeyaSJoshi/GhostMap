@@ -19,13 +19,15 @@ export const TEMPLATE_MESSAGE =
   'This is the GhostMap template. Open a room.html from an export.';
 
 const GLB_MAGIC = [0x67, 0x6c, 0x54, 0x46]; // "glTF"
+const JPEG_MAGIC = [0xff, 0xd8, 0xff];
 
 /**
  * Parses the text inside <script id="ghostmap-data">.
  *
  * @param {string} text
  * @returns {{ ok: true, scene: object, roomGlb: Uint8Array,
- *             objectGlbs: Map<string, Uint8Array>, warnings: string[] }
+ *             objectGlbs: Map<string, Uint8Array>, objectPhotos: Map<string, Uint8Array>,
+ *             warnings: string[] }
  *          | { ok: false, error: string, isTemplate?: boolean }}
  */
 export function parseRoomData(text) {
@@ -103,7 +105,36 @@ export function parseRoomData(text) {
     }
   }
 
-  return { ok: true, scene, roomGlb: roomGlb.bytes, objectGlbs, warnings };
+  const objectPhotos = readPhotos(blob.objectPhotos, objects, known, warnings);
+
+  return { ok: true, scene, roomGlb: roomGlb.bytes, objectGlbs, objectPhotos, warnings };
+}
+
+// Task R11: optional photos, one JPEG per object id. A photo is never needed
+// to show the room, so a bad one is a warning, never a failure.
+function readPhotos(encoded, objects, known, warnings) {
+  const photos = new Map();
+  if (!isObject(encoded)) {
+    return photos;
+  }
+
+  for (const [id, value] of Object.entries(encoded)) {
+    if (!known.has(id)) {
+      warnings.push(`A photo with id "${id}" matches no object in the scene and was ignored.`);
+      continue;
+    }
+
+    const bytes = decodeBase64(value);
+    if (bytes === null || bytes.length < 4 || JPEG_MAGIC.some((byte, i) => bytes[i] !== byte)) {
+      const object = objects.find((candidate) => candidate.id === id);
+      warnings.push(`The photo of ${describe(object)} is damaged and is not shown.`);
+      continue;
+    }
+
+    photos.set(id, bytes);
+  }
+
+  return photos;
 }
 
 /**

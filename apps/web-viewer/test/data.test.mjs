@@ -129,3 +129,39 @@ test('decodeBase64 round-trips bytes and rejects malformed input', () => {
   assert.equal(decodeBase64('ab$='), null);
   assert.equal(decodeBase64(42), null);
 });
+
+// ---- Task R11: object photos ------------------------------------------------
+
+const TINY_JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16]);
+
+test('photos are optional: a blob without objectPhotos has none and no warning', async () => {
+  const result = parseRoomData(JSON.stringify(await validBlob()));
+  assert.equal(result.objectPhotos.size, 0);
+  assert.deepEqual(result.warnings, []);
+});
+
+test('photos are read per object id', async () => {
+  const blob = { ...(await validBlob()), objectPhotos: { 'desk-1': base64(TINY_JPEG) } };
+  const result = parseRoomData(JSON.stringify(blob));
+  assert.equal(result.ok, true);
+  assert.deepEqual([...result.objectPhotos.keys()], ['desk-1']);
+  assert.deepEqual([...result.objectPhotos.get('desk-1')], [...TINY_JPEG]);
+  assert.deepEqual(result.warnings, []);
+});
+
+test('a damaged or non-JPEG photo is a warning, never a failure', async () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]);
+  const blob = { ...(await validBlob()), objectPhotos: { 'bed-1': 'not base64!', 'chair-1': base64(png) } };
+  const result = parseRoomData(JSON.stringify(blob));
+  assert.equal(result.ok, true);
+  assert.equal(result.objectPhotos.size, 0);
+  assert.equal(result.warnings.length, 2);
+  assert.match(result.warnings[0], /photo of the bed "bed-1" is damaged/);
+});
+
+test('a photo for no object is ignored with a warning', async () => {
+  const blob = { ...(await validBlob()), objectPhotos: { lamp: base64(TINY_JPEG) } };
+  const result = parseRoomData(JSON.stringify(blob));
+  assert.equal(result.objectPhotos.size, 0);
+  assert.match(result.warnings[0], /photo with id "lamp" matches no object/);
+});

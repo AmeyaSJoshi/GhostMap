@@ -6,9 +6,10 @@ export const PLACEHOLDER = '__GHOSTMAP_DATA__';
 
 /**
  * @param {string} template  dist/room-template.html
- * @param {{ scene: object, roomGlb: Uint8Array, objectGlbs: Record<string, Uint8Array> }} room
+ * @param {{ scene: object, roomGlb: Uint8Array, objectGlbs: Record<string, Uint8Array>,
+ *          objectPhotos?: Record<string, Uint8Array> }} room
  */
-export function fillTemplate(template, { scene, roomGlb, objectGlbs }) {
+export function fillTemplate(template, { scene, roomGlb, objectGlbs, objectPhotos = {} }) {
   if (template.split(PLACEHOLDER).length !== 2) {
     throw new Error('The template must contain the data placeholder exactly once.');
   }
@@ -19,6 +20,7 @@ export function fillTemplate(template, { scene, roomGlb, objectGlbs }) {
     scene,
     roomGlb: base64(roomGlb),
     objectGlbs: Object.fromEntries(Object.entries(objectGlbs).map(([id, bytes]) => [id, base64(bytes)])),
+    objectPhotos: Object.fromEntries(Object.entries(objectPhotos).map(([id, bytes]) => [id, base64(bytes)])),
   };
 
   // Escape "<" so no string in the scene (a room name or label containing

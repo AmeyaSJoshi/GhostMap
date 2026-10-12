@@ -140,6 +140,14 @@ button[aria-pressed="true"] { background: var(--accent); border-color: var(--acc
 .selection { border-color: var(--accent); }
 .selection h2 { color: var(--text); text-transform: none; letter-spacing: 0; font-size: 15px; }
 .icon { padding: 0 8px; line-height: 24px; font-size: 18px; }
+.selection-photo {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: calc(var(--radius) - 4px);
+  background: var(--canvas);
+}
 
 .rows { margin: 0; display: grid; gap: 4px; }
 .rows div { display: flex; justify-content: space-between; gap: 12px; }

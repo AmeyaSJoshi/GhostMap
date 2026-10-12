@@ -7,6 +7,13 @@ detail in `git show 0b7a106:docs/status/scanner.md` and the hackathon handoffs
 
 ## Current state
 
+> **Blocker (2026-10-11):** on the owner's iPhone the stand-in-place scan
+> finds only two walls (ARKit reports no plane on plain side walls). Since
+> 2026-10-12 the user taps the bottom of each missing wall (**Add Wall**);
+> device run 4 pending. Read
+> `docs/tasks/R2-auto-scan-walls.md` (code map, device logs, hypotheses, next
+> steps). Fixes so far are on `fix/scanner-r2-wall-planes`.
+
 **S1-S6 are verified on a physical iPhone. Everything imported from
 `GhostMapDublinHacks` (task `R1`) compiled and passed its EditMode suite there,
 but none of it has run on an iPhone.**
@@ -102,9 +109,11 @@ messages, `ProtocolSerializer` and `PeerDiscoveryProtocol`.
 ## Known issues
 
 **Unknown until a device session (`R2`)**
-- How many vertical planes ARKit reports in a real furnished room. The automatic
-  scan never invents a wall; with three it asks the user to look toward the
-  fourth.
+- **Answered in part (R2, 2026-10-11):** in the owner's room ARKit reported up
+  to 7 vertical planes during one turn, 4 labelled "wall", but only 2 were big
+  enough to trust (1.0 m labelled / 2.5 m unlabelled), so the scan failed. See
+  `docs/tasks/R2-auto-scan-walls.md`. The automatic scan never invents a wall;
+  with three it asks the user to look toward the fourth.
 - Sweep accuracy: aim error grows with roughly the square of aim distance, and a
   consistent aim bias enlarges the whole room while the fit looks clean.
 - Whether ARKit labels door and window planes at all (usually it does not).
@@ -159,6 +168,7 @@ messages, `ProtocolSerializer` and `PeerDiscoveryProtocol`.
 
 ## Next safe task
 
+**The blocker first:** `docs/tasks/R2-auto-scan-walls.md`. Then the rest of
 `R2`: the first device session (plan section 18), now ending with **Finish**,
 the `GhostMap export:` log line, and **Send to Computer** by AirDrop to the Mac
 (`R7`'s device check in `docs/tasks/R7-share-sheet.md`). Include `R4`'s device

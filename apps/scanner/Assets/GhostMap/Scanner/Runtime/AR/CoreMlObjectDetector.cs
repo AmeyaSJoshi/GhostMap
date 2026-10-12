@@ -25,7 +25,7 @@ namespace GhostMap.Scanner.AR
         /// <summary>Under StreamingAssets.</summary>
         public const string ModelRelativePath = "GhostMap/yolo11n.mlpackage";
 
-        public const float SubmitIntervalSeconds = 0.2f;
+        public float IntervalSeconds { get; set; } = ObjectDetectors.ActiveIntervalSeconds;
 
         private const int MaxDetections = 64;
         private const int LogEveryFrames = 25;
@@ -126,7 +126,7 @@ namespace GhostMap.Scanner.AR
                 return;
             }
 
-            nextSubmitAt = Time.unscaledTime + SubmitIntervalSeconds;
+            nextSubmitAt = Time.unscaledTime + IntervalSeconds;
 
             var cameraParams = new XRCameraParams
             {

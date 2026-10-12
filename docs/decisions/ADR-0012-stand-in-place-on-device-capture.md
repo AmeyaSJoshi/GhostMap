@@ -101,6 +101,18 @@ dimensions, not a scanned mesh.
 - Every one of these paths still needs a physical-device session and a tape
   measure before it is trusted (`AGENTS.md` rule 12).
 
+## Amendment, 2026-10-12 (R2): tap the walls ARKit cannot see
+
+On the owner's iPhone (no LiDAR used), a full turn produced ARKit planes on only
+two opposite walls; the plain side walls produced none
+(`docs/research/r2-device-logs/`). So the automatic scan now asks the user to
+point at the bottom of each missing wall and tap. Each tap places a wall
+through the tapped floor point, parallel or perpendicular to the strongest
+wall found, assuming square corners, which the supported four-corner room
+already assumes. A tapped wall is the user's measurement, like a walked corner;
+the scan still never invents a wall on its own. The sweep and walked corners
+remain the fallbacks when no wall is found at all.
+
 ## Compliance
 
 - `AGENTS.md` rule 6 is rewritten to match this ADR.

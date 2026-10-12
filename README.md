@@ -53,7 +53,7 @@ revisited after the first device session (`R2`); the reasoning is in
 | --- | --- |
 | Foundation `F0`-`F4` | Complete |
 | Assisted-capture MVP: Scanner `S1`-`S6`, Viewer `V1`-`V6` | Complete; scanner verified on a physical iPhone |
-| Stand-in-place GhostMap `R1`-`R10` | **`R1`, `R4`-`R8`, `R11` built, `R9` agent part built; suites green (303 / 580 / 849); demo runs end to end in the Simulator; next: `R2` on the iPhone** |
+| Stand-in-place GhostMap `R1`-`R10` | **`R1`, `R4`-`R8`, `R11` built, `R9` agent part built; suites green (303 / 580 / 849); demo runs end to end in the Simulator; **R2 on the iPhone: the stand-in-place scan finds too few walls ([blocker](docs/tasks/R2-auto-scan-walls.md))** |
 
 What is where today:
 

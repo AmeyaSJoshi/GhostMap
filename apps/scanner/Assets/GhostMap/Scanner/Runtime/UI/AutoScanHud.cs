@@ -147,7 +147,7 @@ namespace GhostMap.Scanner.UI
 
             if (primaryButtonLabel != null)
             {
-                primaryButtonLabel.text = scanning ? "Finish Scan" : "Scan Room";
+                primaryButtonLabel.text = !scanning ? "Scan Room" : WantsTap(workflow) ? "Add Wall" : "Finish Scan";
             }
 
             if (secondaryButton != null)
@@ -184,11 +184,20 @@ namespace GhostMap.Scanner.UI
                 workflow.BeginAutoScan(Time.realtimeSinceStartup);
                 Debug.Log("GhostMap auto: scan started");
             }
+            else if (workflow.Phase == ScanPhase.AutoScanRoom && WantsTap(workflow))
+            {
+                bool added = workflow.TryAddTappedWall(out string error);
+                Debug.Log("GhostMap auto: tapped wall " + (added ? "added" : "refused: " + error) + "\n" + workflow.Auto.DebugSummary);
+            }
             else if (workflow.Phase == ScanPhase.AutoScanRoom)
             {
                 Finish(workflow);
             }
         }
+
+        /// <summary>R2: after the turn, with walls missing, the main button places one by a tap.</summary>
+        private static bool WantsTap(ScanWorkflowController workflow)
+            => workflow.Auto != null && workflow.Auto.CanAddTappedWall && !workflow.Auto.IsReadyToFinish;
 
         private void OnSecondaryPressed()
         {

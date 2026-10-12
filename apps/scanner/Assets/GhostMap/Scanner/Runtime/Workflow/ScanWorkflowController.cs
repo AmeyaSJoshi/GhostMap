@@ -279,6 +279,23 @@ namespace GhostMap.Scanner.Workflow
         /// any door or window planes. Refuses, rather than inventing a wall,
         /// when the evidence does not close into a legal room.
         /// </summary>
+        /// <summary>
+        /// R2: during the automatic scan, places a wall ARKit could not see
+        /// where the crosshair meets the floor (<see cref="AutoRoomScanController.TryAddTappedWall(out string)"/>).
+        /// Publishes nothing: the room is adopted, as always, by
+        /// <see cref="TryFinishAutoScan"/>.
+        /// </summary>
+        public bool TryAddTappedWall(out string error)
+        {
+            if (Phase != ScanPhase.AutoScanRoom || autoScan == null)
+            {
+                error = "Scan the room first.";
+                return false;
+            }
+
+            return autoScan.TryAddTappedWall(out error);
+        }
+
         public bool TryFinishAutoScan(out AutoScanRejection rejection)
         {
             rejection = AutoScanRejection.None;

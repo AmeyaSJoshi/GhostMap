@@ -11,7 +11,7 @@ namespace GhostMap.Scanner.AR
     /// </summary>
     public sealed class SimulatedObjectDetector : IObjectDetector
     {
-        public const double IntervalSeconds = 0.2;
+        public float IntervalSeconds { get; set; } = ObjectDetectors.ActiveIntervalSeconds;
         public const float Confidence = 0.9f;
 
         private readonly SimulatedRoom room;
@@ -96,6 +96,8 @@ namespace GhostMap.Scanner.AR
     {
         public bool IsAvailable => false;
 
+        public float IntervalSeconds { get; set; }
+
         public bool TryGetLatest(List<ObjectDetection> into, out double timestamp)
         {
             timestamp = 0;
@@ -112,6 +114,19 @@ namespace GhostMap.Scanner.AR
     /// <summary>Picks the detector for where the scanner runs.</summary>
     public static class ObjectDetectors
     {
+        /// <summary>Five frames a second in the furniture step.</summary>
+        public const float ActiveIntervalSeconds = 0.2f;
+
+        /// <summary>
+        /// Two a second before it (R2): during the room scan ARKit needs the
+        /// phone's capacity to find walls; the detector only collects early
+        /// sightings then.
+        /// </summary>
+        public const float BackgroundIntervalSeconds = 0.5f;
+
+        public static float IntervalFor(Workflow.ScanPhase phase)
+            => phase == Workflow.ScanPhase.AddObjects ? ActiveIntervalSeconds : BackgroundIntervalSeconds;
+
         public static IObjectDetector Create(ArSpatialProvider provider)
         {
             if (provider != null && provider.IsSimulated)

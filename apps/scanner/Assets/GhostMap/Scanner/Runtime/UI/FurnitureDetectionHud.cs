@@ -80,6 +80,14 @@ namespace GhostMap.Scanner.UI
         /// <summary>At most this many photos per frame: each is a crop and a JPEG encode.</summary>
         private const int MaxPhotosPerFrame = 2;
 
+        // R2: load (compile) the model at launch, before the room scan,
+        // rather than at floor lock where it competed with ARKit.
+        private void Start()
+        {
+            detector ??= ObjectDetectors.Create(spatialProvider);
+            detector.IntervalSeconds = ObjectDetectors.BackgroundIntervalSeconds;
+        }
+
         private void Awake()
         {
             if (typeButton != null)
@@ -169,6 +177,7 @@ namespace GhostMap.Scanner.UI
         private void UpdateIdentification(ScanWorkflowController workflow)
         {
             detector ??= ObjectDetectors.Create(spatialProvider);
+            detector.IntervalSeconds = ObjectDetectors.IntervalFor(workflow.Phase);
 
             if (!detector.TryGetLatest(detections, out _))
             {

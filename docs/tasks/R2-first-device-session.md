@@ -7,6 +7,13 @@ to keep this checklist accurate and to turn the results into
 **Why:** everything imported in `R1` (auto scan, sweep, furniture detection,
 guided UI) has passed EditMode tests but has never run on a phone.
 
+> **2026-10-11: started, and blocked at step 2.** Lock Floor works; Scan
+> Room did not find the room in two attempts. Everything about that is in
+> `R2-auto-scan-walls.md`. Until PRs #30-#37 and `fix/scanner-r2-wall-planes`
+> are merged, build from `fix/scanner-r2-wall-planes`, not `main`. If the scan
+> fails, carry on from step 3 with **Help GhostMap** so the other steps still
+> get tested.
+
 ## Before the session
 
 1. Pull `main`. Run `./tools/run_unity_tests.sh` (or confirm CI is green).

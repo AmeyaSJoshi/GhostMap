@@ -516,10 +516,17 @@ namespace GhostMap.Scanner.Capture
         /// <summary>
         /// The surface's own orientation, as a Ghost-space yaw in degrees.
         ///
-        /// <para>The plane's local +X spans the surface. Taken through the Ghost
-        /// frame and projected into XZ, its bearing is the object's yaw — which
-        /// is why a detected desk comes out square to the desk rather than
-        /// square to the room.</para>
+        /// <para>The plane's local +X spans the surface, and the candidate's
+        /// width is the plane's extent along it. A <see cref="SceneObjectModel"/>
+        /// runs its width along <c>Euler(0, yaw, 0) * right</c>, whose bearing
+        /// from Ghost +Z is <c>yaw + 90</c>; so the yaw is the bearing of the
+        /// plane's +X, taken through the Ghost frame and projected into XZ,
+        /// minus 90 degrees. That is why a detected desk comes out square to
+        /// the desk rather than square to the room.</para>
+        ///
+        /// <para>Task R9 fix: the minus 90 was missing, so every detected
+        /// surface that was not square came out turned a quarter turn (found
+        /// when the demo bed poked through a wall).</para>
         ///
         /// <para>Normalized into <c>[0, 360)</c>. The sign of the plane's axis is
         /// arbitrary, so a detected box's yaw is only defined modulo 180
@@ -540,10 +547,10 @@ namespace GhostMap.Scanner.Capture
             }
 
             // Ghost +Z is the zero bearing, matching how yaw is applied as a
-            // rotation about +Y elsewhere.
-            float yawDeg = Mathf.Atan2(flat.x, flat.y) * Mathf.Rad2Deg;
+            // rotation about +Y elsewhere. The width axis is a quarter turn on.
+            float bearingDeg = Mathf.Atan2(flat.x, flat.y) * Mathf.Rad2Deg;
 
-            return Mathf.Repeat(yawDeg, 360f);
+            return Mathf.Repeat(bearingDeg - 90f, 360f);
         }
 
         // -------------------------------------------------------------------

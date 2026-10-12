@@ -183,7 +183,8 @@ namespace GhostMap.Scanner.Export
                 && fileName.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
         }
 
-        private static bool IsDiskFull(IOException exception)
+        /// <summary>Task R9: whether a save failed because the phone is out of space.</summary>
+        public static bool IsDiskFull(IOException exception)
         {
             // ENOSPC on iOS/macOS/Linux; ERROR_DISK_FULL / ERROR_HANDLE_DISK_FULL on Windows.
             int code = exception.HResult & 0xFFFF;

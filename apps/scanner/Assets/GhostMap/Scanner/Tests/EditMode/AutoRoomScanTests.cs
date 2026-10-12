@@ -463,6 +463,81 @@ namespace GhostMap.Scanner.Tests.EditMode
             StringAssert.Contains("wall", workflow.Auto.Message);
         }
 
+        // Task R9: a full turn that finds too few walls offers the sweep soon,
+        // saying how many walls it found.
+
+        private static float Wait(ScanWorkflowController workflow, float now, float seconds)
+        {
+            for (float end = now + seconds; now < end;)
+            {
+                now += 0.25f;
+                workflow.TickAutoScan(now);
+            }
+
+            return now;
+        }
+
+        [Test]
+        public void AutoScan_WithTwoWalls_OffersTheSweepSoonAfterTheTurn()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+            List<DetectedSurface> surfaces = FullRoom(workflow.Frame);
+            surfaces.RemoveRange(2, 2);
+            Feed(provider, surfaces);
+
+            workflow.BeginAutoScan(0f);
+            float now = TurnOnce(provider, workflow);
+            Assert.AreNotEqual(AutoScanState.NeedHelp, workflow.Auto.State, "not straight after the turn");
+
+            Wait(workflow, now, AutoRoomScanController.FewWallsHelpAfterS + 0.5f);
+
+            Assert.AreEqual(AutoScanState.NeedHelp, workflow.Auto.State);
+            Assert.AreEqual("Found 2 of 4 walls. Tap Help GhostMap to trace them by hand.", workflow.Auto.Message);
+            Assert.Less(now + AutoRoomScanController.FewWallsHelpAfterS + 0.5f, AutoRoomScanController.OfferHelpAfterS,
+                "sooner than the general offer");
+        }
+
+        [Test]
+        public void AutoScan_WithNoWalls_SaysSoAndOffersTheSweep()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+            Feed(provider, new List<DetectedSurface>());
+
+            workflow.BeginAutoScan(0f);
+            float now = TurnOnce(provider, workflow);
+            Wait(workflow, now, AutoRoomScanController.FewWallsHelpAfterS + 0.5f);
+
+            Assert.AreEqual(AutoScanState.NeedHelp, workflow.Auto.State);
+            StringAssert.StartsWith("No walls found yet.", workflow.Auto.Message);
+            StringAssert.Contains("Help GhostMap", workflow.Auto.Message);
+        }
+
+        [Test]
+        public void AutoScan_WithThreeWalls_KeepsPointingAtTheMissingOne()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+            List<DetectedSurface> surfaces = FullRoom(workflow.Frame);
+            surfaces.RemoveAt(3);
+            Feed(provider, surfaces);
+
+            workflow.BeginAutoScan(0f);
+            float now = TurnOnce(provider, workflow);
+            Wait(workflow, now, AutoRoomScanController.FewWallsHelpAfterS + 0.5f);
+
+            Assert.AreEqual(AutoScanState.MissingWall, workflow.Auto.State, "three walls: one more look usually finds the fourth");
+        }
+
+        [TestCase(0, "No walls found yet. Tap Help GhostMap to trace them by hand.")]
+        [TestCase(1, "Found 1 of 4 walls. Tap Help GhostMap to trace them by hand.")]
+        [TestCase(2, "Found 2 of 4 walls. Tap Help GhostMap to trace them by hand.")]
+        public void DescribeFewWalls_CountsTheWallsFound(int walls, string expected)
+        {
+            Assert.AreEqual(expected, AutoRoomScanController.DescribeFewWalls(walls));
+        }
+
         [Test]
         public void HelpGhostMap_FallsBackToTheExistingSweep_KeepingTheFloorLock()
         {

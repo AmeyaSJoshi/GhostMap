@@ -200,7 +200,7 @@ namespace GhostMap.Scanner.Tests.EditMode
             Assert.IsTrue(workflow.TryVerifyClosure(out _, out _));
 
             ScanGuideStep step = ScanGuide.Describe(workflow, Tracking);
-            Assert.AreEqual(3, step.Number);
+            Assert.AreEqual(2, step.Number);
             Assert.AreEqual(GuideMessageKind.Error, step.MessageKind);
             StringAssert.Contains("Redo Walls", step.Instruction);
             StringAssert.Contains("30 cm", step.Message);
@@ -258,23 +258,23 @@ namespace GhostMap.Scanner.Tests.EditMode
 
             SweepLegalRoom(provider, workflow);
             Assert.IsTrue(workflow.TryDeriveRoomFromSweeps(out _, out _));
-            Expect(3);
+            Expect(2); // Task R9: the corner check is part of the room step
 
             AimAtGhost(provider, workflow.Frame, 0f, 0f);
             Assert.IsTrue(workflow.TryVerifyClosure(out _, out _));
-            Expect(4);
+            Expect(3);
             Assert.AreEqual(GuideMessageKind.Success, ScanGuide.Describe(workflow, Tracking).MessageKind);
             Assert.AreEqual("Where wall meets ceiling", ScanGuide.Describe(workflow, Tracking).AimHint);
 
             Assert.IsTrue(workflow.TrySetManualHeight(2.5f, out _));
-            Expect(5);
+            Expect(4);
             StringAssert.Contains("door", ScanGuide.Describe(workflow, Tracking).AimHint);
 
             Assert.IsTrue(workflow.FinishAddingOpenings());
-            Expect(6);
+            Expect(5);
 
             Assert.IsTrue(workflow.FinishAddingObjects());
-            Expect(7);
+            Expect(6);
 
             // ADR-0013: finishing needs no connection; the network is a developer live view.
             ScanGuideStep ready = ScanGuide.Describe(workflow, Tracking);
@@ -288,7 +288,7 @@ namespace GhostMap.Scanner.Tests.EditMode
         }
 
         // -------------------------------------------------------------------
-        // Step 6 — detected furniture (ADR-0006)
+        // Step 5 — detected furniture (ADR-0006)
         // -------------------------------------------------------------------
 
         private static ScanWorkflowController SweptRoomAtAddObjects(FakeSpatialProvider provider)
@@ -327,7 +327,7 @@ namespace GhostMap.Scanner.Tests.EditMode
 
             ScanGuideStep step = ScanGuide.Describe(workflow, Tracking);
 
-            Assert.AreEqual(6, step.Number);
+            Assert.AreEqual(5, step.Number);
             StringAssert.Contains("tap Place", step.Instruction);
             Assert.IsFalse(string.IsNullOrEmpty(step.AimHint));
             StringAssert.Contains("Next", step.Message);
@@ -349,7 +349,7 @@ namespace GhostMap.Scanner.Tests.EditMode
 
             ScanGuideStep step = ScanGuide.Describe(workflow, Tracking);
 
-            Assert.AreEqual(6, step.Number);
+            Assert.AreEqual(5, step.Number);
             StringAssert.Contains("Looks like a desk", step.Instruction);
             StringAssert.Contains("Tap Add", step.Instruction);
             StringAssert.Contains("Skip", step.Instruction);
@@ -401,7 +401,7 @@ namespace GhostMap.Scanner.Tests.EditMode
 
             ScanGuideStep step = ScanGuide.Describe(workflow, Tracking);
 
-            Assert.AreEqual(6, step.Number);
+            Assert.AreEqual(5, step.Number);
             StringAssert.Contains("Found: bed, 2 chairs. Tap Add All.", step.Instruction);
             Assert.IsNull(step.AimHint);
         }

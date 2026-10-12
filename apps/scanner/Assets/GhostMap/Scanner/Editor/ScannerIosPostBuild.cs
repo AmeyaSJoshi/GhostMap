@@ -41,6 +41,21 @@ namespace GhostMap.Scanner.Editor
             "-L$(DT_TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)",
         };
 
+        /// <summary>
+        /// System frameworks the native plugins call: Core ML and Vision for
+        /// the detector (task R4), Core Image for its photo crops (R11), UIKit
+        /// for the share sheet and haptics. Linked explicitly because a Debug
+        /// Simulator build does not auto-link them the way a Release device
+        /// build happened to (found in R9: undefined VNCoreMLRequest).
+        /// </summary>
+        internal static readonly string[] PluginFrameworks =
+        {
+            "CoreML.framework",
+            "Vision.framework",
+            "CoreImage.framework",
+            "UIKit.framework"
+        };
+
         public int callbackOrder => 0;
 
         public void OnPostprocessBuild(BuildReport report)
@@ -82,6 +97,23 @@ namespace GhostMap.Scanner.Editor
             plist.WriteToFile(plistPath);
 
             AddSwiftRuntimeSearchPaths(report.summary.outputPath);
+            AddPluginFrameworks(report.summary.outputPath);
+        }
+
+        private static void AddPluginFrameworks(string outputPath)
+        {
+            string projectPath = PBXProject.GetPBXProjectPath(outputPath);
+            var project = new PBXProject();
+            project.ReadFromFile(projectPath);
+
+            // The plugins compile into UnityFramework, so that is what links them.
+            string framework = project.GetUnityFrameworkTargetGuid();
+            foreach (string name in PluginFrameworks)
+            {
+                project.AddFrameworkToProject(framework, name, weak: false);
+            }
+
+            project.WriteToFile(projectPath);
         }
 
         /// <summary>

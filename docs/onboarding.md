@@ -70,7 +70,7 @@ native Swift. Do not start a rewrite, or argue for one mid-task (`AGENTS.md` rul
 | --- | --- | --- |
 | Floor lock, coordinate frame, walked corners, closure, height by aiming or typing, two-point doors/windows, manual furniture | Built (S1-S5) | **Yes** |
 | TCP snapshot stream, finalize, Reset | Built (S6); now a developer tool | Yes, against a Python listener |
-| Guided scan UI (step header, bottom sheet, Details panel, two-tap Restart), Editor/Simulator demo mode | Built (hackathon, `R1`) | No |
+| Guided scan UI (six-step header, bottom sheet, Details panel, two-tap Restart), Editor/Simulator demo mode | Built (`R1`), hardened in `R9`. The demo now runs the whole flow in the iOS Simulator (it reports its own AR planes) | No |
 | Automatic room scan from ARKit planes | Built (`R1`) | No |
 | Wall sweep fallback | Built (`R1`, ADR-0005) | No |
 | Furniture surface detection with measured size | Built (`R1`, ADR-0006) | No |
@@ -83,8 +83,8 @@ native Swift. Do not start a rewrite, or argue for one mid-task (`AGENTS.md` rul
 | `room.html` browser viewer | Built (`R8`), filled by the phone (`R6`); checked in headless Chrome, owner's Safari check left | n/a |
 | A photo of each object, shown in `room.html` | Built (`R11`); the phone crops it from the camera; no photos in demo mode | No |
 
-Test suites: shared 303, viewer 580, scanner 821, all passing in this
-repository (owner's Mac, 2026-10-11, after `R5`); web viewer 48 (Node). CI's Unity jobs still wait
+Test suites: shared 303, viewer 580, scanner 849, all passing in this
+repository (owner's Mac, 2026-10-11, after `R9`); web viewer 48 (Node). CI's Unity jobs still wait
 for the owner's licence secrets (`docs/ci.md`); until then run
 `./tools/run_unity_tests.sh` on a Mac with Unity.
 

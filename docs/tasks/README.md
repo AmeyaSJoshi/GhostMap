@@ -18,9 +18,9 @@ and the ADRs win; fix the brief.
 | R6 | [Phone-built export bundle](R6-export-bundle.md) | R1 | Built 2026-10-11; owner checks it on the iPhone in `R2` |
 | R7 | [Share-sheet Send to Computer](R7-share-sheet.md) | R6 | Built 2026-10-11; owner's AirDrop check in `R2` |
 | R8 | [Browser viewer `room.html`](R8-browser-viewer.md) | — (template), R6 (embedding) | Built 2026-10-11; owner's Safari check left |
-| R9 | [Hardening and guided flow](R9-hardening.md) | R2, R7, R8 | Agent plus owner device checks |
+| R9 | [Hardening and guided flow](R9-hardening.md) | R2, R7, R8 | Agent part built 2026-10-11; owner's device checks in `R2` |
 | R10 | [Retire the Unity Viewer](R10-retire-unity-viewer.md) | Acceptance test passes | Agent |
 | R11 | [A photo of each object](R11-object-photos.md) | R4, R6, R8 | Built 2026-10-11; owner's device check in `R2` |
 
-**Can start right now without the owner:** the parts of R9 that need no
-device.
+**Can start right now without the owner:** nothing on the roadmap; every
+remaining task needs `R2`'s results or the acceptance test.

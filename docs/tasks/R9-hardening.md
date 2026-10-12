@@ -6,6 +6,43 @@ Computer exists), `R8` (`room.html` exists).
 **Who:** an agent writes fixes and tests; the owner reproduces each case on the
 iPhone.
 
+> **Agent part built 2026-10-11** on `scanner/r9-hardening` (handoff
+> `docs/handoffs/2026-10-11-scanner-r9-hardening.md`). What was done, row by row:
+>
+> | Item | Result |
+> | --- | --- |
+> | Poor tracking | Every capture path already refused; tests now drive height, an opening, placement and a detected surface through the workflow with tracking lost (refused, no revision). **Bug found and fixed:** accepting an already-detected surface, and Add All, still worked with tracking lost |
+> | Fewer than four walls | After a full turn with 0-2 walls the guide says "Found 2 of 4 walls. Tap Help GhostMap to trace them by hand." (or "No walls found yet. ...") after 6 s instead of 30 s. Three walls keep pointing at the missing one |
+> | Detector finds nothing | With a detector running, the furniture step first says "Look slowly around at your furniture..." and after 10 s "Nothing recognised yet. Place furniture by hand, or tap Next if there is none." |
+> | Share cancelled | Already covered by `ShareControllerTests` (`R7`) |
+> | App backgrounded | `TrackingResumeGate` in `ArSpatialProvider`: after `OnApplicationPause`, tracking counts as lost until ARKit has tracked well for 1 s; the guide says "Welcome back. Hold the phone steady..." |
+> | Storage full | Already handled in `R6`; the disk-full check is now public and tested, and a failed save is tested to leave nothing behind |
+> | Debug text | `S6 diag` removed; the S1 diagnostics show only in the Editor, Development builds, or after tapping Details five times within 3 s (`DeveloperMode`) |
+> | Steps | Six: Floor, Room, Height, Openings, Furniture, Send (`ScanGuide.StepNames`); the corner check is part of Room |
+> | Reticle | 108 px (was 84), centre dot 18 px, with a dark halo behind both; scene regenerated |
+> | Haptics | `CaptureHaptics` behind `IHaptics`: one light tap (`UIImpactFeedbackGenerator`, plugin `GhostMapHaptics.mm`) per frame in which the scan changed |
+> | **Demo mode** | **Bug found and fixed:** demo mode reported no AR planes, so its automatic scan never saw a wall. `SimulatedPlanes` now reports the demo room's walls, door and window frames, ceiling, floor and furniture tops, each once looked at |
+>
+> Running the now-working demo end to end in the iOS Simulator found three more
+> bugs, all fixed with regression tests:
+>
+> 1. **Detected furniture was turned a quarter turn** (since `R1`, ADR-0006).
+>    A plane's width runs along its local X, but the yaw was the bearing of
+>    that axis, which puts a `SceneObjectModel`'s width a quarter turn away.
+>    Every non-square surface (a bed, a desk) came out rotated; the demo bed
+>    went through a wall. `YawFromSurface` now subtracts 90 degrees. The old
+>    test planes shared the mistake, so the new test checks the added object
+>    against the plane's real rectangle.
+> 2. **Detected doors and windows were lost when ARKit missed the ceiling.**
+>    They were only added when the scan also measured the height; now they
+>    are added as soon as the height is measured or typed.
+> 3. **The Simulator build did not link Core ML and Vision** (Debug builds do
+>    not auto-link them; the Release device build happened to).
+>    `ScannerIosPostBuild` now adds Core ML, Vision, Core Image and UIKit to
+>    `UnityFramework` explicitly.
+>
+> Left for the owner: every row on the iPhone.
+
 ## Goal
 
 A first-time user gets from **Start Scan** to **Send to Computer** with no debug

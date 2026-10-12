@@ -27,6 +27,7 @@ but none of it has run on an iPhone.**
 | Export bundle (ADR-0013, task `R6`) | **Finish** (was Finalize GhostMap) builds `GhostMap-<room>-<time>.zip` (`room.html`, `room.glb`, `objects/<id>.glb`, `scene.json`, `README.txt`) with `ExportBundleBuilder` and keeps it via `SavedScanStore` in `persistentDataPath/scans/`. The guide says "saved on this iPhone" or shows the error; **Send to Computer** retries a failed export. Logs `GhostMap export: saved <file> (<KB>) in <ms>`. On the Mac: 27 ms, 182 KB for the fixture room | Not run on a device |
 | Send to Computer and Your rooms (ADR-0013, task `R7`) | After **Finish**, **Send to Computer** opens the iOS share sheet (`UIActivityViewController`, native plugin `Assets/Plugins/iOS/GhostMapShare/GhostMapShare.mm`) with the saved zip: AirDrop, Save to Files, Mail. The guide reports "Sent with AirDrop.", "Saved to Files." or the error; a cancel says nothing and the button works again. **Rooms** (top bar) lists the five newest saved rooms ("Bedroom · 11 Oct, 14:30"), each with its own Send button. The network chip is now **Live view**, a developer tool that no longer opens by itself. Logic in `ShareController` behind `IShareSheet`; the Editor reveals the zip in Finder instead | Not run on a device. Simulator: share sheet, Save to Files and the callback work |
 | A photo of each object (task `R11`) | The detector plugin keeps its last analysed camera frame and crops JPEGs from it (at most 480 px). Identified furniture keeps the crop of its most confident sighting; anything else gets a crop of the camera view around it when added, if mostly on screen. `ScanWorkflowController.ObjectPhotos` holds them by object id (dropped on undo, never published); the export writes `photos/<id>.jpg` and `objectPhotos` in `room.html`. No photos in demo mode (the project has no Image Conversion module) | Not run on a device. Compiled for iPhone |
+| Hardening and guided flow (task `R9`) | Six steps (Floor, Room, Height, Openings, Furniture, Send); every capture refused while tracking is lost, including adding detected furniture; after backgrounding, tracking must settle for 1 s ("Welcome back..."); a full turn with 0-2 walls offers Help GhostMap after 6 s and says how many walls were found; with a detector, the furniture step first asks you to look around, then after 10 s points to placing by hand; no debug text unless developer mode (Editor, Development builds, or five quick taps on Details); 108 px reticle with a dark halo; a light haptic tap per capture. Fixes: detected furniture was a quarter turn off (since `R1`); detected doors and windows were lost when the ceiling was not seen; demo mode had no AR planes; the Simulator build did not link Core ML/Vision | Not run on a device. **Demo run end to end in the iOS Simulator** (2026-10-11) |
 | Quick-send discovery (ADR-0009) — now the developer **Live view** card | Finds the Viewer over UDP 47832 after finalize | Superseded by ADR-0013; dormant, removed in `R10` |
 
 ### Scan flow
@@ -48,7 +49,6 @@ validation and the snapshot are identical however the room was captured.
 | Plan says | Scanner does today | Fixed by |
 | --- | --- | --- |
 | Remove any single proposed item before Add All | Undo removes the last added object | Not planned yet |
-| No debug text in the guided flow | `S6 diag:` line still in the status text; S1 diagnostics in Details | `R9` |
 | `phone.pose` at <= 5 Hz | Not sent | Not planned |
 | Manual height marked in snapshot metadata | HUD only | Not planned |
 
@@ -60,6 +60,8 @@ validation and the snapshot are identical however the room was captured.
 - Export bundle: branch `integration/r6-export-bundle`; EditMode 694/694,
   `ScannerBuild.BuildScanner` and unsigned `xcodebuild` on the owner's Mac,
   2026-10-11. Not device-verified.
+- Hardening: branch `scanner/r9-hardening`; EditMode 849/849; Simulator demo
+  build run from Lock Floor to Finish; exported room checked in Chrome.
 - Detector label: branch `shared/r5-detector-label`; EditMode 821/821.
   Objects the detector named carry its COCO class as `label`. Not
   device-verified.
@@ -84,7 +86,7 @@ unsigned `xcodebuild` (Release, iphoneos) succeeded there.
 
 **Confirmed in this repository on 2026-10-11 at `69af8eb`: 577 tests, 577
 passed**. **After `R6`: 694 tests, 694 passed** (+90 embedded shared, +27 export), 0 failed (owner's Mac, Unity 6000.3.24f1).
-**After `R7`: 710. After `R4`: 779 tests, 779 passed** **After `R11`: 805** (+26 photo tests). **After `R5`: 821** (+11 shared label tests, +5 label workflow tests). For `R4`: 773 at its first commit, +6 for identification from floor lock; +73
+**After `R7`: 710. After `R4`: 779 tests, 779 passed** **After `R11`: 805** (+26 photo tests). **After `R5`: 821** (+11 shared label tests, +5 label workflow tests). **After `R9`: 849** (+28: hardening, few walls, demo planes, three regressions). For `R4`: 773 at its first commit, +6 for identification from floor lock; +73
 `FurnitureIdentificationTests` cases, +2 guide tests, +2 detection tests with
 the six ADR-0007 suggestion tests rewritten for identified types, -14
 `FurnitureTypeSuggesterTests` removed); the iOS
@@ -116,9 +118,9 @@ messages, `ProtocolSerializer` and `PeerDiscoveryProtocol`.
   documented transform, not against a camera.
 
 **Known behaviour**
-- In the Simulator demo build the automatic room scan reaches "100% seen" but
-  does not finish ("Having trouble? Tap Help GhostMap."). Not investigated;
-  check whether it also happens in the Editor demo before `R9`.
+- Fixed in `R9`: the demo's automatic scan never finished because demo mode
+  reported no AR planes. The demo now runs from Lock Floor to Finish in the
+  iOS Simulator (see `R9` below).
 - Export runs on the main thread when **Finish** is tapped. 27 ms on
   the Mac; the iPhone time is unmeasured (spec target under 2 s).
 - Saved rooms accumulate in `persistentDataPath/scans/`; **Rooms** lists the
@@ -161,8 +163,9 @@ messages, `ProtocolSerializer` and `PeerDiscoveryProtocol`.
 the `GhostMap export:` log line, and **Send to Computer** by AirDrop to the Mac
 (`R7`'s device check in `docs/tasks/R7-share-sheet.md`). Include `R4`'s device
 check (`docs/tasks/R4-yolo-furniture-identification.md`, "Device check"): the
-`GhostMap yolo:` frame time and what "Found:" names in the room. Agent work in
-parallel: `R5` (detector label), then `R9` (hardening). Progress:
+`GhostMap yolo:` frame time and what "Found:" names in the room. The demo build
+(`ScannerSimulatorBuild`) now walks the whole flow in the Simulator, so use it
+to rehearse. Agent work: whatever `R2` turns up. Progress:
 `docs/status/integration.md`.
 
 ## Do not touch

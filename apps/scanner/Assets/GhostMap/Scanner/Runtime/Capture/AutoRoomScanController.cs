@@ -60,6 +60,13 @@ namespace GhostMap.Scanner.Capture
         /// <summary>After this long with full coverage and no room, offer help.</summary>
         public const float OfferHelpAfterS = 30f;
 
+        /// <summary>
+        /// Task R9: after a full turn that found fewer than three walls, offer
+        /// the sweep this soon rather than after <see cref="OfferHelpAfterS"/>:
+        /// a second turn rarely finds two missing walls.
+        /// </summary>
+        public const float FewWallsHelpAfterS = 6f;
+
         /// <summary>Without any vertical plane for this long, suggest pointing at something detailed.</summary>
         public const float NoDetailAfterS = 8f;
 
@@ -87,6 +94,7 @@ namespace GhostMap.Scanner.Capture
         private float startedAt;
         private float lastSelectAt = float.NegativeInfinity;
         private float firstVerticalAt = float.NaN;
+        private float coveredAt = float.NaN;
         private Vector2 centerSum;
         private int centerCount;
         private float headingDeg;
@@ -161,6 +169,7 @@ namespace GhostMap.Scanner.Capture
             startedAt = now;
             lastSelectAt = float.NegativeInfinity;
             firstVerticalAt = float.NaN;
+            coveredAt = float.NaN;
             centerSum = Vector2.zero;
             centerCount = 0;
             CurrentTurnRateDegPerS = 0f;
@@ -455,10 +464,23 @@ namespace GhostMap.Scanner.Capture
             }
 
             // The whole turn has been seen, but the walls do not close into a room.
+            if (float.IsNaN(coveredAt))
+            {
+                coveredAt = now;
+            }
+
             if (now - startedAt >= OfferHelpAfterS)
             {
                 State = AutoScanState.NeedHelp;
                 Message = "Having trouble? Tap Help GhostMap.";
+                return;
+            }
+
+            int trusted = LastResult.TrustedWallCount;
+            if (trusted < 3 && now - coveredAt >= FewWallsHelpAfterS)
+            {
+                State = AutoScanState.NeedHelp;
+                Message = DescribeFewWalls(trusted);
                 return;
             }
 
@@ -485,6 +507,17 @@ namespace GhostMap.Scanner.Capture
 
             State = AutoScanState.PointAtWalls;
             Message = "Point the camera at the walls.";
+        }
+
+        /// <summary>
+        /// Task R9: what to say when a full turn found too few walls to make a
+        /// room, pointing to the sweep (Help GhostMap).
+        /// </summary>
+        public static string DescribeFewWalls(int trustedWalls)
+        {
+            return trustedWalls <= 0
+                ? "No walls found yet. Tap Help GhostMap to trace them by hand."
+                : $"Found {trustedWalls} of 4 walls. Tap Help GhostMap to trace them by hand.";
         }
 
         /// <summary>Turns a bearing relative to where the camera faces into a short instruction.</summary>

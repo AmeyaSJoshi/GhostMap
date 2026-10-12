@@ -29,9 +29,15 @@ namespace GhostMap.Scanner.UI
             ExportState export = ExportState.None,
             string exportError = null,
             ShareState share = ShareState.Idle,
-            string shareMessage = null)
+            string shareMessage = null,
+            float secondsInPhase = 0f,
+            bool detectorAvailable = false,
+            bool recoveringFromBackground = false)
         {
             TrackingGood = trackingGood;
+            SecondsInPhase = secondsInPhase;
+            DetectorAvailable = detectorAvailable;
+            RecoveringFromBackground = recoveringFromBackground;
             LastFloorRejection = lastFloorRejection;
             ConnectedToComputer = connectedToComputer;
             Export = export;
@@ -58,6 +64,15 @@ namespace GhostMap.Scanner.UI
 
         /// <summary>What the share sheet reported, e.g. "Sent with AirDrop."</summary>
         public string ShareMessage { get; }
+
+        /// <summary>Task R9: seconds since the scan entered its current phase.</summary>
+        public float SecondsInPhase { get; }
+
+        /// <summary>Task R9: whether the furniture detector is running (task R4).</summary>
+        public bool DetectorAvailable { get; }
+
+        /// <summary>Task R9: tracking is settling after the app was in the background.</summary>
+        public bool RecoveringFromBackground { get; }
     }
 
     /// <summary>The finalized room's export bundle (task R6).</summary>
@@ -124,7 +139,26 @@ namespace GhostMap.Scanner.UI
     /// </summary>
     public static class ScanGuide
     {
-        public const int StepCount = 7;
+        /// <summary>
+        /// Task R9: six steps, as plan section 18 names them. The room step
+        /// covers every capture path (turn, sweep, walk) and the corner check.
+        /// </summary>
+        public const int StepCount = 6;
+
+        /// <summary>The step names, in order: index 0 is step 1.</summary>
+        public static readonly string[] StepNames = { "Floor", "Room", "Height", "Openings", "Furniture", "Send" };
+
+        /// <summary>Task R9: with a detector, how long to let it look before pointing to manual placement.</summary>
+        public const float NothingFoundAfterSeconds = 10f;
+
+        /// <summary>
+        /// Task R9: the line shown while tracking is lost, which blocks every
+        /// capture. After the app was in the background, it says why.
+        /// </summary>
+        public static string TrackingLostMessage(bool recoveringFromBackground)
+            => recoveringFromBackground
+                ? "Welcome back. Hold the phone steady and point it at the room while GhostMap finds its place."
+                : "Tracking lost. Move the phone slowly and point it at the room.";
 
         public static ScanGuideStep Describe(ScanWorkflowController workflow, ScanGuideContext context)
         {
@@ -157,11 +191,11 @@ namespace GhostMap.Scanner.UI
                     return DescribeOpenings(workflow);
 
                 case ScanPhase.AddObjects:
-                    return DescribeObjects(workflow);
+                    return DescribeObjects(workflow, context);
 
                 case ScanPhase.ReadyToFinalize:
                     return new ScanGuideStep(
-                        7,
+                        6,
                         "Room ready",
                         "Your room is ready. Tap Finish to save it on this iPhone.",
                         null,
@@ -172,7 +206,7 @@ namespace GhostMap.Scanner.UI
                     if (context.Export == ExportState.Failed)
                     {
                         return new ScanGuideStep(
-                            7,
+                            6,
                             "Not saved yet",
                             "Your room is finished, but it could not be saved on this iPhone. Tap Send to Computer to try again.",
                             null,
@@ -201,14 +235,14 @@ namespace GhostMap.Scanner.UI
             switch (context.Share)
             {
                 case ShareState.Sharing:
-                    return new ScanGuideStep(7, "Sending", instruction, null, context.ShareMessage, GuideMessageKind.None);
+                    return new ScanGuideStep(StepCount, "Sending", instruction, null, context.ShareMessage, GuideMessageKind.None);
                 case ShareState.Sent:
-                    return new ScanGuideStep(7, "Sent", "Your room is on its way. Open room.html from the zip on your computer.",
+                    return new ScanGuideStep(StepCount, "Sent", "Your room is on its way. Open room.html from the zip on your computer.",
                         null, context.ShareMessage, GuideMessageKind.Success);
                 case ShareState.Failed:
-                    return new ScanGuideStep(7, "All done", instruction, null, context.ShareMessage, GuideMessageKind.Warning);
+                    return new ScanGuideStep(StepCount, "All done", instruction, null, context.ShareMessage, GuideMessageKind.Warning);
                 default:
-                    return new ScanGuideStep(7, "All done", instruction, null, string.Empty, GuideMessageKind.None);
+                    return new ScanGuideStep(StepCount, "All done", instruction, null, string.Empty, GuideMessageKind.None);
             }
         }
 
@@ -405,7 +439,7 @@ namespace GhostMap.Scanner.UI
         }
 
         // -------------------------------------------------------------------
-        // Step 3 — closure check
+        // Step 2 — closure check (manual paths)
         // -------------------------------------------------------------------
 
         private static ScanGuideStep DescribeVerifyClosure(ScanWorkflowController workflow)
@@ -417,7 +451,7 @@ namespace GhostMap.Scanner.UI
             if (corners.HasClosureMeasurement && corners.LastClosureQuality == ClosureQuality.Rejected)
             {
                 return new ScanGuideStep(
-                    3,
+                    2,
                     title,
                     $"That corner was too far off. Tap {redo} and try again a little more carefully.",
                     null,
@@ -428,7 +462,7 @@ namespace GhostMap.Scanner.UI
             string error = corners.LastError;
 
             return new ScanGuideStep(
-                3,
+                2,
                 title,
                 "Point the dot at the real corner where the blue marker is, then tap Check Corner. This tells you how accurate the room is.",
                 "That corner, at the floor",
@@ -437,7 +471,7 @@ namespace GhostMap.Scanner.UI
         }
 
         // -------------------------------------------------------------------
-        // Step 4 — height
+        // Step 3 — height
         // -------------------------------------------------------------------
 
         private static ScanGuideStep DescribeHeight(ScanWorkflowController workflow)
@@ -460,7 +494,7 @@ namespace GhostMap.Scanner.UI
             }
 
             return new ScanGuideStep(
-                4,
+                3,
                 "Measure the ceiling",
                 "Point the dot where the yellow-lined wall meets the ceiling, then tap Measure. Or type the height below.",
                 "Where wall meets ceiling",
@@ -469,7 +503,7 @@ namespace GhostMap.Scanner.UI
         }
 
         // -------------------------------------------------------------------
-        // Step 5 — doors and windows
+        // Step 4 — doors and windows
         // -------------------------------------------------------------------
 
         private static ScanGuideStep DescribeOpenings(ScanWorkflowController workflow)
@@ -481,7 +515,7 @@ namespace GhostMap.Scanner.UI
             if (openings.HasPendingStartPoint)
             {
                 return new ScanGuideStep(
-                    5,
+                    4,
                     "Doors & windows",
                     $"Now point at the TOP-RIGHT corner of the {type} and tap again.",
                     $"Top-right of the {type}",
@@ -494,7 +528,7 @@ namespace GhostMap.Scanner.UI
                 : $"{openings.OpeningCount} added. Add more, or tap Next.";
 
             return new ScanGuideStep(
-                5,
+                4,
                 "Doors & windows",
                 $"Pick the wall with a {type} (yellow line). Point at the {type}'s BOTTOM-LEFT corner and tap.",
                 $"Bottom-left of the {type}",
@@ -503,10 +537,10 @@ namespace GhostMap.Scanner.UI
         }
 
         // -------------------------------------------------------------------
-        // Step 6 — furniture
+        // Step 5 — furniture
         // -------------------------------------------------------------------
 
-        private static ScanGuideStep DescribeObjects(ScanWorkflowController workflow)
+        private static ScanGuideStep DescribeObjects(ScanWorkflowController workflow, ScanGuideContext context)
         {
             ObjectPlacementController objects = workflow.Objects;
             FurnitureDetectionController detection = workflow.FurnitureDetection;
@@ -520,7 +554,7 @@ namespace GhostMap.Scanner.UI
             if (proposals.Count > 0)
             {
                 return new ScanGuideStep(
-                    6,
+                    5,
                     "Add furniture",
                     $"Found: {FurnitureIdentificationController.Describe(proposals)}. Tap Add All.",
                     null,
@@ -547,7 +581,7 @@ namespace GhostMap.Scanner.UI
                     : "Found something at the yellow dot. Tap Is: to say what it is, then Add. Or Skip it.";
 
                 return new ScanGuideStep(
-                    6,
+                    5,
                     "Add furniture",
                     instruction,
                     null,
@@ -557,12 +591,28 @@ namespace GhostMap.Scanner.UI
                     string.IsNullOrEmpty(error) ? GuideMessageKind.Tip : GuideMessageKind.Error);
             }
 
-            string tip = objects.ObjectCount == 0
-                ? "Look at desk and table tops to detect them. No furniture? Just tap Next."
-                : "Use the size buttons to match the last thing you placed.";
+            // Task R9: with a detector running, first let it look; if it has
+            // named nothing after a while, point to placing by hand.
+            if (context.DetectorAvailable && objects.ObjectCount == 0 && string.IsNullOrEmpty(error)
+                && context.SecondsInPhase < NothingFoundAfterSeconds)
+            {
+                return new ScanGuideStep(
+                    5,
+                    "Add furniture",
+                    "Look slowly around at your furniture. GhostMap names what it recognises.",
+                    null,
+                    "Or place something yourself: pick its type, point at its middle, tap Place.",
+                    GuideMessageKind.Tip);
+            }
+
+            string tip = objects.ObjectCount > 0
+                ? "Use the size buttons to match the last thing you placed."
+                : context.DetectorAvailable
+                    ? "Nothing recognised yet. Place furniture by hand, or tap Next if there is none."
+                    : "Look at desk and table tops to detect them. No furniture? Just tap Next.";
 
             return new ScanGuideStep(
-                6,
+                5,
                 "Add furniture",
                 $"Point the dot at the middle of the {type.ToLowerInvariant()} on the floor, then tap Place.",
                 $"Middle of the {type.ToLowerInvariant()}",

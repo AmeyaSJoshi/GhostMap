@@ -122,6 +122,12 @@ namespace GhostMap.Scanner.AR
 
         public bool IsTrackingGood => Time.unscaledTime - startTime >= WarmUpSeconds;
 
+        // Task R9: the planes ARKit would report, each once it has been looked at.
+        private readonly SimulatedPlanes planes = new SimulatedPlanes();
+
+        /// <summary>The demo room's planes seen so far (task R9).</summary>
+        public void CopyDetectedSurfaces(List<DetectedSurface> into) => planes.CopySeen(into);
+
         public void Initialize(Camera arCamera)
         {
             viewCamera = arCamera;
@@ -146,6 +152,11 @@ namespace GhostMap.Scanner.AR
             pitch = Mathf.Lerp(pitch, targetPitch, blend);
 
             ApplyCameraPose();
+
+            if (IsTrackingGood)
+            {
+                planes.MarkSeen(viewCamera.WorldToViewportPoint);
+            }
         }
 
         /// <summary>
@@ -265,14 +276,14 @@ namespace GhostMap.Scanner.AR
 
             // A door on the west wall and a window on the east wall, to try
             // the openings step on.
-            Box(root, "Door", new Vector3(-halfW + 0.01f, 1.0f, 0.6f), new Vector3(0.02f, 2.0f, 0.9f), new Color(0.42f, 0.30f, 0.22f));
-            Box(root, "Window", new Vector3(halfW - 0.01f, 1.45f, -0.2f), new Vector3(0.02f, 1.0f, 1.3f), new Color(0.62f, 0.82f, 0.95f));
+            Box(root, "Door", SimulatedLayout.Door.center, SimulatedLayout.Door.size, new Color(0.42f, 0.30f, 0.22f));
+            Box(root, "Window", SimulatedLayout.Window.center, SimulatedLayout.Window.size, new Color(0.62f, 0.82f, 0.95f));
 
             // Furniture, including a bed that hides part of a wall, as real
             // rooms do.
-            Bounds bed = Box(root, "Bed", new Vector3(halfW - 0.75f, 0.25f, halfD - 1.05f), new Vector3(1.4f, 0.5f, 2.0f), new Color(0.93f, 0.93f, 0.96f));
+            Bounds bed = Box(root, "Bed", SimulatedLayout.Bed.center, SimulatedLayout.Bed.size, new Color(0.93f, 0.93f, 0.96f));
             bed.Encapsulate(Box(root, "Bed Headboard", new Vector3(halfW - 0.75f, 0.55f, halfD - 0.04f), new Vector3(1.4f, 1.1f, 0.06f), new Color(0.35f, 0.28f, 0.24f)));
-            Bounds desk = Box(root, "Desk", new Vector3(-halfW + 0.45f, 0.37f, -halfD + 0.9f), new Vector3(0.7f, 0.74f, 1.3f), new Color(0.75f, 0.62f, 0.45f));
+            Bounds desk = Box(root, "Desk", SimulatedLayout.Desk.center, SimulatedLayout.Desk.size, new Color(0.75f, 0.62f, 0.45f));
             furniture.Add(new Furniture("bed", bed));
             furniture.Add(new Furniture("dining table", desk));
             Box(root, "Rug", new Vector3(0.1f, 0.005f, -0.3f), new Vector3(1.8f, 0.01f, 1.2f), new Color(0.48f, 0.55f, 0.60f));

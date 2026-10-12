@@ -78,14 +78,14 @@ namespace GhostMap.Scanner.Tests.EditMode
             return workflow;
         }
 
-        private static void AimAtFloor(FakeSpatialProvider provider, GhostCoordinateFrame frame, float x, float z)
+        internal static void AimAtFloor(FakeSpatialProvider provider, GhostCoordinateFrame frame, float x, float z)
         {
             Vector3 target = frame.GhostToWorld(new Vector3(x, 0f, z));
             Vector3 eye = frame.GhostToWorld(new Vector3(x, 1.5f, z - 1f));
             provider.ScreenRay = new Ray(eye, (target - eye).normalized);
         }
 
-        private static void AimAtWall(FakeSpatialProvider provider, GhostCoordinateFrame frame, float wallX, float heightM)
+        internal static void AimAtWall(FakeSpatialProvider provider, GhostCoordinateFrame frame, float wallX, float heightM)
         {
             Vector3 eye = frame.GhostToWorld(new Vector3(1.5f, 1.5f, 1.25f));
             Vector3 target = frame.GhostToWorld(new Vector3(wallX, heightM, 0f));

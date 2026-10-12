@@ -56,7 +56,7 @@ namespace GhostMap.Scanner.Capture
         public const float MinCenterToWallM = 0.3f;
 
         /// <summary>Every chosen wall must have at least this much observed length.</summary>
-        public const float MinObservedPerWallM = 0.8f;
+        public const float MinObservedPerWallM = 0.5f;
 
         /// <summary>Observed wall length must cover at least this fraction of the room's perimeter.</summary>
         public const float MinCoverageFraction = 0.25f;

@@ -54,8 +54,8 @@ ArSpatialProvider.TryGetDetectedSurfaces          ARPlaneManager.trackables -> D
 | Per-plane: unlabelled | `WallPlaneAccumulator.MinUnlabelledWidthM` / `HeightM` / `TopM` | 0.5 m wide, 0.4 m tall, top at least 1.3 m above the floor | Was 1.5 m x 1.2 m until `1a5c025`; that rejected everything in run 1 |
 | Per-plane: labelled | `MinLabelledWidthM` | 0.3 m | Was 0.6 m |
 | Same wall | `SameWallAngleDeg` / `SameWallOffsetM` | 12 deg, 0.30 m | Planes merge into one cluster |
-| **Trusted wall** | `TrustedLabelledWidthM` / `TrustedUnlabelledWidthM` | **1.0 m labelled, 2.5 m unlabelled**, observed width along the line | **This is what failed in run 2** |
-| Room | `RoomFromWalls.Select` | at least 3 trusted to name the missing direction, **4 trusted** that enclose the scan centre (no angular gap over 170 deg, centre at least 0.3 m from each wall, each wall at least 0.8 m observed, observed length at least 25% of the perimeter) | ADR-0012: never invents a wall |
+| **Trusted wall** | `TrustedLabelledWidthM` / `TrustedUnlabelledWidthM` | **0.5 m labelled** (was 1.0 m until run 3's build), 2.5 m unlabelled, observed width along the line | **This is what failed in run 2** |
+| Room | `RoomFromWalls.Select` | at least 3 trusted to name the missing direction, **4 trusted** that enclose the scan centre (no angular gap over 170 deg, centre at least 0.3 m from each wall, each wall at least 0.5 m observed (`MinObservedPerWallM`, was 0.8 m), observed length at least 25% of the perimeter) | ADR-0012: never invents a wall |
 | Help offer | `AutoRoomScanController.OfferHelpAfterS` / `FewWallsHelpAfterS` | 30 s; 6 s after a full turn with 0-2 trusted | |
 
 ## Hypotheses, most likely first
@@ -82,6 +82,18 @@ ArSpatialProvider.TryGetDetectedSurfaces          ARPlaneManager.trackables -> D
 Not in scope without the owner and an ADR: LiDAR or scene reconstruction
 (`AGENTS.md` rule 6), inventing a missing wall from three, or moving the app to
 native Swift (rule 15; the owner chose to finish R2 on Unity first).
+
+## Change made without more owner data (2026-10-11)
+
+The owner declined to measure the room or describe each wall. Acting on
+hypothesis 1 from run 2's numbers alone, `TrustedLabelledWidthM` went from 1.0
+to 0.5 m and `MinObservedPerWallM` from 0.8 to 0.5 m. A new test,
+`TheOwnersRoom_LabelledWallsAsSmallAsTheDeviceSaw_BuildTheRoom`, builds a room
+from labelled walls of 2.6, 1.8, 0.8 and 0.6 m, the sizes the phone reported.
+Unlabelled walls still need 2.5 m. **Risk:** a small plane that ARKit labels
+"wall" but is really furniture could now become a wall; `RoomFromWalls` still
+requires four walls enclosing the user, and the shared room validator still
+applies. The next device run (it logs bearings) shows whether this worked.
 
 ## Next steps
 

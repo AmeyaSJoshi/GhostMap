@@ -112,8 +112,14 @@ namespace GhostMap.Scanner.Capture
         /// <summary>A wall-labelled plane must be at least this wide.</summary>
         public const float MinLabelledWidthM = 0.3f;
 
-        /// <summary>A cluster with at least this much merged width, and a wall label, is trusted.</summary>
-        public const float TrustedLabelledWidthM = 1.0f;
+        /// <summary>
+        /// A cluster with at least this much merged width, and a wall label, is
+        /// trusted. R2 run 2 (owner's iPhone): ARKit labelled four walls but
+        /// grew them only to 2.6, 1.8, 0.8 and 0.6 m in one turn; at 1.0 m two
+        /// were trusted and no room could be built. ARKit's wall label is
+        /// reliable, so a labelled half metre is enough.
+        /// </summary>
+        public const float TrustedLabelledWidthM = 0.5f;
 
         /// <summary>A cluster with no wall label needs this much merged width to be trusted.</summary>
         public const float TrustedUnlabelledWidthM = 2.5f;

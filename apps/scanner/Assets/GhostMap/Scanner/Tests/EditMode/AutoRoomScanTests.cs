@@ -373,6 +373,30 @@ namespace GhostMap.Scanner.Tests.EditMode
         }
 
         [Test]
+        public void TheOwnersRoom_LabelledWallsAsSmallAsTheDeviceSaw_BuildTheRoom()
+        {
+            // R2 run 2: ARKit labelled four walls but grew them only to 2.6,
+            // 1.8, 0.8 and 0.6 m during one turn. That has to be enough.
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+            GhostCoordinateFrame frame = workflow.Frame;
+            Feed(provider, new[]
+            {
+                Patch(frame, 0f, 2f, 0f, -1f, 2.6f, 2.8f, 1.4f, PlaneClassifications.WallFace),
+                Patch(frame, 2.5f, 0f, -1f, 0f, 1.8f, 2.5f, 1.3f, PlaneClassifications.WallFace),
+                Patch(frame, 0.5f, -1.8f, 0f, 1f, 0.8f, 2.0f, 1.2f, PlaneClassifications.WallFace),
+                Patch(frame, -2.2f, 0.4f, 1f, 0f, 0.6f, 0.7f, 1.5f, PlaneClassifications.WallFace)
+            });
+
+            workflow.BeginAutoScan(0f);
+            TurnOnce(provider, workflow);
+
+            Assert.AreEqual(4, workflow.Auto.LastResult.TrustedWallCount);
+            Assert.IsTrue(workflow.TryFinishAutoScan(out AutoScanRejection rejection), rejection + "\n" + workflow.Auto.DebugSummary);
+            Assert.AreEqual(4, workflow.Snapshot.room.corners.Length);
+        }
+
+        [Test]
         public void DoorAndWindowFramePlanes_AreNotWalls()
         {
             GhostCoordinateFrame frame = Frame();

@@ -1,7 +1,9 @@
 # Export Bundle v1
 
 **Status:** Complete for v1. Section 2 was fixed by task `R8` (browser viewer)
-and the rest by task `R6` (the phone builds the bundle).
+and the rest by task `R6` (the phone builds the bundle). Task `R11` (2026-10-11)
+added optional object photos (`photos/<id>.jpg`, `objectPhotos`, section 5);
+an additive change, so `formatVersion` stays 1.
 **Decision:** `docs/decisions/ADR-0013-phone-export-and-browser-viewer.md`.
 **Owner:** Shared / Integration workstream.
 **Source of truth:** `shared/com.ghostmap.shared/Runtime/Export/` (geometry and
@@ -27,6 +29,7 @@ GhostMap-<room>-<yyyyMMdd-HHmm>.zip
 ├── room.html           section 2
 ├── room.glb            section 3.1
 ├── objects/<id>.glb    section 3.2, one per furniture object
+├── photos/<id>.jpg     section 5, a photo of each object that has one (optional)
 ├── scene.json          the finalized SceneSnapshot
 └── README.txt          what each file is; how to use them in Unity (section 4)
 ```
@@ -34,8 +37,9 @@ GhostMap-<room>-<yyyyMMdd-HHmm>.zip
 | Rule | Value |
 | --- | --- |
 | File name | `GhostMap-<room>-<yyyyMMdd-HHmm>.zip`, local time of the export. `<room>` is `room.name` with every character other than letters, digits, `.`, `_` and `-` replaced by `_`, at most 40 characters, leading and trailing `.`/`_` trimmed; `Room` if empty. A second save with the same name gets `-2`, `-3`, ... before `.zip` |
-| Entry order | `room.html`, `room.glb`, `objects/*.glb` in `room.objects` order, `scene.json`, `README.txt`. Readers must not depend on it |
+| Entry order | `room.html`, `room.glb`, `objects/*.glb` in `room.objects` order, `photos/*.jpg` in the same order, `scene.json`, `README.txt`. Readers must not depend on it |
 | Object entry names | `objects/<id>.glb`, with the id made safe by the same character rule (at most 64 characters, `object` if empty) and a `_2`, `_3` suffix on collision. The id in `scene.json` is never changed; only the file name is |
+| Photo entry names | `photos/<stem>.jpg` with exactly the stem of the same object's `objects/<stem>.glb`, so the two always pair up |
 | `scene.json` | `JsonUtility.ToJson(snapshot, prettyPrint: true)`, UTF-8 without a byte-order mark. Must be `finalized: true` |
 | Text encoding | Every text entry is UTF-8 without a byte-order mark |
 | Entry timestamps | The export time (never before 1980-01-01) |
@@ -76,7 +80,8 @@ not otherwise modify the template.
   "formatVersion": 1,
   "scene": { "...": "the finalized SceneSnapshot, schema v1; the same content as scene.json" },
   "roomGlb": "<base64 of room.glb>",
-  "objectGlbs": { "<object id>": "<base64 of objects/<id>.glb>" }
+  "objectGlbs": { "<object id>": "<base64 of objects/<id>.glb>" },
+  "objectPhotos": { "<object id>": "<base64 of photos/<id>.jpg>" }
 }
 ```
 
@@ -87,6 +92,7 @@ not otherwise modify the template.
 | `scene` | A `SceneSnapshot` (`docs/contracts/scene-schema-v1.md`), finalized, already validated on the phone. The viewer does not re-validate room rules |
 | `roomGlb` | Standard base64 (RFC 4648, with `=` padding, no line breaks) of `room.glb` |
 | `objectGlbs` | Keyed by the real `scene.room.objects[*].id` (not the safe file name), standard base64 of that object's `.glb`. An object with no entry is listed but not drawn, with a warning; an entry with no object is ignored, with a warning |
+| `objectPhotos` | Optional (task `R11`). Keyed by real object id, standard base64 of that object's `photos/<id>.jpg`. The phone always writes it, `{}` when there are none. An object with no entry simply has no photo (no warning); an entry that is not a JPEG, or matches no object, is ignored with a warning. A photo never stops the room from showing |
 
 ### 2.3 Escaping
 
@@ -103,6 +109,9 @@ escaping is applied, and the exporter must not HTML-escape the JSON.
   `apps/web-viewer/src/placement.js` for the derivation.
 - Shows only values from `scene` (type, optional `label`, width, depth, height,
   ids, room name, height, opening counts). It never recomputes a room rule.
+- Shows an object's photo, when it has one, in the panel that opens when the
+  object is selected (section 5). The page's Content-Security-Policy allows
+  `img-src data: blob:` for this; the viewer uses a blob URL.
 - Measures between clicked surface points in metres (3D and horizontal).
 
 ---
@@ -170,3 +179,20 @@ Checked on 2026-10-11 by importing the fixture bundle into Unity
 write furniture already placed (for example a `room-furnished.glb`) is an open
 owner decision (`docs/status/integration.md`); it would be an additive change
 to this contract.
+
+---
+
+## 5. Object photos (task `R11`)
+
+A photo the phone took of a piece of furniture, so whoever opens the room can
+see what each box really is. It is a picture only: it never changes a size or
+position, and no reader may derive geometry from it.
+
+| Rule | Value |
+| --- | --- |
+| Format | JPEG (the bytes start `FF D8 FF`), sRGB, upright |
+| Size | At most 480 pixels on the longest side and 256 KB (`ObjectPhotoRules`); the phone leaves out anything larger or not a JPEG |
+| Presence | Optional per object. None in a room is valid. `scene.json` does not mention photos; they are only in the zip and in `room.html` |
+| Content | For furniture the detector named (task `R4`), a crop of the camera frame with its most confident sighting; otherwise a crop of the camera view around the object when it was added, if it was mostly on screen. Taken on the phone; nothing is generated |
+| Where | `photos/<stem>.jpg` in the zip (section 1) and `objectPhotos` in `room.html` (section 2.2), the same bytes |
+| Undo | A photo goes with its object: undoing the object drops it |

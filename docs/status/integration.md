@@ -5,7 +5,7 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 
 ## Current state
 
-**`R1` done: merged, and all three Unity suites pass in this repository (shared 202, viewer 548, scanner 577, run on the owner's Mac on 2026-10-11). `R4` (on-device YOLO furniture identification), `R6` (phone-built export bundle), `R7` (share-sheet Send to Computer) and `R8` (browser viewer) are built and verified as far as a Mac can; none has run on the iPhone. The whole product path now exists in code. Next: `R2` on the iPhone, ending with Finish and an AirDrop to the Mac.**
+**`R1` done: merged, and all three Unity suites pass in this repository (shared 202, viewer 548, scanner 577, run on the owner's Mac on 2026-10-11). `R4` (on-device YOLO furniture identification, running from floor lock), `R11` (a photo of each object in the export), `R6` (phone-built export bundle), `R7` (share-sheet Send to Computer) and `R8` (browser viewer) are built and verified as far as a Mac can; none has run on the iPhone. The whole product path now exists in code. Next: `R2` on the iPhone, ending with Finish and an AirDrop to the Mac.**
 
 | Task | What | State |
 | --- | --- | --- |
@@ -19,6 +19,7 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 | R8 | Browser viewer `room.html` (three.js, view and measure) | **Built** on `viewer/r8-browser-viewer`: template, 41 Node tests, CI job. Checked in headless Chrome; owner's double-click check in Safari still to do. The phone fills it in `R6` |
 | R9 | Failure hardening and one guided scan flow | Not started |
 | R10 | Retire the Unity Viewer and the discovery code | Not started |
+| R11 | A photo of each piece of furniture, exported and shown in `room.html` (owner's "option 1" instead of 3D-scanning furniture) | **Built** on `integration/r11-object-photos`: native crop from the detector's frame, photos kept per object, `photos/<id>.jpg` and `objectPhotos` (contract section 5), shown in the viewer. Compiled for iPhone; checked in Chrome; device check in `R2` |
 
 Nothing has gone from the phone to a computer yet. The S6 network test used a
 Python listener.
@@ -70,6 +71,10 @@ How it was merged:
 | 2026-10-11 | Owner's Mac, Unity 6000.3.24f1, `scanner/r4-yolo-identification` | scanner (EditMode) | **779/779** (773, then +6 when identification moved to floor lock; +73 identification cases, +4 guide and detection, -14 ADR-0007 suggester tests). Shared and viewer unchanged by `R4` |
 | 2026-10-11 | Owner's Mac, `scanner/r4-yolo-identification` | `ConfigureXr`, `BuildScanner`, unsigned `xcodebuild` Release iphoneos | `BUILD SUCCEEDED`. `UnityFramework` links `CoreML.framework` and `Vision.framework` and defines the `GhostMapDetector_*` functions the IL2CPP stubs call; the app carries the model at `Data/Raw/GhostMap/yolo11n.mlpackage` (5.2 MB, no `.meta` files) |
 | 2026-10-11 | Owner's Mac, Swift + Vision, the committed `yolo11n.mlpackage` | Load, classify a test photo upright and as a landscape sensor image with orientation `.right` | 80 COCO labels including `bed`, `couch`, `dining table`, `tv`; identical boxes both ways (so Vision reports boxes in the upright image, which `DetectionGeometry` assumes); 2.3 ms per frame warm on the Mac |
+| 2026-10-11 | Owner's Mac, Unity 6000.3.24f1, `integration/r11-object-photos` | scanner (EditMode) | **805/805** (+26 photo tests). Shared and viewer unchanged |
+| 2026-10-11 | Owner's Mac, `integration/r11-object-photos` | `ConfigureXr`, `BuildScanner`, unsigned `xcodebuild` Release iphoneos | `BUILD SUCCEEDED`; `GhostMapDetector_CropJpeg` is in `UnityFramework` and called from its IL2CPP stub; Core Image linked |
+| 2026-10-11 | Owner's Mac, Node 24, `integration/r11-object-photos` | web-viewer | **46/46** (+5); rebuilt template copied to the scanner |
+| 2026-10-11 | Owner's Mac, headless Chrome 154, `file://` | `room.html` filled with the fixture room and a real JPEG for the bed | Selecting the bed shows the 810×1080 photo above its sizes ("Photo of the bed, taken by the phone"); selecting the desk (no photo) hides it; no console errors |
 | 2026-10-11 | Owner's Mac, `69af8eb` | Python tools checks (`inspect_snapshot.py --quiet` on the three fixtures, `send_fixture.py --dry-run`, `bash -n tools/run_unity_tests.sh`) | Passed: the two valid fixtures valid, the malformed one rejected on the height rule alone |
 
 The counts match those recorded in `GhostMapDublinHacks` at `0b7a106`. CI's Unity jobs still stop at the missing-secrets check, so for now the suites are confirmed only on the owner's Mac.
@@ -139,7 +144,8 @@ From reading the code, not from a failed run:
    open `room.html` from the unzipped bundle (`R7` device check).
 3. **Owner, in `R2`:** `R4`'s device check: point at the bed, desk, table,
    chairs; note what "Found:" says, the `GhostMap yolo:` frame time, and the
-   added sizes against a tape.
+   added sizes against a tape. Then `R11`'s: open the exported `room.html` and
+   check each object's photo shows that object.
 4. **Agent, in parallel:** `R5` (detector label in the schema), then `R9`.
    See `docs/tasks/README.md`.
 5. **Owner, when convenient:** add `UNITY_LICENSE`, `UNITY_EMAIL`,

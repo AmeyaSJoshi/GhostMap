@@ -81,9 +81,10 @@ native Swift. Do not start a rewrite, or argue for one mid-task (`AGENTS.md` rul
 | Phone-built export bundle, saved scans (`R6`) | Built: zip on Finish, kept in `persistentDataPath/scans/`; validator-clean `.glb`, glTFast import checked | No |
 | Share-sheet Send to Computer, Rooms list | Built (`R7`); native plugin compiled for iPhone | No |
 | `room.html` browser viewer | Built (`R8`), filled by the phone (`R6`); checked in headless Chrome, owner's Safari check left | n/a |
+| A photo of each object, shown in `room.html` | Built (`R11`); the phone crops it from the camera; no photos in demo mode | No |
 
-Test suites: shared 292, viewer 569, scanner 779, all passing in this
-repository (owner's Mac, 2026-10-11, after `R4`); web viewer 41 (Node). CI's Unity jobs still wait
+Test suites: shared 292, viewer 569, scanner 805, all passing in this
+repository (owner's Mac, 2026-10-11, after `R11`); web viewer 46 (Node). CI's Unity jobs still wait
 for the owner's licence secrets (`docs/ci.md`); until then run
 `./tools/run_unity_tests.sh` on a Mac with Unity.
 

@@ -1180,6 +1180,7 @@ R1 -> R2 -> R3
    \      \-> R4 -> R5
     \-> R6 -> R7
           \-> R8
+R4, R6, R8 -> R11
 R2, R7, R8 -> R9 -> R10
 ```
 
@@ -1317,6 +1318,18 @@ Once the section 23 acceptance test passes with `room.html`:
 1. Remove `apps/viewer/`, its test suite, and the UDP discovery code from `GhostMapDublinHacks` (ADR-0009).
 2. Keep protocol v1 and the scanner's TCP client only if a developer still uses live streaming; otherwise remove them with an ADR.
 3. Update `tools/run_unity_tests.sh`, the README, the architecture overview and the status pages.
+
+---
+
+## Task R11: A photo of each piece of furniture
+
+**Built 2026-10-11** (`integration/r11-object-photos`), owner's request. Real furniture shapes were considered and set aside: on-phone photogrammetry needs LiDAR (excluded; the app must work on any iPhone), image-to-3D needs a cloud GPU (excluded by `AGENTS.md` rule 6), and Mac photogrammetry would move capture off the phone. Instead the phone keeps one photo per object, and `room.html` shows it beside the object's measured size. Brief: `docs/tasks/R11-object-photos.md`.
+
+1. The detector plugin keeps the image of its last analysed frame and crops a JPEG from it on request (at most 480 px, 256 KB).
+2. Identified furniture keeps the crop of its most confident sighting; other objects get a crop of the camera view when added, if mostly on screen.
+3. The photos travel only in the export bundle: `photos/<id>.jpg` and `objectPhotos` in `room.html` (`docs/contracts/export-bundle-v1.md` section 5). Not in `scene.json`, not on the wire.
+4. `room.html` shows the photo in the selected object's panel.
+5. Device check (owner, `R2`): each added object's photo shows that object.
 
 ---
 
@@ -1688,6 +1701,7 @@ R1 -> R2 -> R3
    \      \-> R4 -> R5
     \-> R6 -> R7
           \-> R8
+R4, R6, R8 -> R11
 R2, R7, R8 -> R9 -> R10
 ```
 

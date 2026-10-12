@@ -411,11 +411,12 @@ Every runtime type, by project and folder. Tests mirror these names with a
 | `Runtime/Capture` | `FurnitureDetectionController` | Furniture surface candidates with measured size and yaw (ADR-0006) |
 | `Runtime/Capture` | `FurnitureIdentificationController`, `IdentifiedFurniture`, `FurnitureClassMap`, `DetectionGeometry` | Task `R4` (ADR-0011): detector box to floor point, surface match, COCO class to type, tracker, proposals for Add All |
 | `Runtime/AR` | `IObjectDetector`, `ObjectDetection`, `CoreMlObjectDetector`, `SimulatedObjectDetector`, `ObjectDetectors` | The seam onto the YOLO11n detector; demo mode reports the virtual room's furniture |
-| `Assets/Plugins/iOS/GhostMapDetector` | `GhostMapDetector.mm` | Native plugin: Vision + Core ML on the `ARFrame` image, off the main thread |
+| `Assets/Plugins/iOS/GhostMapDetector` | `GhostMapDetector.mm` | Native plugin: Vision + Core ML on the `ARFrame` image, off the main thread; crops object photos from the last analysed frame (`R11`) |
+| `Runtime/Capture` | `ObjectPhotoRules` | Task `R11`: what an object photo may be, and where an object is on screen for one |
 | `Assets/StreamingAssets/GhostMap` | `yolo11n.mlpackage` | The model, compiled on the phone on first use (SHA-256s in ADR-0011) |
 | `Runtime/Networking` | `ISnapshotSink`, `ScannerSnapshotPublisher`, `ScannerNetworkClient` | Revision changes → messages → TCP (developer stream) |
 | `Runtime/Networking` | `PeerDiscoveryClient` | UDP discovery; dormant, removed in `R10` |
-| `Runtime/Export` | `ExportBundleBuilder`, `SavedScanStore`, `ScanExporter`, `ExportResult` | The zip on Finalize (`room.html`, `room.glb`, objects, `scene.json`, `README.txt`), saved atomically in `persistentDataPath/scans/` (task `R6`) |
+| `Runtime/Export` | `ExportBundleBuilder`, `SavedScanStore`, `ScanExporter`, `ExportResult` | The zip on Finalize (`room.html`, `room.glb`, objects, object photos, `scene.json`, `README.txt`), saved atomically in `persistentDataPath/scans/` (task `R6`) |
 | `Resources` | `GhostMapRoomTemplate.html` | Copy of `apps/web-viewer/dist/room-template.html`; a test keeps it fresh |
 | `Runtime/Share` | `IShareSheet`, `ShareResult`, `ShareController`, `ShareState`, `IosShareSheet`, `EditorShareSheet`, `ShareSheets` | Send to Computer through the share sheet; outcome wording (task `R7`) |
 | `Runtime/UI` | `SavedRoomsHud` | **Rooms**: the newest saved rooms, each with Send to Computer |

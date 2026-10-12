@@ -62,7 +62,14 @@ namespace GhostMap.Scanner.UI
         private readonly StringBuilder builder = new StringBuilder();
         private readonly List<GameObject> candidateMarkers = new List<GameObject>();
 
+        private readonly List<ObjectDetection> detections = new List<ObjectDetection>();
+
         private float nextRefreshAt;
+
+        // Task R4: created at floor lock, so furniture seen while the room is
+        // scanned is already found when the furniture step opens.
+        private IObjectDetector detector;
+        private string lastProposals = string.Empty;
 
         private void Awake()
         {
@@ -130,12 +137,38 @@ namespace GhostMap.Scanner.UI
                 workflow.TryRefreshFurnitureDetection(out _);
             }
 
+            if (workflow.IdentificationRuns)
+            {
+                UpdateIdentification(workflow);
+            }
+
             UpdateControls(workflow, inObjectPhase);
             UpdateMarkers(workflow, inObjectPhase);
 
             if (readoutText != null)
             {
                 readoutText.text = inObjectPhase ? BuildReadout(workflow) : string.Empty;
+            }
+        }
+
+        /// <summary>Task R4: feeds each new detector frame to the workflow, from floor lock on.</summary>
+        private void UpdateIdentification(ScanWorkflowController workflow)
+        {
+            detector ??= ObjectDetectors.Create(spatialProvider);
+
+            if (!detector.TryGetLatest(detections, out _))
+            {
+                return;
+            }
+
+            workflow.UpdateFurnitureIdentification(detections, Time.unscaledTime);
+
+            // Device-test observability: what the phone thinks is in the room.
+            string proposals = FurnitureIdentificationController.Describe(workflow.FurnitureIdentification.Proposals);
+            if (proposals != lastProposals)
+            {
+                lastProposals = proposals;
+                Debug.Log("GhostMap identify: " + (proposals.Length > 0 ? proposals : "(nothing)"));
             }
         }
 
@@ -238,7 +271,7 @@ namespace GhostMap.Scanner.UI
             // Device-test observability: the numbers to compare against a
             // tape measure, in the Xcode console, without opening Details.
             Debug.Log(string.Format(
-                "GhostMap detect: {0} {1} [ARKit {9}, suggested {10}] G({2:F3},{3:F3}) w {4:F3} d {5:F3} top {6:F3} m yaw {7:F1} -> {8}",
+                "GhostMap detect: {0} {1} [ARKit {9}, identified {10}] G({2:F3},{3:F3}) w {4:F3} d {5:F3} top {6:F3} m yaw {7:F1} -> {8}",
                 accepted ? "ADDED" : "REFUSED",
                 type,
                 candidate.CenterGhost.x,
@@ -251,7 +284,7 @@ namespace GhostMap.Scanner.UI
                     ? $"objects {workflow.Objects.ObjectCount}"
                     : $"{detectionRejection}/{placementRejection} {detection.LastError} {workflow.Objects.LastError}",
                 candidate.Classifications,
-                candidate.SuggestedType));
+                detection.IsIdentified(candidate) ? detection.SuggestedTypeFor(candidate) : "nothing"));
         }
 
         private void OnSkipPressed() => Workflow?.DismissDetectedCandidate();
@@ -381,12 +414,26 @@ namespace GhostMap.Scanner.UI
                     "  ARKit label {0} -> {1}{2}\n",
                     candidate.Classifications,
                     detection.SelectedType,
-                    detection.TypeIsSuggested ? " (suggested)" : " (yours)");
+                    !detection.TypeIsSuggested ? " (yours)"
+                        : detection.IsIdentified(candidate) ? " (identified)" : " (default)");
             }
             else if (detection.CandidateCount == 0)
             {
                 builder.Append(
                     "  Look at a desk, table or bed top. Place by hand if nothing appears.\n");
+            }
+
+            FurnitureIdentificationController identification = workflow.FurnitureIdentification;
+            builder.Append("Identify: ");
+            if (detector == null || !detector.IsAvailable)
+            {
+                builder.Append("no detector\n");
+            }
+            else
+            {
+                builder.Append(identification.FramesProcessed).Append(" frames, tracking ")
+                    .Append(identification.Tracked.Count).Append(", found ")
+                    .Append(identification.Proposals.Count).Append('\n');
             }
 
             if (!string.IsNullOrEmpty(detection.LastError))

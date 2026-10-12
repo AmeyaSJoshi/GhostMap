@@ -13,7 +13,7 @@ and the ADRs win; fix the brief.
 | R1 | Merge `GhostMapDublinHacks` | — | Done; suites green at `69af8eb` (202 / 548 / 577) |
 | R2 | [First device session](R2-first-device-session.md) | R1 | **Owner** on an iPhone; an agent prepares the checklist |
 | R3 | [Accuracy benchmark](R3-accuracy-benchmark.md) | R2 | **Owner** with a tape measure |
-| R4 | [YOLO-n furniture identification](R4-yolo-furniture-identification.md) | R2 | Agent writes code and tests; owner builds and device-tests |
+| R4 | [YOLO-n furniture identification](R4-yolo-furniture-identification.md) | R2 | Built 2026-10-11; owner's device check in `R2` |
 | R5 | [Detector label in the schema](R5-detector-label.md) | R4 design | Agent; CI runs tests |
 | R6 | [Phone-built export bundle](R6-export-bundle.md) | R1 | Built 2026-10-11; owner checks it on the iPhone in `R2` |
 | R7 | [Share-sheet Send to Computer](R7-share-sheet.md) | R6 | Built 2026-10-11; owner's AirDrop check in `R2` |
@@ -21,5 +21,5 @@ and the ADRs win; fix the brief.
 | R9 | [Hardening and guided flow](R9-hardening.md) | R2, R7, R8 | Agent plus owner device checks |
 | R10 | [Retire the Unity Viewer](R10-retire-unity-viewer.md) | Acceptance test passes | Agent |
 
-**Can start right now without the owner:** R4 (code and tests),
-R5 (once R4's class list is settled), R4 (code and tests).
+**Can start right now without the owner:** R5 (the class list is settled in
+ADR-0011; `IdentifiedFurniture.ClassName` already holds the label to store).

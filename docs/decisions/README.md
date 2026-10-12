@@ -11,11 +11,11 @@ ADR is changed only by a new ADR that supersedes it.
 | [0004](ADR-0004-no-dense-depth-in-mvp.md) | Assisted geometric capture; no LiDAR, dense depth or learned reconstruction | Accepted, partly superseded by 0012 |
 | [0005](ADR-0005-sweep-wall-capture.md) | Sweep wall capture | Accepted, built (imported in R1), not device-verified |
 | [0006](ADR-0006-furniture-detection-and-asset-export.md) | Furniture surface detection and per-object `.glb` export | Accepted, built (imported in R1), not device-verified |
-| [0007](ADR-0007-plane-classification-type-suggestion.md) | Furniture type from ARKit's plane label | **Superseded by 0011**; removed in R4 |
+| [0007](ADR-0007-plane-classification-type-suggestion.md) | Furniture type from ARKit's plane label | **Superseded by 0011**; removed in R4 (2026-10-11) |
 | [0008](ADR-0008-peer-to-peer-transport.md) | Peer-to-peer transport (scoping) | Proposal only; overtaken by 0013 |
 | [0009](ADR-0009-local-quick-send-discovery.md) | Local quick-send discovery (UDP, port 47832) | **Superseded by 0013**; dormant, removed in R10 |
 | [0010](ADR-0010-one-button-computer-transfer.md) | One-button Send to Computer, no IP typing | Accepted; transport superseded by 0013 |
-| [0011](ADR-0011-on-device-yolo-furniture-identification.md) | Identify furniture on the phone with YOLO-n | Accepted, not built |
+| [0011](ADR-0011-on-device-yolo-furniture-identification.md) | Identify furniture on the phone with YOLO-n | Accepted; built in R4, not run on an iPhone |
 | [0012](ADR-0012-stand-in-place-on-device-capture.md) | Stand in one spot, capture everything on the phone, deliver Unity-ready files | Accepted; delivery superseded by 0013 |
 | [0013](ADR-0013-phone-export-and-browser-viewer.md) | Phone builds the export bundle, Send to Computer is the iOS share sheet, `room.html` is the viewer | Accepted; built (R6, R7, R8), not yet run on an iPhone |
 

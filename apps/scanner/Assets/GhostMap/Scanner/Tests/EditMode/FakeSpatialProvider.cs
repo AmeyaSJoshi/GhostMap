@@ -28,6 +28,12 @@ namespace GhostMap.Scanner.Tests.EditMode
 
         public Ray ScreenRay { get; set; } = new Ray(Vector3.zero, Vector3.forward);
 
+        /// <summary>
+        /// When set, <see cref="GetScreenRay"/> answers per screen point, so a
+        /// test can give several detections each their own place in the room.
+        /// </summary>
+        public System.Func<Vector2, Ray> ScreenRayAt { get; set; }
+
         /// <summary>Screen point the last <see cref="TryGetFloorHit"/> was asked about.</summary>
         public Vector2 LastRaycastScreenPoint { get; private set; }
 
@@ -63,7 +69,7 @@ namespace GhostMap.Scanner.Tests.EditMode
         {
             LastScreenRayPoint = screenPoint;
             ScreenRayRequestCount++;
-            return ScreenRay;
+            return ScreenRayAt != null ? ScreenRayAt(screenPoint) : ScreenRay;
         }
 
         public bool TryGetCameraPose(out Pose pose)

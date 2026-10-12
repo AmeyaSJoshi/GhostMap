@@ -1,6 +1,7 @@
 # ADR-0011: Identify furniture on the phone with YOLO-n
 
-- **Status:** Accepted (owner decision), not built
+- **Status:** Accepted (owner decision). Built in task `R4` (2026-10-11);
+  not yet run on an iPhone
 - **Date:** 2026-10-10
 - **Supersedes:** ADR-0007 in `GhostMapDublinHacks` (furniture type from ARKit's
   plane label)
@@ -44,6 +45,8 @@ ARKit camera frame (~5 per second, not every frame)
 
 Nothing is added to the room without the user's tap. A detection with no
 matching surface gets the type's default dimensions, which the user can adjust.
+A surface only matches a class whose top it can be (section "As built"), so a
+chair tucked under a desk does not take the desk's size.
 
 ### Classes
 
@@ -79,6 +82,72 @@ Ultralytics YOLO is **AGPL-3.0**. That suits this public repository. Closed-sour
 or commercial distribution would need an Ultralytics Enterprise licence or a
 switch to an Apache-2.0 detector (for example Apple's Core ML DETR model, which
 the hackathon perception audit already timed).
+
+## As built (task `R4`, 2026-10-11)
+
+Where the build differs from the text above, this section wins.
+
+### The model
+
+| | |
+| --- | --- |
+| File | `apps/scanner/Assets/StreamingAssets/GhostMap/yolo11n.mlpackage` (5.2 MB) |
+| Source weights | `yolo11n.pt`, SHA-256 `0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1` |
+| Export | `yolo export model=yolo11n.pt format=coreml nms=True imgsz=640` |
+| Export environment | Python 3.12.13, `ultralytics` 8.4.175, `torch` 2.7.1, `torchvision` 0.22.1, `numpy` 1.26.4, `coremltools` 9.0 (newer `torch` and `numpy` 2 fail the export) |
+| `Manifest.json` | SHA-256 `f08764f5830f2348813b3a35df958d3ec14331bcf5d56d8f0b58c7f2337872c3` |
+| `Data/com.apple.CoreML/model.mlmodel` | SHA-256 `c5bac47705cccb4052a2247c2766652fd8ac570ddde3acf74a869a77b1dfa417` |
+| `Data/com.apple.CoreML/weights/weight.bin` | SHA-256 `7e28de4c897432a4413e15432685334a7c983e92f23d14936f2e5ca38c800785` |
+| Checked on the Mac | Vision returns 80 COCO labels (including `bed`, `couch`, `dining table`, `tv`); the same five boxes for an upright photo and for that photo turned into a landscape sensor image read with orientation `.right`; 2.3 ms per frame warm on the owner's Mac. Phone timing is the `R4` device check |
+
+The package lives in `StreamingAssets`, not `Plugins/iOS`: Unity copies it
+verbatim into the app (`Data/Raw/GhostMap/`, checked in the built `.app`),
+and the plugin compiles it on first use with `MLModel compileModelAtURL`, off
+the main thread. Unity does not add an `.mlpackage` in a plugin folder to
+Xcode's sources, and a post-build step would be one more thing to keep working.
+
+### The plugin
+
+`Assets/Plugins/iOS/GhostMapDetector/GhostMapDetector.mm`, Objective-C++ (the
+same form as the `R7` share plugin; no Swift bridging). C functions:
+`GhostMapDetector_Load(path)`, `_State`, `_LabelCount`, `_CopyLabel`,
+`_CopyError`, `_Submit(nativeFrame, viewportWidth, viewportHeight)` and
+`_Latest(out, max, &frameId, displayTransform[6], &elapsedMs)`. `Submit` takes
+AR Foundation's `XRCameraFrame.nativePtr` (`UnityXRNativeFrame_1 { int version;
+void* framePtr; }`, `framePtr` is the `ARFrame`), runs a `VNCoreMLRequest`
+(`scaleFill`, orientation `.right`) on `capturedImage` on a background queue,
+and drops the frame if one is already running. Core ML and Vision link
+automatically (checked with `otool -L` on the built framework).
+
+C# (`CoreMlObjectDetector`) submits at most every 0.2 s and turns each box into
+Unity screen pixels with `DetectionGeometry.VisionBoxToScreen`, using the
+frame's `displayTransform(for: .portrait, viewportSize:)` captured with it.
+It logs `GhostMap yolo: <ms>` every 25 frames.
+
+### Rules added while building
+
+- **A surface matches only the classes it can be the top of**
+  (`FurnitureClassMap.CanSitUnder`): `dining table` 0.55-1.00 m, `bed`
+  0.25-0.85 m, `chair` and `bench` 0.35-0.60 m, `couch` 0.30-0.60 m; nothing
+  else takes a surface.
+- **A chair or couch keeps at least its default height**: ARKit measures the
+  seat, never the back. Its footprint and yaw still come from the seat.
+- **ARKit's plane label is no longer used.** A surface the detector has not
+  named is offered as `generic` until it does.
+- **It runs from floor lock, not only in the furniture step.** The user turns
+  in place to scan the room and the camera passes every piece of furniture
+  then; asking them to look around again would waste that. Before the room
+  closes there is no footprint to check, so floor points further than 8 m
+  are ignored instead, and a proposal is dropped once the closed room shows
+  it is outside. Owner's request, 2026-10-11.
+- **A proposal is kept, not forgotten after 3 s.** The 3-second rule above
+  applies only to sightings not yet proposed (flicker). Otherwise furniture
+  seen during the room scan would be gone by the furniture step.
+- **Surfaces attach late.** A proposal made before surfaces were measured
+  takes the surface under its centre once the furniture step measures it.
+- **Demo mode** (`SimulatedObjectDetector`) reports the virtual room's
+  furniture with the COCO name YOLO would give it, so the flow runs in the
+  Editor.
 
 ## Consequences
 

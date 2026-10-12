@@ -1199,7 +1199,7 @@ The owner's hackathon repository is this repository at `f5a7d30` plus 31 commits
 | Automatic room scan from ARKit planes (stand in place) | ADR-0012 | 27 tests passing | keep |
 | Wall sweep capture | 0005 | passing | keep |
 | Furniture surface detection and per-object `.glb` export | 0006 | passing | keep; exporter moves to shared in `R6` |
-| Type from ARKit plane label | 0007 | passing | remove in `R4` |
+| Type from ARKit plane label | 0007 | passing | removed in `R4` (2026-10-11) |
 | UDP quick-send discovery | 0009 | passing | superseded by ADR-0013; dormant, removed in `R10` |
 | Footprint and perception research spikes | — | not production | move under `docs/research/` or drop |
 
@@ -1239,6 +1239,8 @@ Targets: median wall absolute error <= 0.12 m, max wall error <= 0.20 m, height 
 ---
 
 ## Task R4: On-device furniture identification (ADR-0011)
+
+**Built 2026-10-11** (`scanner/r4-yolo-identification`); steps 1-4 and 6 done, step 5 without per-item remove (Undo removes the last object), step 7 is the owner's device check. What differs from the text: ADR-0011, "As built".
 
 1. Export YOLO11n to Core ML with NMS (`yolo export model=yolo11n.pt format=coreml nms=True`); commit the `.mlpackage` and its SHA-256.
 2. Native iOS plugin (Swift, Vision + Core ML) taking ARKit camera images about five times a second, returning class, confidence and box.

@@ -94,7 +94,6 @@ namespace GhostMap.Scanner.Capture
             HeightM = heightM;
             YawDeg = yawDeg;
             Classifications = classifications;
-            SuggestedType = FurnitureTypeSuggester.Suggest(classifications, widthM, depthM, heightM);
         }
 
         public TrackableId SurfaceId { get; }
@@ -120,14 +119,8 @@ namespace GhostMap.Scanner.Capture
 
         public float YawDeg { get; }
 
-        /// <summary>ARKit's label for the surface, or None while undecided.</summary>
+        /// <summary>ARKit's label for the surface, or None while undecided. Diagnostic only since task R4.</summary>
         public PlaneClassifications Classifications { get; }
-
-        /// <summary>
-        /// <c>ADR-0007</c>: the type pre-selected for this surface from its
-        /// label and measured size. Always a supported type.
-        /// </summary>
-        public string SuggestedType { get; }
     }
 
     /// <summary>
@@ -142,11 +135,10 @@ namespace GhostMap.Scanner.Capture
     /// default.</para>
     ///
     /// <para><b>Type.</b> Under <c>ADR-0006</c> the user picked every type.
-    /// <c>ADR-0007</c> pre-selects one from ARKit's on-device plane label
-    /// (Table / Seat) and the measured size; the user confirms or changes it.
-    /// That is an owner-approved exception to <c>AGENTS.md</c> rule 6, recorded
-    /// in the ADR. No camera images are classified and nothing leaves the
-    /// device.</para>
+    /// Task R4 (<c>ADR-0011</c>) pre-selects the type the on-device YOLO
+    /// detector identified on the surface (<see cref="SetIdentifiedTypes"/>);
+    /// the user confirms or changes it. ADR-0007's guess from ARKit's plane
+    /// label is gone. The detector only names; this class measures.</para>
     ///
     /// <para><b>This does not weaken <c>ADR-0004</c>.</b> That rejected
     /// depending on detection of blank <i>vertical</i> walls. Horizontal
@@ -199,6 +191,9 @@ namespace GhostMap.Scanner.Capture
         private readonly HashSet<TrackableId> resolved = new HashSet<TrackableId>();
         private readonly List<Vector3> footprint = new List<Vector3>(4);
 
+        // Task R4: the detector's name for each surface it identified.
+        private readonly Dictionary<TrackableId, string> identifiedTypes = new Dictionary<TrackableId, string>();
+
         public FurnitureDetectionController(
             ISpatialProvider provider,
             FloorLockController floorLock,
@@ -211,6 +206,11 @@ namespace GhostMap.Scanner.Capture
 
         /// <summary>The frame Task S2 locked, or null before the floor is locked.</summary>
         public GhostCoordinateFrame Frame => floorLock.Frame;
+
+        /// <summary>The collaborators furniture identification (task R4) shares with detection.</summary>
+        internal ISpatialProvider Provider => provider;
+        internal FloorLockController FloorLock => floorLock;
+        internal CornerCaptureController CornerStore => corners;
 
         /// <summary>Candidates from the most recent <see cref="Refresh"/>, measured and gated.</summary>
         public IReadOnlyList<FurnitureCandidate> Candidates => candidates;
@@ -228,9 +228,9 @@ namespace GhostMap.Scanner.Capture
         public bool HasSelection => SelectedIndex >= 0 && SelectedIndex < candidates.Count;
 
         /// <summary>
-        /// The type the next accepted candidate becomes: the selected
-        /// candidate's <see cref="FurnitureCandidate.SuggestedType"/>, unless
-        /// the user has picked one with <see cref="SetType"/> (ADR-0007).
+        /// The type the next accepted candidate becomes: what the detector
+        /// identified on the selected surface (<see cref="SuggestedTypeFor"/>,
+        /// task R4), unless the user has picked one with <see cref="SetType"/>.
         /// </summary>
         public string SelectedType { get; private set; } = "generic";
 
@@ -240,7 +240,41 @@ namespace GhostMap.Scanner.Capture
         /// </summary>
         public bool TypeIsSuggested => HasSelection && !typeChosenByUser;
 
-        // ADR-0007. A user's choice sticks to the surface it was made for
+        /// <summary>
+        /// The type offered for a surface: the detector's identification
+        /// (task R4, ADR-0011), or <c>generic</c> until it names it. Replaced
+        /// ADR-0007's guess from ARKit's plane label.
+        /// </summary>
+        public string SuggestedTypeFor(FurnitureCandidate candidate)
+            => identifiedTypes.TryGetValue(candidate.SurfaceId, out string type) ? type : "generic";
+
+        /// <summary>Whether the detector has named this surface.</summary>
+        public bool IsIdentified(FurnitureCandidate candidate) => identifiedTypes.ContainsKey(candidate.SurfaceId);
+
+        /// <summary>
+        /// Task R4: the detector's names for the surfaces it identified
+        /// (<see cref="FurnitureIdentificationController.SurfaceTypes"/>).
+        /// Re-applied to the selection, unless the user chose a type.
+        /// </summary>
+        public void SetIdentifiedTypes(IReadOnlyDictionary<TrackableId, string> types)
+        {
+            identifiedTypes.Clear();
+
+            if (types != null)
+            {
+                foreach (KeyValuePair<TrackableId, string> pair in types)
+                {
+                    if (FurnitureValidator.IsSupportedType(pair.Value))
+                    {
+                        identifiedTypes[pair.Key] = pair.Value;
+                    }
+                }
+            }
+
+            ApplySuggestedType();
+        }
+
+        // A user's choice sticks to the surface it was made for
         // (or, made with nothing selected, to the next surface offered); any
         // other surface gets its own suggestion.
         private bool typeChosenByUser;
@@ -288,8 +322,9 @@ namespace GhostMap.Scanner.Capture
 
         /// <summary>
         /// Brings <see cref="SelectedType"/> in line with the selected
-        /// candidate. Re-run after every refresh, because ARKit often labels a
-        /// plane a few seconds after first reporting it.
+        /// candidate. Re-run after every refresh and identification, because
+        /// the detector usually names a surface a second or so after ARKit
+        /// first reports it.
         /// </summary>
         private void ApplySuggestedType()
         {
@@ -310,7 +345,7 @@ namespace GhostMap.Scanner.Capture
 
             typeChosenByUser = false;
             typeChosenForSurface = candidate.SurfaceId;
-            SelectedType = candidate.SuggestedType;
+            SelectedType = SuggestedTypeFor(candidate);
         }
 
         // -------------------------------------------------------------------

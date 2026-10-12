@@ -106,7 +106,7 @@ end to end from iPhone to computer yet.
 | FR-06 | **Room height.** From the ceiling plane when seen; otherwise aim at the wall/ceiling line or type it. | Ceiling plane: built, not device-verified. Aim and type: device-verified |
 | FR-07 | **Walls and ceiling.** Derived from the footprint and height. | Built |
 | FR-08 | **Doors and windows.** Automatically from labelled planes; otherwise mark two corners on a wall. | Automatic: built, not device-verified. Manual: device-verified |
-| FR-09 | **Furniture identification on the phone.** A YOLO-n detector names furniture in the camera image; each item is matched to its measured surface for size and position; one tap adds them all. | Not built (plan task `R4`, ADR-0011) |
+| FR-09 | **Furniture identification on the phone.** A YOLO-n detector names furniture in the camera image; each item is matched to its measured surface for size and position; one tap adds them all. | Built (`R4`, ADR-0011); compiled for iPhone, not run on a device |
 | FR-10 | **Furniture measurement.** Width, depth, height and yaw from the ARKit surface the object sits on; adjustable. | Built, not device-verified |
 | FR-11 | **Manual furniture fallback.** Pick a type, aim at its floor position, adjust size and yaw. | Built, device-verified |
 | FR-12 | **Export bundle on the phone.** On finalize the phone writes one zip: `room.html`, a whole-room `room.glb` with openings, one `.glb` per object, `scene.json`, `README.txt`. | Built (`R6`); verified on the Mac, not on a device |

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using GhostMap.Scanner.AR;
 using GhostMap.Scanner.Capture;
 using GhostMap.Shared.Domain;
 using GhostMap.Shared.Geometry;
@@ -92,6 +93,7 @@ namespace GhostMap.Scanner.Workflow
         private readonly OpeningCaptureController openingCapture;
         private readonly ObjectPlacementController objectPlacement;
         private readonly FurnitureDetectionController furnitureDetection;
+        private readonly FurnitureIdentificationController furnitureIdentification;
         private readonly AutoRoomScanController autoScan;
 
         private bool isFinalized;
@@ -114,6 +116,10 @@ namespace GhostMap.Scanner.Workflow
             this.objectPlacement = objectPlacement;
             this.furnitureDetection = furnitureDetection;
             this.autoScan = autoScan;
+            furnitureIdentification = furnitureDetection != null
+                ? new FurnitureIdentificationController(
+                    furnitureDetection.Provider, furnitureDetection.FloorLock, furnitureDetection.CornerStore)
+                : null;
             SessionId = Guid.NewGuid().ToString();
             RoomId = Guid.NewGuid().ToString();
             Phase = ScanPhase.Boot;
@@ -153,6 +159,9 @@ namespace GhostMap.Scanner.Workflow
 
         /// <summary>ADR-0006 furniture detection. Read-only from outside the workflow.</summary>
         public FurnitureDetectionController FurnitureDetection => furnitureDetection;
+
+        /// <summary>Task R4 furniture identification. Read-only from outside the workflow.</summary>
+        public FurnitureIdentificationController FurnitureIdentification => furnitureIdentification;
 
         /// <summary>The automatic room scan. Null in a workflow built without one.</summary>
         public AutoRoomScanController Auto => autoScan;
@@ -1024,6 +1033,40 @@ namespace GhostMap.Scanner.Workflow
             return furnitureDetection.Refresh(out rejection);
         }
 
+        /// <summary>
+        /// Task R4: folds one frame of the camera-image detector into the
+        /// identified furniture, and gives each measured surface the type
+        /// identified on it.
+        ///
+        /// <para>Runs from floor lock until furniture is done, so what the
+        /// camera sees while the user turns to scan the room is already found
+        /// when <see cref="ScanPhase.AddObjects"/> opens.</para>
+        ///
+        /// <para><b>Publishes nothing</b>, like
+        /// <see cref="TryRefreshFurnitureDetection"/>: a proposal is not
+        /// furniture until Add All accepts it.</para>
+        /// </summary>
+        public bool UpdateFurnitureIdentification(IReadOnlyList<ObjectDetection> detections, float nowSeconds)
+        {
+            if (!IdentificationRuns || furnitureIdentification == null)
+            {
+                return false;
+            }
+
+            if (!furnitureIdentification.Update(
+                    detections, furnitureDetection.Candidates, objectPlacement.Objects, nowSeconds))
+            {
+                return false;
+            }
+
+            furnitureDetection.SetIdentifiedTypes(furnitureIdentification.SurfaceTypes());
+            return true;
+        }
+
+        /// <summary>True from floor lock until furniture is done: when the detector is worth running.</summary>
+        public bool IdentificationRuns =>
+            floorLock.IsLocked && Phase != ScanPhase.ReadyToFinalize && Phase != ScanPhase.Finalized;
+
         /// <summary>Chooses the type the next accepted candidate becomes.</summary>
         public bool SetDetectedFurnitureType(string type)
         {
@@ -1123,7 +1166,7 @@ namespace GhostMap.Scanner.Workflow
                 }
 
                 furnitureDetection.SetType(
-                    furnitureDetection.Candidates[furnitureDetection.SelectedIndex].SuggestedType);
+                    furnitureDetection.SuggestedTypeFor(furnitureDetection.Candidates[furnitureDetection.SelectedIndex]));
 
                 if (TryAcceptDetectedFurniture(out _, out _))
                 {
@@ -1133,6 +1176,41 @@ namespace GhostMap.Scanner.Workflow
                 {
                     break;
                 }
+            }
+
+            return added + AcceptIdentifiedFurniture();
+        }
+
+        /// <summary>
+        /// Task R4: adds the identified furniture not already added from its
+        /// surface: a chair or bed ARKit saw no plane on goes at its floor
+        /// position with the type's default size. One publish per object, like
+        /// every other add.
+        /// </summary>
+        private int AcceptIdentifiedFurniture()
+        {
+            if (furnitureIdentification == null)
+            {
+                return 0;
+            }
+
+            int added = 0;
+
+            foreach (IdentifiedFurniture item in furnitureIdentification.Proposals)
+            {
+                // A surface proposal was usually just added from its surface
+                // above; the overlap check keeps it from being added twice.
+                if (FurnitureIdentificationController.IsOnExistingObject(item.CenterGhost, item.Type, objectPlacement.Objects)
+                    || !FurnitureIdentificationController.TryBuild(item, out SceneObjectModel model, out _)
+                    || !objectPlacement.TryAdoptDetectedObject(model, out _))
+                {
+                    furnitureIdentification.Remove(item.Id);
+                    continue;
+                }
+
+                furnitureIdentification.Remove(item.Id);
+                Publish();
+                added++;
             }
 
             return added;

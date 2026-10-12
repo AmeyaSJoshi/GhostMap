@@ -34,3 +34,8 @@
 *.so      binary
 *.dylib   binary
 *.unitypackage binary
+
+# Core ML model packages are binary: never convert line endings, so the
+# SHA-256s recorded in ADR-0011 stay true.
+**/*.mlpackage/** binary
+**/*.mlpackage/**/*.meta text eol=lf diff merge

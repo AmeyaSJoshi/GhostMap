@@ -55,6 +55,9 @@ namespace GhostMap.Scanner.AR
         /// <summary>True when answering from the demo room rather than ARKit.</summary>
         public bool IsSimulated => simulatedRoom != null;
 
+        /// <summary>The demo room, when <see cref="IsSimulated"/>.</summary>
+        public SimulatedRoom Simulation => simulatedRoom;
+
         public ARSessionState SessionState =>
             IsSimulated
                 ? (simulatedRoom.IsTrackingGood ? ARSessionState.SessionTracking : ARSessionState.SessionInitializing)

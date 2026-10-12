@@ -74,16 +74,16 @@ native Swift. Do not start a rewrite, or argue for one mid-task (`AGENTS.md` rul
 | Automatic room scan from ARKit planes | Built (`R1`) | No |
 | Wall sweep fallback | Built (`R1`, ADR-0005) | No |
 | Furniture surface detection with measured size | Built (`R1`, ADR-0006) | No |
-| Furniture type from ARKit plane label | Built (`R1`, ADR-0007); **to be replaced** by YOLO-n in `R4` | No |
+| Furniture type from ARKit plane label | **Removed** in `R4` (ADR-0007, superseded by ADR-0011) | — |
 | UDP discovery to the desktop Viewer | Built (`R1`, ADR-0009); **superseded**, removed in `R10` | No |
 | Desktop Unity Viewer (render, edit, measure, save, per-object `.glb`) | Built (V1-V6, ADR-0006); **frozen**, removed in `R10` | n/a |
-| YOLO-n identification | Not built (`R4`) | — |
+| YOLO-n furniture identification (ADR-0011) | Built (`R4`): Core ML plugin, model in the app, tracker, "Found: ..." and Add All; compiled for iPhone | No |
 | Phone-built export bundle, saved scans (`R6`) | Built: zip on Finish, kept in `persistentDataPath/scans/`; validator-clean `.glb`, glTFast import checked | No |
 | Share-sheet Send to Computer, Rooms list | Built (`R7`); native plugin compiled for iPhone | No |
 | `room.html` browser viewer | Built (`R8`), filled by the phone (`R6`); checked in headless Chrome, owner's Safari check left | n/a |
 
-Test suites: shared 292, viewer 569, scanner 710, all passing in this
-repository (owner's Mac, 2026-10-11, after `R7`); web viewer 41 (Node). CI's Unity jobs still wait
+Test suites: shared 292, viewer 569, scanner 779, all passing in this
+repository (owner's Mac, 2026-10-11, after `R4`); web viewer 41 (Node). CI's Unity jobs still wait
 for the owner's licence secrets (`docs/ci.md`); until then run
 `./tools/run_unity_tests.sh` on a Mac with Unity.
 
@@ -175,10 +175,16 @@ Follow this once in the source; it explains most of the scanner.
    ray intersection, or typed); `OpeningCaptureController` (two points on a
    derived wall; also adopts ARKit-labelled openings from the auto scan).
 6. **Furniture.** `FurnitureDetectionController.Refresh` turns horizontal
-   surfaces into `FurnitureCandidate`s (size, yaw, height, `SuggestedType` from
-   `FurnitureTypeSuggester`). `TryAcceptDetectedFurniture` /
-   `TryAcceptAllDetectedFurniture` adopt them into `ObjectPlacementController`'s
-   store; manual placement uses the same store.
+   surfaces into `FurnitureCandidate`s (size, yaw, height). The camera-image
+   detector (`IObjectDetector`: `CoreMlObjectDetector` on the phone,
+   `SimulatedObjectDetector` in demo mode) feeds
+   `ScanWorkflowController.UpdateFurnitureIdentification`;
+   `FurnitureIdentificationController` projects each box to the floor, matches
+   a surface, maps the COCO class (`FurnitureClassMap`) and tracks it across
+   frames, and names the matching surfaces (`SuggestedTypeFor`).
+   `TryAcceptDetectedFurniture` / `TryAcceptAllDetectedFurniture` adopt
+   surfaces and identified furniture into `ObjectPlacementController`'s store;
+   manual placement uses the same store.
 7. **Finalize.** `TryFinalize` sets `finalized = true` and publishes once more.
    No structural method accepts the `Finalized` phase, so the scene is frozen.
    `ScannerHudController.OnFinalizePressed` then calls `ScanExporter.Export`:
@@ -333,8 +339,8 @@ On the desktop side (frozen): `ViewerTcpServer` → `ViewerSession` →
   it can be tested without a device: `ISpatialProvider` (fake:
   `FakeSpatialProvider`), `ISnapshotSink` (`FakeSnapshotSink`), sockets
   (`FakeViewerListener`, `FakeScannerClient`). Follow this for every new
-  device-facing piece (`IObjectDetector` in `R4`; `IShareSheet` has
-  `FakeShareSheet`).
+  device-facing piece (`IObjectDetector` is faked through boxes in
+  `FurnitureIdentificationTests`; `IShareSheet` has `FakeShareSheet`).
 - `MonoBehaviour`s stay thin: they read input and call tested plain classes.
 - Scene wiring is asserted by `ScannerSceneBuilder.VerifyScene()` and
   `ScannerSceneTests`.

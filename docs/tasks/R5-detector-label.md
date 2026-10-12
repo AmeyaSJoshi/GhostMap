@@ -37,7 +37,9 @@ Follow `AGENTS.md` rule 8 in one dedicated commit:
    `room-with-door-window-v1.json` only if a `generic` object exists there;
    otherwise add a new object. Re-run `inspect_snapshot.py` on all three.
 6. Scanner (`R4`): fill `label` with the COCO class name for every detected
-   object.
+   object. `R4` keeps it as `IdentifiedFurniture.ClassName`; set it in
+   `FurnitureIdentificationController.TryBuild`, and for a surface added with
+   an identified type, from the proposal on that surface.
 
 ## Done when
 

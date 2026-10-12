@@ -53,7 +53,7 @@ revisited after the first device session (`R2`); the reasoning is in
 | --- | --- |
 | Foundation `F0`-`F4` | Complete |
 | Assisted-capture MVP: Scanner `S1`-`S6`, Viewer `V1`-`V6` | Complete; scanner verified on a physical iPhone |
-| Stand-in-place GhostMap `R1`-`R10` | **`R1`, `R4`, `R6`, `R7`, `R8` built; suites green (292 / 569 / 773); next: `R2` on the iPhone** |
+| Stand-in-place GhostMap `R1`-`R10` | **`R1`, `R4`, `R6`, `R7`, `R8` built; suites green (292 / 569 / 779); next: `R2` on the iPhone** |
 
 What is where today:
 

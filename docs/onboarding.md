@@ -82,7 +82,7 @@ native Swift. Do not start a rewrite, or argue for one mid-task (`AGENTS.md` rul
 | Share-sheet Send to Computer, Rooms list | Built (`R7`); native plugin compiled for iPhone | No |
 | `room.html` browser viewer | Built (`R8`), filled by the phone (`R6`); checked in headless Chrome, owner's Safari check left | n/a |
 
-Test suites: shared 292, viewer 569, scanner 773, all passing in this
+Test suites: shared 292, viewer 569, scanner 779, all passing in this
 repository (owner's Mac, 2026-10-11, after `R4`); web viewer 41 (Node). CI's Unity jobs still wait
 for the owner's licence secrets (`docs/ci.md`); until then run
 `./tools/run_unity_tests.sh` on a Mac with Unity.

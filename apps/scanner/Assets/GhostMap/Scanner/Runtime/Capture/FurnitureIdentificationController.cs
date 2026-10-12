@@ -46,15 +46,21 @@ namespace GhostMap.Scanner.Capture
     /// the user can add with one tap. Plain C#; the detector is behind
     /// <see cref="IObjectDetector"/>, so every rule here is EditMode-tested.
     ///
+    /// <para>It runs from floor lock on, so furniture seen while the user turns
+    /// to scan the room is already found when the furniture step opens.</para>
+    ///
     /// <para>For each detection: a ray through the box's bottom-centre meets the
-    /// locked floor (the object's front edge on the floor); points outside the
-    /// room or on furniture already added are ignored; the measured ARKit
-    /// surface under it (ADR-0006), if any, supplies size, height and yaw; the
-    /// COCO class becomes a GhostMap type (<see cref="FurnitureClassMap"/>).
-    /// A tracker joins detections of the same type within
-    /// <see cref="SameObjectDistanceM"/> across frames, proposes an object after
-    /// <see cref="MinHits"/> confident frames, and forgets it after
-    /// <see cref="ForgetAfterSeconds"/> unseen.</para>
+    /// locked floor (the object's front edge on the floor); points further than
+    /// <see cref="MaxRangeM"/>, outside the room once it exists, or on furniture
+    /// already added are ignored; the measured ARKit surface under it
+    /// (ADR-0006), if any, supplies size, height and yaw; the COCO class becomes
+    /// a GhostMap type (<see cref="FurnitureClassMap"/>). A tracker joins
+    /// detections of the same type within <see cref="SameObjectDistanceM"/>
+    /// across frames and proposes an object after <see cref="MinHits"/>
+    /// confident frames. A track not yet proposed is forgotten after
+    /// <see cref="ForgetAfterSeconds"/> unseen; a proposal is kept until it is
+    /// added, removed, or found to be outside the room, because the user has
+    /// usually turned away from it by the time they add furniture.</para>
     ///
     /// <para><b>The model only names things.</b> Every number comes from ARKit
     /// and GhostMap's geometry, or from the type's default size when no
@@ -66,6 +72,9 @@ namespace GhostMap.Scanner.Capture
         public const int MinHits = 5;
         public const float ForgetAfterSeconds = 3f;
         public const float SameObjectDistanceM = 0.5f;
+
+        /// <summary>A floor point further than this from the camera is too far to place reliably.</summary>
+        public const float MaxRangeM = 8f;
 
         /// <summary>A detection within this distance of a surface's footprint is that surface.</summary>
         public const float SurfaceMatchMarginM = 0.3f;
@@ -122,7 +131,7 @@ namespace GhostMap.Scanner.Capture
         /// <param name="surfaces">The measured surface candidates (<see cref="FurnitureDetectionController.Candidates"/>).</param>
         /// <param name="existing">Objects already in the room; nothing is proposed on top of them.</param>
         /// <param name="nowSeconds">A monotonic clock.</param>
-        /// <returns>False when identification cannot run (no floor, no room footprint, tracking lost).</returns>
+        /// <returns>False when identification cannot run (no floor lock, tracking lost).</returns>
         public bool Update(
             IReadOnlyList<ObjectDetection> detections,
             IReadOnlyList<FurnitureCandidate> surfaces,
@@ -131,16 +140,17 @@ namespace GhostMap.Scanner.Capture
         {
             GhostCoordinateFrame frame = floorLock.Frame;
 
-            if (frame == null || !corners.IsComplete || !provider.IsTrackingGood)
+            if (frame == null || !provider.IsTrackingGood)
             {
                 return false;
             }
 
             FramesProcessed++;
-            RebuildFootprint();
+            bool hasRoom = RebuildFootprint();
             updatedThisFrame.Clear();
 
             Vector3 forward = FlatForward(frame);
+            bool hasEye = TryGetEye(frame, out Vector3 eye);
 
             foreach (ObjectDetection detection in detections ?? Array.Empty<ObjectDetection>())
             {
@@ -150,7 +160,8 @@ namespace GhostMap.Scanner.Capture
                 }
 
                 if (!TryFloorPoint(frame, detection.ScreenBox, out Vector3 floorPoint)
-                    || !RoomGeometry.ContainsPointXZ(footprint, floorPoint))
+                    || (hasEye && HorizontalDistance(eye, floorPoint) > MaxRangeM)
+                    || (hasRoom && !RoomGeometry.ContainsPointXZ(footprint, floorPoint)))
                 {
                     continue;
                 }
@@ -172,7 +183,8 @@ namespace GhostMap.Scanner.Capture
                 Fold(detection, type, center, surface, nowSeconds);
             }
 
-            Forget(nowSeconds, existing);
+            ResolveSurfaces(surfaces);
+            Forget(nowSeconds, existing, hasRoom);
             return true;
         }
 
@@ -452,27 +464,83 @@ namespace GhostMap.Scanner.Capture
             updatedThisFrame.Add(match);
         }
 
-        private void Forget(float now, IReadOnlyList<SceneObjectModel> existing)
+        private void Forget(float now, IReadOnlyList<SceneObjectModel> existing, bool hasRoom)
         {
             for (int i = tracks.Count - 1; i >= 0; i--)
             {
                 IdentifiedFurniture track = tracks[i];
+                bool stale = !track.IsProposed && now - track.LastSeenSeconds > ForgetAfterSeconds;
+                bool outside = hasRoom && !RoomGeometry.ContainsPointXZ(footprint, track.CenterGhost);
 
-                if (now - track.LastSeenSeconds > ForgetAfterSeconds || IsOnExistingObject(track.CenterGhost, track.Type, existing))
+                if (stale || outside || IsOnExistingObject(track.CenterGhost, track.Type, existing))
                 {
                     tracks.RemoveAt(i);
                 }
             }
         }
 
-        private void RebuildFootprint()
+        /// <summary>
+        /// A track first seen before the furniture step had no surfaces to
+        /// match. Once surfaces are measured, one under its centre gives it its
+        /// measured size and, for a dining table, its desk-or-table type.
+        /// </summary>
+        private void ResolveSurfaces(IReadOnlyList<FurnitureCandidate> surfaces)
+        {
+            if (surfaces == null || surfaces.Count == 0)
+            {
+                return;
+            }
+
+            foreach (IdentifiedFurniture track in tracks)
+            {
+                if (track.Surface.HasValue)
+                {
+                    continue;
+                }
+
+                FurnitureCandidate? surface = MatchSurface(track.ClassName, track.CenterGhost, surfaces);
+
+                if (surface.HasValue && FurnitureClassMap.TryMap(track.ClassName, surface, out string type))
+                {
+                    track.Surface = surface;
+                    track.CenterGhost = surface.Value.CenterGhost;
+                    track.Type = type;
+                }
+            }
+        }
+
+        /// <summary>The room footprint, once the room is closed. False before.</summary>
+        private bool RebuildFootprint()
         {
             footprint.Clear();
+
+            if (!corners.IsComplete)
+            {
+                return false;
+            }
+
             foreach (CornerModel corner in corners.Corners)
             {
                 footprint.Add(corner.position.ToVector3());
             }
+
+            return true;
         }
+
+        private bool TryGetEye(GhostCoordinateFrame frame, out Vector3 eye)
+        {
+            if (!provider.TryGetCameraPose(out Pose pose))
+            {
+                eye = default;
+                return false;
+            }
+
+            eye = frame.WorldToGhost(pose.position);
+            return true;
+        }
+
+        private static float HorizontalDistance(Vector3 a, Vector3 b)
+            => new Vector2(a.x - b.x, a.z - b.z).magnitude;
 
         private static string Plural(string name)
         {

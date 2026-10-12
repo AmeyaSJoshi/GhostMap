@@ -66,8 +66,8 @@ namespace GhostMap.Scanner.UI
 
         private float nextRefreshAt;
 
-        // Task R4: created on first entry to AddObjects, so the model only
-        // loads once a room exists to put furniture in.
+        // Task R4: created at floor lock, so furniture seen while the room is
+        // scanned is already found when the furniture step opens.
         private IObjectDetector detector;
         private string lastProposals = string.Empty;
 
@@ -137,7 +137,7 @@ namespace GhostMap.Scanner.UI
                 workflow.TryRefreshFurnitureDetection(out _);
             }
 
-            if (inObjectPhase)
+            if (workflow.IdentificationRuns)
             {
                 UpdateIdentification(workflow);
             }
@@ -151,7 +151,7 @@ namespace GhostMap.Scanner.UI
             }
         }
 
-        /// <summary>Task R4: feeds each new detector frame to the workflow.</summary>
+        /// <summary>Task R4: feeds each new detector frame to the workflow, from floor lock on.</summary>
         private void UpdateIdentification(ScanWorkflowController workflow)
         {
             detector ??= ObjectDetectors.Create(spatialProvider);

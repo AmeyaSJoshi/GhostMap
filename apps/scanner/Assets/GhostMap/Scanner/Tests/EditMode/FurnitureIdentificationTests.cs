@@ -97,6 +97,31 @@ namespace GhostMap.Scanner.Tests.EditMode
         private static FurnitureIdentificationController Identifier(FakeSpatialProvider provider)
             => Identifier(provider, out _);
 
+        /// <summary>Floor locked, no room yet: the state while the user turns to scan.</summary>
+        private static FurnitureIdentificationController IdentifierBeforeRoom(
+            FakeSpatialProvider provider, out GhostCoordinateFrame frame, out CornerCaptureController corners)
+        {
+            var floorLock = new FloorLockController(provider);
+            Assert.IsTrue(floorLock.TryLockFloor(out FloorLockRejection rejection), rejection.ToString());
+            corners = new CornerCaptureController(provider, floorLock);
+            frame = floorLock.Frame;
+            MapScreenToFloor(provider, frame);
+            return new FurnitureIdentificationController(provider, floorLock, corners);
+        }
+
+        private static void CloseRoom(FakeSpatialProvider provider, GhostCoordinateFrame frame, CornerCaptureController corners)
+        {
+            provider.ScreenRayAt = null;
+            foreach (Vector2 corner in RoomCorners)
+            {
+                AimAtGhost(provider, frame, corner.x, corner.y);
+                Assert.IsTrue(corners.TryCaptureCorner(out _), corners.LastError);
+            }
+
+            Assert.IsTrue(corners.IsComplete);
+            MapScreenToFloor(provider, frame);
+        }
+
         /// <summary>A box whose bottom-centre looks at floor point (x, z).</summary>
         private static ObjectDetection Seen(string className, float x, float z, float confidence = 0.9f)
         {
@@ -262,15 +287,73 @@ namespace GhostMap.Scanner.Tests.EditMode
         }
 
         [Test]
-        public void Update_IsRefusedBeforeTheRoomIsClosed()
+        public void Update_IsRefusedBeforeFloorLock()
         {
             FakeSpatialProvider provider = Provider();
             var floorLock = new FloorLockController(provider);
-            Assert.IsTrue(floorLock.TryLockFloor(out _));
             var identifier = new FurnitureIdentificationController(
                 provider, floorLock, new CornerCaptureController(provider, floorLock));
 
             Assert.IsFalse(identifier.Update(Frame(Seen("chair", 1f, 1f)), NoSurfaces, NoObjects, 0f));
+            Assert.AreEqual(0, identifier.FramesProcessed);
+        }
+
+        // -------------------------------------------------------------------
+        // From floor lock: furniture found while the room is being scanned
+        // -------------------------------------------------------------------
+
+        [Test]
+        public void BeforeTheRoomCloses_FurnitureIsAlreadyCollected()
+        {
+            FurnitureIdentificationController identifier = IdentifierBeforeRoom(Provider(), out _, out _);
+
+            // Even where the room will turn out not to be: there is no room yet.
+            Repeat(identifier, Frame(Seen("bed", 1f, 0.5f), Seen("chair", -1f, 1f)), 5);
+
+            Assert.AreEqual(2, identifier.Proposals.Count);
+        }
+
+        [Test]
+        public void OnceTheRoomCloses_FurnitureOutsideItIsDropped()
+        {
+            FakeSpatialProvider provider = Provider();
+            FurnitureIdentificationController identifier =
+                IdentifierBeforeRoom(provider, out GhostCoordinateFrame frame, out CornerCaptureController corners);
+            Repeat(identifier, Frame(Seen("bed", 1f, 0.5f), Seen("chair", -1f, 1f)), 5);
+
+            CloseRoom(provider, frame, corners);
+            Assert.IsTrue(identifier.Update(Frame(), NoSurfaces, NoObjects, 1f));
+
+            Assert.AreEqual(1, identifier.Proposals.Count);
+            Assert.AreEqual("bed", identifier.Proposals[0].Type);
+        }
+
+        [Test]
+        public void FurnitureFurtherThanTheMaximumRange_IsIgnored()
+        {
+            FurnitureIdentificationController identifier = IdentifierBeforeRoom(Provider(), out _, out _);
+
+            Repeat(identifier, Frame(Seen("bed", 0f, FurnitureIdentificationController.MaxRangeM + 0.5f)), 5);
+
+            Assert.AreEqual(0, identifier.Tracked.Count);
+        }
+
+        [Test]
+        public void ATableSeenBeforeSurfacesExist_TakesItsSurfaceOnceMeasured()
+        {
+            FurnitureIdentificationController identifier = Identifier(Provider());
+            Repeat(identifier, Frame(Seen("dining table", 2f, 1.1f)), 5);
+            Assert.AreEqual("table", identifier.Proposals[0].Type);
+            Assert.IsFalse(identifier.Proposals[0].Surface.HasValue);
+
+            // Out of view now, but the furniture step has measured its top.
+            FurnitureCandidate desk = DeskTop();
+            Assert.IsTrue(identifier.Update(Frame(), new[] { desk }, NoObjects, 5f));
+
+            IdentifiedFurniture item = identifier.Proposals[0];
+            Assert.AreEqual("desk", item.Type);
+            Assert.AreEqual(desk.SurfaceId, item.Surface.Value.SurfaceId);
+            Assert.AreEqual(1.5f, item.CenterGhost.z, Tolerance);
         }
 
         // -------------------------------------------------------------------
@@ -384,14 +467,15 @@ namespace GhostMap.Scanner.Tests.EditMode
         public void ASightingWithinTheMarginOfASurface_MatchesIt_OneFurtherDoesNot()
         {
             FurnitureCandidate desk = DeskTop();
-            float edge = 1.5f - 0.35f;
+            float edge = 2f + 0.7f;
 
+            // Beside it (along x), so the estimated centre does not land on it either.
             FurnitureIdentificationController near = Identifier(Provider());
-            Repeat(near, Frame(Seen("dining table", 2f, edge - 0.29f)), 1, new[] { desk });
+            Repeat(near, Frame(Seen("dining table", edge + 0.28f, 1.5f)), 1, new[] { desk });
             Assert.IsTrue(near.Tracked[0].Surface.HasValue);
 
             FurnitureIdentificationController far = Identifier(Provider());
-            Repeat(far, Frame(Seen("dining table", 2f, edge - 0.31f)), 1, new[] { desk });
+            Repeat(far, Frame(Seen("dining table", edge + 0.32f, 1.5f)), 1, new[] { desk });
             Assert.IsFalse(far.Tracked[0].Surface.HasValue);
             Assert.AreEqual("table", far.Tracked[0].Type);
         }
@@ -510,16 +594,27 @@ namespace GhostMap.Scanner.Tests.EditMode
         }
 
         [Test]
-        public void SomethingUnseenForThreeSeconds_IsForgotten()
+        public void ASightingNotYetProposed_IsForgottenAfterThreeSecondsUnseen()
+        {
+            FurnitureIdentificationController identifier = Identifier(Provider());
+            Repeat(identifier, Frame(Seen("chair", 1f, 1f)), FurnitureIdentificationController.MinHits - 1);
+
+            Assert.IsTrue(identifier.Update(Frame(), NoSurfaces, NoObjects, 0.3f + 2.9f));
+            Assert.AreEqual(1, identifier.Tracked.Count, "2.9 s unseen is kept");
+
+            Assert.IsTrue(identifier.Update(Frame(), NoSurfaces, NoObjects, 0.3f + 3.1f));
+            Assert.AreEqual(0, identifier.Tracked.Count);
+        }
+
+        [Test]
+        public void AProposal_IsKeptWhileTheUserLooksElsewhere()
         {
             FurnitureIdentificationController identifier = Identifier(Provider());
             Repeat(identifier, Frame(Seen("chair", 1f, 1f)), 5);
 
-            Assert.IsTrue(identifier.Update(Frame(), NoSurfaces, NoObjects, 0.4f + 2.9f));
-            Assert.AreEqual(1, identifier.Proposals.Count, "2.9 s unseen is kept");
+            Assert.IsTrue(identifier.Update(Frame(), NoSurfaces, NoObjects, 60f));
 
-            Assert.IsTrue(identifier.Update(Frame(), NoSurfaces, NoObjects, 0.4f + 3.1f));
-            Assert.AreEqual(0, identifier.Tracked.Count);
+            Assert.AreEqual(1, identifier.Proposals.Count);
         }
 
         // -------------------------------------------------------------------
@@ -717,7 +812,51 @@ namespace GhostMap.Scanner.Tests.EditMode
         }
 
         [Test]
-        public void Workflow_IdentificationIsRefusedOutsideAddObjects_AndNeverPublishes()
+        public void Workflow_FurnitureSeenWhileScanningTheRoom_IsOfferedAtTheFurnitureStep()
+        {
+            FakeSpatialProvider provider = Provider();
+            var floorLock = new FloorLockController(provider);
+            var corners = new CornerCaptureController(provider, floorLock);
+            var height = new HeightCaptureController(provider, floorLock, corners);
+            var workflow = new ScanWorkflowController(
+                floorLock,
+                new WallSweepController(provider, floorLock),
+                corners,
+                height,
+                new OpeningCaptureController(provider, floorLock, corners, height),
+                new ObjectPlacementController(provider, floorLock),
+                new FurnitureDetectionController(provider, floorLock, corners));
+            workflow.Tick(true);
+            Assert.IsFalse(workflow.UpdateFurnitureIdentification(Frame(Seen("bed", 1f, 0.4f)), 0f), "no floor yet");
+            Assert.IsTrue(workflow.TryLockFloor(out _));
+
+            // Turning to scan the room: the bed goes by once and is not seen again.
+            MapScreenToFloor(provider, workflow.Frame);
+            int revision = workflow.Revision;
+            See(workflow, Frame(Seen("bed", 1f, 0.4f)), 5);
+            Assert.AreEqual(revision, workflow.Revision, "a proposal is not furniture");
+
+            provider.ScreenRayAt = null;
+            Assert.IsTrue(workflow.BeginCornerCapture());
+            foreach (Vector2 corner in RoomCorners)
+            {
+                AimAtGhost(provider, workflow.Frame, corner.x, corner.y);
+                Assert.IsTrue(workflow.TryCaptureCorner(out _), workflow.Corners.LastError);
+            }
+
+            AimAtGhost(provider, workflow.Frame, 0f, 0f);
+            Assert.IsTrue(workflow.TryVerifyClosure(out _, out _));
+            Assert.IsTrue(workflow.TrySetManualHeight(2.5f, out _));
+            Assert.IsTrue(workflow.UpdateFurnitureIdentification(Frame(), 10f), "still running while adding openings");
+            Assert.IsTrue(workflow.FinishAddingOpenings());
+
+            Assert.AreEqual(1, workflow.FurnitureIdentification.Proposals.Count);
+            Assert.AreEqual(1, workflow.TryAcceptAllDetectedFurniture());
+            Assert.AreEqual("bed", workflow.Objects.Objects[0].type);
+        }
+
+        [Test]
+        public void Workflow_IdentificationStopsWhenFurnitureIsDone_AndNeverPublishes()
         {
             FakeSpatialProvider provider = Provider();
             ScanWorkflowController workflow = AddObjectsWorkflow(provider);

@@ -1038,13 +1038,17 @@ namespace GhostMap.Scanner.Workflow
         /// identified furniture, and gives each measured surface the type
         /// identified on it.
         ///
+        /// <para>Runs from floor lock until furniture is done, so what the
+        /// camera sees while the user turns to scan the room is already found
+        /// when <see cref="ScanPhase.AddObjects"/> opens.</para>
+        ///
         /// <para><b>Publishes nothing</b>, like
         /// <see cref="TryRefreshFurnitureDetection"/>: a proposal is not
         /// furniture until Add All accepts it.</para>
         /// </summary>
         public bool UpdateFurnitureIdentification(IReadOnlyList<ObjectDetection> detections, float nowSeconds)
         {
-            if (Phase != ScanPhase.AddObjects || furnitureIdentification == null)
+            if (!IdentificationRuns || furnitureIdentification == null)
             {
                 return false;
             }
@@ -1058,6 +1062,10 @@ namespace GhostMap.Scanner.Workflow
             furnitureDetection.SetIdentifiedTypes(furnitureIdentification.SurfaceTypes());
             return true;
         }
+
+        /// <summary>True from floor lock until furniture is done: when the detector is worth running.</summary>
+        public bool IdentificationRuns =>
+            floorLock.IsLocked && Phase != ScanPhase.ReadyToFinalize && Phase != ScanPhase.Finalized;
 
         /// <summary>Chooses the type the next accepted candidate becomes.</summary>
         public bool SetDetectedFurnitureType(string type)

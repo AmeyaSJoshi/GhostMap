@@ -134,6 +134,17 @@ It logs `GhostMap yolo: <ms>` every 25 frames.
   seat, never the back. Its footprint and yaw still come from the seat.
 - **ARKit's plane label is no longer used.** A surface the detector has not
   named is offered as `generic` until it does.
+- **It runs from floor lock, not only in the furniture step.** The user turns
+  in place to scan the room and the camera passes every piece of furniture
+  then; asking them to look around again would waste that. Before the room
+  closes there is no footprint to check, so floor points further than 8 m
+  are ignored instead, and a proposal is dropped once the closed room shows
+  it is outside. Owner's request, 2026-10-11.
+- **A proposal is kept, not forgotten after 3 s.** The 3-second rule above
+  applies only to sightings not yet proposed (flicker). Otherwise furniture
+  seen during the room scan would be gone by the furniture step.
+- **Surfaces attach late.** A proposal made before surfaces were measured
+  takes the surface under its centre once the furniture step measures it.
 - **Demo mode** (`SimulatedObjectDetector`) reports the virtual room's
   furniture with the COCO name YOLO would give it, so the flow runs in the
   Editor.

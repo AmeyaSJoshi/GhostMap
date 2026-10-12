@@ -18,6 +18,8 @@ the iPhone and runs the device check.
 > - A surface matches only classes it can be the top of (so a chair beside a
 >   desk keeps its own size), and a chair or couch keeps at least its default
 >   height. ADR-0011 lists the ranges.
+> - The detector runs from floor lock, not only in `AddObjects`, and a
+>   proposal is kept until added (owner's request; ADR-0011, "As built").
 > - Not built: per-item remove (Undo removes the last added object) and
 >   world-space label markers. The Details readout and the `GhostMap
 >   identify:` log line show what is tracked.

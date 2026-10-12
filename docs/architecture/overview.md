@@ -410,6 +410,8 @@ Every runtime type, by project and folder. Tests mirror these names with a
 | `Runtime/Capture` | `WallSweepController` | Sweep fallback |
 | `Runtime/Capture` | `FurnitureDetectionController` | Furniture surface candidates with measured size and yaw (ADR-0006) |
 | `Runtime/Capture` | `FurnitureIdentificationController`, `IdentifiedFurniture`, `FurnitureClassMap`, `DetectionGeometry` | Task `R4` (ADR-0011): detector box to floor point, surface match, COCO class to type, tracker, proposals for Add All |
+| `Runtime/AR` | `SimulatedPlanes`, `SimulatedLayout`, `TrackingResumeGate` | Demo mode's AR planes (task `R9`); trust tracking only once it settles after the app returns from the background |
+| `Runtime/UI` | `DeveloperMode`, `CaptureHaptics`, `IHaptics` | Task `R9`: developer readouts behind a hidden toggle; a light tap per capture (`Assets/Plugins/iOS/GhostMapHaptics`) |
 | `Runtime/AR` | `IObjectDetector`, `ObjectDetection`, `CoreMlObjectDetector`, `SimulatedObjectDetector`, `ObjectDetectors` | The seam onto the YOLO11n detector; demo mode reports the virtual room's furniture |
 | `Assets/Plugins/iOS/GhostMapDetector` | `GhostMapDetector.mm` | Native plugin: Vision + Core ML on the `ARFrame` image, off the main thread; crops object photos from the last analysed frame (`R11`) |
 | `Runtime/Capture` | `ObjectPhotoRules` | Task `R11`: what an object photo may be, and where an object is on screen for one |

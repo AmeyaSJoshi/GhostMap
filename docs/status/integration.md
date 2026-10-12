@@ -17,7 +17,7 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 | R6 | The phone builds the export bundle (`room.html`, `room.glb`, objects, `scene.json`) and keeps saved scans | **Built** on `integration/r6-export-bundle`: shared `Runtime/Export/`, whole-room `.glb`, zip on Finalize, saved scans, contract complete. All `.glb` pass the Khronos validator; imports into Unity with glTFast verified. Not run on the iPhone; saved-scans list UI moves to `R7` |
 | R7 | Send to Computer through the iOS share sheet | **Built** on `scanner/r7-share-sheet`: native share-sheet plugin, `ShareController`, **Send to Computer** after Finish, **Rooms** list. EditMode-tested and compiled for iPhone; the AirDrop device check is the owner's (`R2`) |
 | R8 | Browser viewer `room.html` (three.js, view and measure) | **Built** on `viewer/r8-browser-viewer`: template, 41 Node tests, CI job. Checked in headless Chrome; owner's double-click check in Safari still to do. The phone fills it in `R6` |
-| R9 | Failure hardening and one guided scan flow | Not started |
+| R9 | Failure hardening and one guided scan flow | **Agent part built** on `scanner/r9-hardening`: all six failure cases handled and tested, debug text hidden, six steps, larger reticle, haptics. Four bugs found and fixed, three by running the demo in the Simulator (furniture a quarter turn off, doors/windows lost without a ceiling, demo had no planes, Simulator build missing Core ML). Device checks are the owner's (`R2`) |
 | R10 | Retire the Unity Viewer and the discovery code | Not started |
 | R11 | A photo of each piece of furniture, exported and shown in `room.html` (owner's "option 1" instead of 3D-scanning furniture) | **Built** on `integration/r11-object-photos`: native crop from the detector's frame, photos kept per object, `photos/<id>.jpg` and `objectPhotos` (contract section 5), shown in the viewer. Compiled for iPhone; checked in Chrome; device check in `R2` |
 
@@ -78,6 +78,8 @@ How it was merged:
 | 2026-10-11 | Owner's Mac, Unity 6000.3.24f1, `shared/r5-detector-label` | shared, viewer, scanner (EditMode) | **All passed: shared 303/303, viewer 580/580, scanner 821/821** (+11 shared label tests in each; scanner +5 label workflow tests) |
 | 2026-10-11 | Owner's Mac, Node 24, `shared/r5-detector-label` | web-viewer | **48/48** (+2: a typed object keeps its type as the title; the fixture carries a label) |
 | 2026-10-11 | Owner's Mac, `shared/r5-detector-label` | `inspect_snapshot.py` on the three fixtures, and on a copy with a 65-character label and a newline in another | Fixtures as before (two valid, malformed rejected on height alone; the desk now prints `"dining table"`); the copy rejected on exactly those two labels |
+| 2026-10-11 | Owner's Mac, Unity 6000.3.24f1, `scanner/r9-hardening` | scanner (EditMode) | **849/849** (+28). Each of the two new regression tests (furniture quarter turn, openings without a ceiling) fails without its fix. Shared and viewer unchanged |
+| 2026-10-11 | Owner's Mac, iOS Simulator (iPhone 17), demo build from `scanner/r9-hardening` | The whole flow: Lock Floor, Scan Room by dragging round, type the height, Next, Add All, Next, Finish | **First complete demo scan.** Step 1 to 6 of 6, "Room found from your turn", "Found: bed. Tap Add All.", "Your room is saved on this iPhone." The saved zip: room 4.20 × 3.60 m, 2.50 m, the bed 1.40 × 2.00 × 0.50 m labelled `bed`; `inspect_snapshot.py` valid; `room.html` renders it in Chrome. That run (before the last fixes) showed the bed turned a quarter turn through a wall and no door or window, which led to fixes 1 and 2. A second run with every fix reached step 3 (room found again), then the Simulator stopped delivering taps to buttons and the text field (drags still worked), so the fixed bed and the door and window were not seen on screen; both fixes are covered by tests that fail without them |
 | 2026-10-11 | Owner's Mac, `69af8eb` | Python tools checks (`inspect_snapshot.py --quiet` on the three fixtures, `send_fixture.py --dry-run`, `bash -n tools/run_unity_tests.sh`) | Passed: the two valid fixtures valid, the malformed one rejected on the height rule alone |
 
 The counts match those recorded in `GhostMapDublinHacks` at `0b7a106`. CI's Unity jobs still stop at the missing-secrets check, so for now the suites are confirmed only on the owner's Mac.
@@ -149,7 +151,8 @@ From reading the code, not from a failed run:
    chairs; note what "Found:" says, the `GhostMap yolo:` frame time, and the
    added sizes against a tape. Then `R11`'s: open the exported `room.html` and
    check each object's photo shows that object.
-4. **Agent, in parallel:** `R9` (hardening) parts that need no device.
+4. **Agent:** fixes for whatever `R2` turns up. Until then, the Simulator
+   demo build rehearses the whole flow (`ScannerSimulatorBuild`).
    See `docs/tasks/README.md`.
 5. **Owner, when convenient:** add `UNITY_LICENSE`, `UNITY_EMAIL`,
    `UNITY_PASSWORD` as repository secrets (`docs/ci.md`) so CI can run the

@@ -1298,6 +1298,8 @@ Shared-contract change (`AGENTS.md` rule 8): add an optional `label` string to `
 
 ## Task R9: Hardening and the guided flow
 
+**Agent part built 2026-10-11** (`scanner/r9-hardening`); the brief records each row and four bugs found on the way. Device checks remain.
+
 | Case | Expected |
 | --- | --- |
 | Poor light or fast motion | Capture blocked with a clear tracking message |

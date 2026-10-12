@@ -19,8 +19,11 @@ and the ADRs win; fix the brief.
 | R7 | [Share-sheet Send to Computer](R7-share-sheet.md) | R6 | Built 2026-10-11; owner's AirDrop check in `R2` |
 | R8 | [Browser viewer `room.html`](R8-browser-viewer.md) | — (template), R6 (embedding) | Built 2026-10-11; owner's Safari check left |
 | R9 | [Hardening and guided flow](R9-hardening.md) | R2, R7, R8 | Agent part built 2026-10-11; owner's device checks in `R2` |
+| **R2 blocker** | [**Stand-in-place scan finds too few walls**](R2-auto-scan-walls.md) | R2 device logs | **Current priority.** Agent (tune from device logs, with tests) plus owner reruns |
 | R10 | [Retire the Unity Viewer](R10-retire-unity-viewer.md) | Acceptance test passes | Agent |
 | R11 | [A photo of each object](R11-object-photos.md) | R4, R6, R8 | Built 2026-10-11; owner's device check in `R2` |
 
-**Can start right now without the owner:** nothing on the roadmap; every
-remaining task needs `R2`'s results or the acceptance test.
+**Can start right now without the owner:** the R2 blocker's analysis
+(`R2-auto-scan-walls.md`): turn the run-2 device log into an EditMode test and
+prepare the trust-rule change. Confirm the change against the owner's next run
+(which logs each wall's bearing) before treating it as fixed.

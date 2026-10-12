@@ -347,6 +347,31 @@ namespace GhostMap.Scanner.Tests.EditMode
             StringAssert.Contains("raw vertical 2 (wall-labelled 1), largest 0.90 x 0.60 m", workflow.Auto.DebugSummary);
         }
 
+        [TestCase(0f, 1f, 2f, 0f, 2f)]     // wall at z = 2, ahead: bearing 0, 2 m
+        [TestCase(1f, 0f, -1.5f, 270f, 1.5f)] // wall at x = -1.5, to the left: bearing 270
+        [TestCase(0f, -1f, 2f, 180f, 2f)]   // wall at z = -2 (normal flipped): behind
+        public void WallBearing_IsTheDirectionAndDistanceFromTheScanCentre(
+            float nx, float nz, float offset, float bearing, float distance)
+        {
+            var wall = new WallCluster { Normal = new Vector2(nx, nz), Offset = offset };
+
+            AutoRoomScanController.WallBearing(wall, Vector2.zero, out float b, out float d);
+
+            Assert.AreEqual(bearing, b, 0.01f);
+            Assert.AreEqual(distance, d, 0.001f);
+        }
+
+        [Test]
+        public void WallBearing_IsMeasuredFromTheScanCentre_NotTheOrigin()
+        {
+            var wall = new WallCluster { Normal = new Vector2(1f, 0f), Offset = 3f };
+
+            AutoRoomScanController.WallBearing(wall, new Vector2(1f, 5f), out float b, out float d);
+
+            Assert.AreEqual(90f, b, 0.01f);
+            Assert.AreEqual(2f, d, 0.001f);
+        }
+
         [Test]
         public void DoorAndWindowFramePlanes_AreNotWalls()
         {

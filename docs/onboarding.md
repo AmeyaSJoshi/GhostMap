@@ -30,6 +30,10 @@ canonical document wins (see `docs/README.md`, "Which document wins").
   scan, sweep, furniture surface detection, `.glb` export) was merged in task
   `R1`. **None of the new work has run on an iPhone.** Roadmap `R2`-`R10`
   (plan section 18) is the work ahead.
+- **Current blocker (2026-10-11):** on the owner's iPhone the stand-in-place
+  room scan finds only two trusted walls and cannot build the room.
+  `docs/tasks/R2-auto-scan-walls.md` has everything: what the owner sees, the
+  device logs, the code path, the thresholds, hypotheses and next steps.
 - **Your first job** is in `docs/status/integration.md` under "Next safe task".
 
 ### Where Unity fits, and why

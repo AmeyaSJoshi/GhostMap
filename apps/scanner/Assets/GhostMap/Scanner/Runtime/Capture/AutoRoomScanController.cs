@@ -581,6 +581,22 @@ namespace GhostMap.Scanner.Capture
             RawWallLabelledCount = labelled;
         }
 
+        /// <summary>
+        /// R2 diagnostics: the direction from the scan centre to a wall's line
+        /// (Ghost bearing in degrees, 0 = +Z, the camera's heading at floor
+        /// lock, 90 = +X) and the perpendicular distance to it.
+        /// </summary>
+        public static void WallBearing(WallCluster cluster, Vector2 scanCenter, out float bearingDeg, out float distanceM)
+        {
+            // The wall's line is { p : dot(Normal, p) = Offset }.
+            float signed = cluster.Offset - Vector2.Dot(cluster.Normal, scanCenter);
+            Vector2 toWall = cluster.Normal * signed;
+            distanceM = Mathf.Abs(signed);
+            bearingDeg = toWall.sqrMagnitude < 1e-8f
+                ? 0f
+                : Mathf.Repeat(Mathf.Atan2(toWall.x, toWall.y) * Mathf.Rad2Deg, 360f);
+        }
+
         private string BuildDebug()
         {
             var sb = new System.Text.StringBuilder();
@@ -592,12 +608,16 @@ namespace GhostMap.Scanner.Capture
                 State, CoveragePercent, CurrentTurnRateDegPerS, accumulator.PlaneCount,
                 accumulator.Clusters.Count, LastResult.TrustedWallCount);
 
-            for (int i = 0; i < accumulator.Clusters.Count && i < 6; i++)
+            // R2: where each wall is, so a log shows which candidates are the
+            // same physical wall, which are opposite, and which are furniture.
+            for (int i = 0; i < accumulator.Clusters.Count && i < 8; i++)
             {
                 WallCluster c = accumulator.Clusters[i];
+                WallBearing(c, ScanCenter, out float bearingDeg, out float distanceM);
                 sb.AppendFormat(
-                    "  wall {0}: width {1:F1} m height {2:F1} m members {3} label {4} trusted {5}\n",
-                    i, c.ObservedWidthM, c.MaxHeightM, c.MemberCount, c.HasWallLabel, WallPlaneAccumulator.IsTrusted(c));
+                    "  wall {0}: width {1:F1} m height {2:F1} m members {3} label {4} trusted {5} bearing {6:F0} deg dist {7:F2} m\n",
+                    i, c.ObservedWidthM, c.MaxHeightM, c.MemberCount, c.HasWallLabel, WallPlaneAccumulator.IsTrusted(c),
+                    bearingDeg, distanceM);
             }
 
             if (TryGetCeilingHeight(out float h))

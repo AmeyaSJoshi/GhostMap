@@ -1215,6 +1215,8 @@ Last recorded suites there: shared 202, viewer 548, scanner 577, all passing; un
 
 ## Task R2: First device session
 
+**Started 2026-10-11; blocked:** the stand-in-place scan finds only two trusted walls in the owner's room. See `docs/tasks/R2-auto-scan-walls.md`.
+
 Build to the owner's iPhone, in a real furnished room:
 
 1. Floor lock, then **Scan Room** standing in one spot. Record how many walls ARKit found and whether the room closed.

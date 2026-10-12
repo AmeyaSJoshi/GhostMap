@@ -6,6 +6,8 @@
    your environment can and cannot do.
 3. Your next task is under "Next safe task" in `docs/status/integration.md`.
    Its implementation brief is in `docs/tasks/`.
+4. **Current blocker (2026-10-11):** the stand-in-place room scan fails on the
+   owner's iPhone. Start with `docs/tasks/R2-auto-scan-walls.md`.
 
 Facts that change how you work in a cloud session:
 

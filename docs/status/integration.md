@@ -5,12 +5,18 @@ Workstream: Shared / Integration. Tracks the stand-in-place roadmap, tasks
 
 ## Current state
 
+> **Current blocker (2026-10-11): the stand-in-place room scan does not find
+> the room on the owner's iPhone.** ARKit sees the walls but only two are big
+> enough to be trusted. Everything about it, including the device logs, the
+> code map, hypotheses and next steps, is in
+> [`docs/tasks/R2-auto-scan-walls.md`](../tasks/R2-auto-scan-walls.md). Start there.
+
 **`R1` done: merged, and all three Unity suites pass in this repository (shared 202, viewer 548, scanner 577, run on the owner's Mac on 2026-10-11). `R4` (on-device YOLO furniture identification, running from floor lock), `R11` (a photo of each object in the export), `R6` (phone-built export bundle), `R7` (share-sheet Send to Computer) and `R8` (browser viewer) are built and verified as far as a Mac can; none has run on the iPhone. The whole product path now exists in code. Next: `R2` on the iPhone, ending with Finish and an AirDrop to the Mac.**
 
 | Task | What | State |
 | --- | --- | --- |
 | R1 | Bring `GhostMapDublinHacks` into this repository | **Merged** (owner-approved, 2026-10-11). Suites confirmed here 2026-10-11 at `69af8eb`: 202 / 548 / 577, all passing |
-| R2 | First device session: every capture path on a real iPhone | Not started |
+| R2 | First device session: every capture path on a real iPhone | **In progress, blocked.** Lock Floor works; the stand-in-place scan fails (two attempts, see "R2 device log" below and `docs/tasks/R2-auto-scan-walls.md`). The rest of the session (sweep fallback, furniture, Finish, AirDrop) is not done yet |
 | R3 | Accuracy benchmark against a tape measure | Not started |
 | R4 | YOLO-n furniture identification on the phone (ADR-0011) | **Built** on `scanner/r4-yolo-identification`: YOLO11n Core ML model (SHA-256s in ADR-0011), native Vision plugin, `FurnitureIdentificationController`, "Found: ..." and Add All; ARKit-label guessing removed. EditMode-tested, compiled for iPhone with Core ML linked and the model inside. Device check is the owner's (`R2`) |
 | R5 | Optional `label` on `SceneObjectModel` (additive schema change) | **Built** on `shared/r5-detector-label`: field, 64-character rule, inspector, fixture label, scanner fills it with the COCO class name, `room.html` shows it (title only for `generic`). All suites green |
@@ -89,7 +95,8 @@ The counts match those recorded in `GhostMapDublinHacks` at `0b7a106`. CI's Unit
 | Date | Build | Step | Result | Follow-up |
 | --- | --- | --- | --- | --- |
 | 2026-10-11 | `scanner/r9-hardening`, owner's iPhone (A19, iOS 26.6.2) | Lock Floor | Worked | — |
-| 2026-10-11 | same | Scan Room, one full turn (coverage 100%, 11-16 deg/s) | **Failed: "planes 0 walls 0" for the whole turn**, ended at "Help GhostMap". ARKit logged "World tracking performance is being affected by resource constraints" as the YOLO model compiled at floor lock. YOLO ran at 9-14 ms per frame (one 22 ms) | `fix/scanner-r2-wall-planes`: wall patches down to 0.5 m wide (0.3 m if labelled) now count and add up along their wall, but an unlabelled patch must reach 1.3 m high (furniture fronts stop lower); trust thresholds unchanged. YOLO model loads at launch and runs at 2 fps until the furniture step. The log now prints raw vertical planes before filtering, so a retry says what ARKit reported |
+| 2026-10-11 | same (run 1) | Scan Room, one full turn (coverage 100%, 11-16 deg/s) | **Failed: "planes 0 walls 0" for the whole turn**, ended at "Help GhostMap". ARKit logged "World tracking performance is being affected by resource constraints" as the YOLO model compiled at floor lock. YOLO ran at 9-14 ms per frame (one 22 ms) | `fix/scanner-r2-wall-planes`: wall patches down to 0.5 m wide (0.3 m if labelled) now count and add up along their wall, but an unlabelled patch must reach 1.3 m high (furniture fronts stop lower); trust thresholds unchanged. YOLO model loads at launch and runs at 2 fps until the furniture step. The log now prints raw vertical planes before filtering, so a retry says what ARKit reported |
+| 2026-10-11 | `fix/scanner-r2-wall-planes` at `1a5c025` (run 2) | Scan Room, one full turn | **Failed again, but ARKit sees walls now:** 7 raw vertical planes (4 labelled "wall" by ARKit), 7 kept, **2 trusted** (2.6 m and 1.8 m, labelled, full height). Untrusted: labelled 0.8 x 2.0 m (bar 1.0 m), labelled 0.6 x 0.7 and 0.3 x 1.8 m, unlabelled 0.5-0.7 m under 1 m tall. Needs 3 trusted to point at the missing wall, 4 to build. The "resource constraints" warning still appeared with YOLO loaded at launch. Full log: `docs/research/r2-device-logs/2026-10-11-auto-scan.md` | Each wall's bearing and distance from the scan centre are now logged, to tell walls from furniture. Next: owner reruns, gives room size and what is on each wall; agent tunes the trust rule from that (`docs/tasks/R2-auto-scan-walls.md`) |
 
 ## Open decisions for the owner
 
@@ -146,9 +153,13 @@ From reading the code, not from a failed run:
 
 ## Next safe task
 
-1. **Owner: `R2`**, the first device session on the iPhone
-   (`docs/tasks/R2-first-device-session.md`). The Unity suites are green at
-   `69af8eb`, so the build is ready to try.
+1. **Blocker: make the stand-in-place scan find the room**
+   (`docs/tasks/R2-auto-scan-walls.md`). Owner: one more scan with the new
+   bearing log (the Xcode project at `apps/scanner/Builds/iOS` is already
+   built, with the signing team set), the room's tape size, and what is along
+   each wall; then finish R2 with **Help GhostMap** (the sweep). Agent: tune
+   the wall trust rule from that log, with an EditMode test built from it.
+   The rest of the session is `docs/tasks/R2-first-device-session.md`.
 2. **Owner, quick:** double-click a filled `room.html` in Safari to finish `R8`
    (`apps/web-viewer/README.md`, "Manual check"); record it in
    `docs/status/viewer.md`. In `R2`, also note the `GhostMap export:` time,

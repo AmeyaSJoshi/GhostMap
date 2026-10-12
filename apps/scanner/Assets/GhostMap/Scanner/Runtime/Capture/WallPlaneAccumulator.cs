@@ -90,14 +90,27 @@ namespace GhostMap.Scanner.Capture
         /// <summary>...and their centers are within this distance of the same line.</summary>
         public const float SameWallOffsetM = 0.30f;
 
-        /// <summary>An unlabelled vertical plane must be at least this wide to count as wall evidence.</summary>
-        public const float MinUnlabelledWidthM = 1.5f;
+        /// <summary>
+        /// An unlabelled vertical plane must be at least this wide to count as
+        /// wall evidence. R2 (first iPhone session, 2026-10-11): ARKit on a
+        /// phone without LiDAR reports walls as small patches, and the old
+        /// 1.5 m x 1.2 m minimum rejected every one of them ("planes 0" for a
+        /// whole turn). Patches are now kept and add up along their wall; a
+        /// wall is still only trusted at <see cref="TrustedUnlabelledWidthM"/>.
+        /// </summary>
+        public const float MinUnlabelledWidthM = 0.5f;
 
-        /// <summary>...and at least this tall (a monitor or cabinet side is smaller).</summary>
-        public const float MinUnlabelledHeightM = 1.2f;
+        /// <summary>...and at least this tall.</summary>
+        public const float MinUnlabelledHeightM = 0.4f;
+
+        /// <summary>
+        /// ...and reach at least this high above the floor. Furniture fronts
+        /// (a desk side, a sofa back, a cabinet) stop lower; walls do not.
+        /// </summary>
+        public const float MinUnlabelledTopM = 1.3f;
 
         /// <summary>A wall-labelled plane must be at least this wide.</summary>
-        public const float MinLabelledWidthM = 0.6f;
+        public const float MinLabelledWidthM = 0.3f;
 
         /// <summary>A cluster with at least this much merged width, and a wall label, is trusted.</summary>
         public const float TrustedLabelledWidthM = 1.0f;
@@ -256,7 +269,8 @@ namespace GhostMap.Scanner.Capture
                     return false;
                 }
             }
-            else if (m.WidthM < MinUnlabelledWidthM || m.HeightM < MinUnlabelledHeightM)
+            else if (m.WidthM < MinUnlabelledWidthM || m.HeightM < MinUnlabelledHeightM
+                     || m.CenterY + m.HeightM * 0.5f < MinUnlabelledTopM)
             {
                 return false;
             }

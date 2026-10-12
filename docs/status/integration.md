@@ -84,6 +84,13 @@ How it was merged:
 
 The counts match those recorded in `GhostMapDublinHacks` at `0b7a106`. CI's Unity jobs still stop at the missing-secrets check, so for now the suites are confirmed only on the owner's Mac.
 
+## R2 device log
+
+| Date | Build | Step | Result | Follow-up |
+| --- | --- | --- | --- | --- |
+| 2026-10-11 | `scanner/r9-hardening`, owner's iPhone (A19, iOS 26.6.2) | Lock Floor | Worked | — |
+| 2026-10-11 | same | Scan Room, one full turn (coverage 100%, 11-16 deg/s) | **Failed: "planes 0 walls 0" for the whole turn**, ended at "Help GhostMap". ARKit logged "World tracking performance is being affected by resource constraints" as the YOLO model compiled at floor lock. YOLO ran at 9-14 ms per frame (one 22 ms) | `fix/scanner-r2-wall-planes`: wall patches down to 0.5 m wide (0.3 m if labelled) now count and add up along their wall, but an unlabelled patch must reach 1.3 m high (furniture fronts stop lower); trust thresholds unchanged. YOLO model loads at launch and runs at 2 fps until the furniture step. The log now prints raw vertical planes before filtering, so a retry says what ARKit reported |
+
 ## Open decisions for the owner
 
 1. **Unity or native Swift for the phone app: decided "Unity for now",

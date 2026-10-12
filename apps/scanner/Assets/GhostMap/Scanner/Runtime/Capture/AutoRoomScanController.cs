@@ -159,6 +159,10 @@ namespace GhostMap.Scanner.Capture
         {
             accumulator.Clear();
             ceilingPlanes.Clear();
+            RawVerticalCount = 0;
+            RawWallLabelledCount = 0;
+            LargestRawVerticalWidthM = 0f;
+            LargestRawVerticalHeightM = 0f;
             openingPlanes.Clear();
             Array.Clear(sectors, 0, sectors.Length);
             LastResult = new RoomFromWallsResult();
@@ -204,6 +208,7 @@ namespace GhostMap.Scanner.Capture
             if (tracking && provider.TryGetDetectedSurfaces(surfaces))
             {
                 accumulator.Update(surfaces, Frame);
+                CountRawVerticals();
                 ObserveOtherSurfaces();
 
                 if (float.IsNaN(firstVerticalAt) && accumulator.PlaneCount > 0)
@@ -539,9 +544,49 @@ namespace GhostMap.Scanner.Capture
             return "Look at the wall ahead and hold steady.";
         }
 
+        /// <summary>R2 diagnostics: what ARKit reported before any filter.</summary>
+        public int RawVerticalCount { get; private set; }
+
+        /// <summary>...how many of those ARKit labelled as a wall.</summary>
+        public int RawWallLabelledCount { get; private set; }
+
+        /// <summary>...and the widest one seen this scan, in metres.</summary>
+        public float LargestRawVerticalWidthM { get; private set; }
+
+        public float LargestRawVerticalHeightM { get; private set; }
+
+        private void CountRawVerticals()
+        {
+            int vertical = 0;
+            int labelled = 0;
+
+            foreach (DetectedSurface surface in surfaces)
+            {
+                if (!WallPlaneAccumulator.TryMeasureVertical(surface, Frame, out WallPlaneAccumulator.PlaneMeasure m))
+                {
+                    continue;
+                }
+
+                vertical++;
+                labelled += (surface.Classifications & PlaneClassifications.WallFace) != 0 ? 1 : 0;
+
+                if (m.WidthM > LargestRawVerticalWidthM)
+                {
+                    LargestRawVerticalWidthM = m.WidthM;
+                    LargestRawVerticalHeightM = m.HeightM;
+                }
+            }
+
+            RawVerticalCount = vertical;
+            RawWallLabelledCount = labelled;
+        }
+
         private string BuildDebug()
         {
             var sb = new System.Text.StringBuilder();
+            sb.AppendFormat(
+                "auto: raw vertical {0} (wall-labelled {1}), largest {2:F2} x {3:F2} m\n",
+                RawVerticalCount, RawWallLabelledCount, LargestRawVerticalWidthM, LargestRawVerticalHeightM);
             sb.AppendFormat(
                 "auto: {0} cover {1}% turn {2:F0} deg/s planes {3} walls {4} trusted {5}\n",
                 State, CoveragePercent, CurrentTurnRateDegPerS, accumulator.PlaneCount,

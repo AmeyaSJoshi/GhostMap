@@ -360,6 +360,16 @@ namespace GhostMap.Scanner.Tests.EditMode
             Assert.AreEqual(2, counter.Pulses, "Restart is not a capture");
         }
 
+        [Test]
+        public void Detector_RunsSlowerUntilTheFurnitureStep()
+        {
+            // R2: during the room scan ARKit needs the phone's capacity for walls.
+            Assert.AreEqual(ObjectDetectors.BackgroundIntervalSeconds, ObjectDetectors.IntervalFor(ScanPhase.AutoScanRoom));
+            Assert.AreEqual(ObjectDetectors.BackgroundIntervalSeconds, ObjectDetectors.IntervalFor(ScanPhase.CaptureHeight));
+            Assert.AreEqual(ObjectDetectors.ActiveIntervalSeconds, ObjectDetectors.IntervalFor(ScanPhase.AddObjects));
+            Assert.Greater(ObjectDetectors.BackgroundIntervalSeconds, ObjectDetectors.ActiveIntervalSeconds);
+        }
+
         // -------------------------------------------------------------------
         // Developer mode toggle
         // -------------------------------------------------------------------

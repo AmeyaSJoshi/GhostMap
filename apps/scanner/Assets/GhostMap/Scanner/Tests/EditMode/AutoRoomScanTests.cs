@@ -254,6 +254,99 @@ namespace GhostMap.Scanner.Tests.EditMode
             Assert.AreEqual(0, accumulator.Clusters.Count);
         }
 
+        // R2 (first iPhone session): ARKit reported walls only as small
+        // patches, and the old per-plane minimum threw every one away.
+
+        /// <summary>A wall patch whose centre is <paramref name="centerY"/> above the floor.</summary>
+        private static DetectedSurface Patch(
+            GhostCoordinateFrame frame, float x, float z, float normalX, float normalZ,
+            float widthM, float heightM, float centerY, PlaneClassifications label = PlaneClassifications.None)
+        {
+            Vector3 world = frame.GhostToWorld(new Vector3(x, centerY, z));
+            Vector3 normal = frame.GhostDirectionToWorld(new Vector3(normalX, 0f, normalZ)).normalized;
+            Quaternion rotation = Quaternion.LookRotation(frame.GhostDirectionToWorld(Vector3.up), normal);
+            return new DetectedSurface(new TrackableId(nextId++, 1), world, rotation, new Vector2(widthM, heightM),
+                PlaneAlignment.Vertical, label);
+        }
+
+        [Test]
+        public void SmallHighWallPatches_AddUpToATrustedWall()
+        {
+            GhostCoordinateFrame frame = Frame();
+
+            // Four 0.8 m patches, high on the same wall, 3.2 m between them.
+            WallPlaneAccumulator accumulator = Accumulate(
+                frame,
+                Patch(frame, -1.2f, 2f, 0f, -1f, 0.8f, 0.6f, 1.6f),
+                Patch(frame, -0.4f, 2f, 0f, -1f, 0.8f, 0.6f, 1.7f),
+                Patch(frame, 0.4f, 2f, 0f, -1f, 0.8f, 0.6f, 1.5f),
+                Patch(frame, 1.2f, 2f, 0f, -1f, 0.8f, 0.6f, 1.6f));
+
+            Assert.AreEqual(4, accumulator.PlaneCount);
+            Assert.AreEqual(1, accumulator.Clusters.Count);
+            Assert.IsTrue(WallPlaneAccumulator.IsTrusted(accumulator.Clusters[0]));
+        }
+
+        [Test]
+        public void OneSmallWallPatch_IsKept_ButNotTrustedAlone()
+        {
+            GhostCoordinateFrame frame = Frame();
+
+            WallPlaneAccumulator accumulator = Accumulate(frame, Patch(frame, 0f, 2f, 0f, -1f, 0.8f, 0.6f, 1.6f));
+
+            Assert.AreEqual(1, accumulator.PlaneCount);
+            Assert.IsFalse(WallPlaneAccumulator.IsTrusted(accumulator.Clusters[0]));
+        }
+
+        [Test]
+        public void SmallWallLabelledPatches_AddUpToATrustedWall()
+        {
+            GhostCoordinateFrame frame = Frame();
+
+            WallPlaneAccumulator accumulator = Accumulate(
+                frame,
+                Patch(frame, -0.4f, 2f, 0f, -1f, 0.4f, 0.4f, 1.0f, PlaneClassifications.WallFace),
+                Patch(frame, 0.0f, 2f, 0f, -1f, 0.4f, 0.4f, 1.2f, PlaneClassifications.WallFace),
+                Patch(frame, 0.4f, 2f, 0f, -1f, 0.4f, 0.4f, 0.8f, PlaneClassifications.WallFace));
+
+            Assert.AreEqual(1, accumulator.Clusters.Count);
+            Assert.IsTrue(WallPlaneAccumulator.IsTrusted(accumulator.Clusters[0]), "1.2 m of labelled wall");
+        }
+
+        [Test]
+        public void LowUnlabelledPatches_FurnitureFronts_AreIgnored()
+        {
+            GhostCoordinateFrame frame = Frame();
+
+            // A sofa back and a cabinet front: wide enough, but they stop low.
+            WallPlaneAccumulator accumulator = Accumulate(
+                frame,
+                Patch(frame, 0f, 1f, 0f, -1f, 2.0f, 0.5f, 0.6f),
+                Patch(frame, 1.2f, 1f, 0f, -1f, 0.9f, 0.9f, 0.6f));
+
+            Assert.AreEqual(0, accumulator.PlaneCount);
+        }
+
+        [Test]
+        public void TheScanLogsWhatARKitReported_BeforeAnyFilter()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = LockedWorkflow(provider);
+            Feed(provider, new[]
+            {
+                Patch(workflow.Frame, 0f, 2f, 0f, -1f, 0.3f, 0.3f, 0.2f),
+                Patch(workflow.Frame, 1f, 2f, 0f, -1f, 0.9f, 0.6f, 1.6f, PlaneClassifications.WallFace)
+            });
+
+            workflow.BeginAutoScan(0f);
+            TurnOnce(provider, workflow);
+
+            Assert.AreEqual(2, workflow.Auto.RawVerticalCount);
+            Assert.AreEqual(1, workflow.Auto.RawWallLabelledCount);
+            Assert.AreEqual(0.9f, workflow.Auto.LargestRawVerticalWidthM, 0.01f);
+            StringAssert.Contains("raw vertical 2 (wall-labelled 1), largest 0.90 x 0.60 m", workflow.Auto.DebugSummary);
+        }
+
         [Test]
         public void DoorAndWindowFramePlanes_AreNotWalls()
         {

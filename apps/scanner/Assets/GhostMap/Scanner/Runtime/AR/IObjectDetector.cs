@@ -49,6 +49,9 @@ namespace GhostMap.Scanner.AR
         /// </summary>
         bool TryGetLatest(List<ObjectDetection> into, out double timestamp);
 
+        /// <summary>Seconds between analysed frames (see <see cref="ObjectDetectors.IntervalFor"/>).</summary>
+        float IntervalSeconds { get; set; }
+
         /// <summary>
         /// Task R11: a JPEG of part of the camera image from the frame last
         /// returned by <see cref="TryGetLatest"/> (screen pixels, bottom-left

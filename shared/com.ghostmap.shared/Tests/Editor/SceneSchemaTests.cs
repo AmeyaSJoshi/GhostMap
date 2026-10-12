@@ -324,5 +324,36 @@ namespace GhostMap.Shared.Tests
             Assert.AreEqual(0, restored.room.objects.Length);
             Assert.AreEqual(0f, restored.room.heightM, Tolerance);
         }
+
+        // -------------------------------------------------------------------
+        // Task R5: optional SceneObjectModel.label (additive within v1)
+        // -------------------------------------------------------------------
+
+        [Test]
+        public void Label_SurvivesARoundTrip()
+        {
+            SceneSnapshot snapshot = BuildCompleteSnapshot();
+            snapshot.room.objects[0].label = "potted plant";
+
+            SceneSnapshot restored = RoundTrip(snapshot);
+
+            Assert.AreEqual("potted plant", restored.room.objects[0].label);
+        }
+
+        [Test]
+        public void Label_AbsentFromOlderJson_ReadsAsNoLabel()
+        {
+            // A v1 snapshot written before R5 has no "label" key at all.
+            string json = JsonUtility.ToJson(BuildCompleteSnapshot());
+            Assert.IsTrue(json.Contains("\"label\":\"\""), "a model without a label is written with an empty one");
+            string older = json.Replace("\"label\":\"\",", string.Empty);
+            Assert.IsFalse(older.Contains("\"label\""));
+
+            SceneSnapshot restored = JsonUtility.FromJson<SceneSnapshot>(older);
+
+            // JsonUtility may give null or empty; both mean "no label" everywhere.
+            Assert.IsTrue(string.IsNullOrEmpty(restored.room.objects[0].label));
+            Assert.AreEqual("bed-1", restored.room.objects[0].id);
+        }
     }
 }

@@ -15,6 +15,9 @@ namespace GhostMap.Shared.Validation
         public const float MinDimensionM = 0.05f;
         public const float MaxDimensionM = 5.0f;
 
+        /// <summary>Longest allowed <see cref="SceneObjectModel.label"/> (task R5).</summary>
+        public const int MaxLabelLength = 64;
+
         private static readonly string[] Types =
         {
             "bed",
@@ -80,6 +83,12 @@ namespace GhostMap.Shared.Validation
                     $"Object type '{model.type}' is not supported.");
             }
 
+            ValidationResult label = ValidateLabel(model.label);
+            if (!label.IsValid)
+            {
+                return label;
+            }
+
             if (!RoomValidator.IsFinite(model.center.ToVector3()))
             {
                 return ValidationResult.Invalid("Object center must be finite.");
@@ -106,6 +115,34 @@ namespace GhostMap.Shared.Validation
             if (!height.IsValid)
             {
                 return height;
+            }
+
+            return ValidationResult.Valid();
+        }
+
+        /// <summary>
+        /// Task R5: a label is optional; when present it is at most
+        /// <see cref="MaxLabelLength"/> characters with no control characters.
+        /// </summary>
+        public static ValidationResult ValidateLabel(string label)
+        {
+            if (string.IsNullOrEmpty(label))
+            {
+                return ValidationResult.Valid();
+            }
+
+            if (label.Length > MaxLabelLength)
+            {
+                return ValidationResult.Invalid(
+                    $"Object label is {label.Length} characters; the maximum is {MaxLabelLength}.");
+            }
+
+            foreach (char c in label)
+            {
+                if (char.IsControl(c))
+                {
+                    return ValidationResult.Invalid("Object label must not contain control characters.");
+                }
             }
 
             return ValidationResult.Valid();

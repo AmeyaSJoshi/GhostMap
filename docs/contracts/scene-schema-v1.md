@@ -148,6 +148,7 @@ public sealed class SceneObjectModel
 {
     public string id;
     public string type;   // bed, desk, chair, couch, table, dresser, tv, generic
+    public string label;  // optional: the detector's class name (task R5)
 
     public Vec3Dto center;
     public float yawDeg;
@@ -161,6 +162,7 @@ public sealed class SceneObjectModel
 | Field | Meaning |
 | --- | --- |
 | `type` | One of `bed`, `desk`, `chair`, `couch`, `table`, `dresser`, `tv`, `generic`. |
+| `label` | **Optional** (task `R5`, 2026-10-11). What the on-device detector called the object, as its COCO class name: `"potted plant"`, `"dining table"`. Empty, null or absent when placed by hand or when no detector named it. |
 | `center` | Object center on the floor plane, GhostMap coordinates. |
 | `yawDeg` | Rotation about **+Y** in degrees. |
 | `widthM` / `depthM` / `heightM` | Bounding dimensions, stored as width × depth × height. |
@@ -170,6 +172,10 @@ public sealed class SceneObjectModel
 - MVP furniture is axis-aligned to its own yaw around +Y. There is **no pitch or
   roll**.
 - `type` must be one of the eight values above.
+- `label`, when present, is at most 64 characters
+  (`FurnitureValidator.MaxLabelLength`) with no control characters. Readers
+  treat empty, null and absent the same: no label. A label never changes
+  `type` or any dimension; it is shown, nothing more.
 - `center` and `yawDeg` must be finite.
 - `widthM`, `depthM` and `heightM` must each be finite and within
   `0.05`–`5.0` m (`FurnitureValidator.MinDimensionM` / `MaxDimensionM`).
@@ -359,6 +365,12 @@ it does not recognize rather than attempting a partial read.
   meaning, adding `walls`): increment `schemaVersion`, update this document, add
   an old-version rejection test, and merge the shared change before any app
   change.
+
+Additive changes made so far:
+
+| Date | Field | Task |
+| --- | --- | --- |
+| 2026-10-11 | `SceneObjectModel.label` (optional string) | `R5` |
 
 ---
 

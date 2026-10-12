@@ -40,6 +40,7 @@ MAX_OPENING_WIDTH_M = 4.0
 MIN_OPENING_HEIGHT_M = 0.30
 MIN_OBJECT_DIM_M = 0.05
 MAX_OBJECT_DIM_M = 5.0
+MAX_LABEL_LENGTH = 64  # FurnitureValidator.MaxLabelLength (task R5)
 
 CLOSURE_EXCELLENT_M = 0.08
 CLOSURE_ACCEPTABLE_M = 0.15
@@ -318,6 +319,16 @@ def validate(snapshot):
     for obj in room.get("objects") or []:
         if obj.get("type") not in SUPPORTED_OBJECT_TYPES:
             problems.append(f"object {obj.get('id')} has type {obj.get('type')!r}")
+        label = obj.get("label")
+        if label is not None and not isinstance(label, str):
+            problems.append(f"object {obj.get('id')} label must be a string")
+        elif label:
+            if len(label) > MAX_LABEL_LENGTH:
+                problems.append(
+                    f"object {obj.get('id')} label is {len(label)} characters; "
+                    f"the maximum is {MAX_LABEL_LENGTH}")
+            if any(ord(ch) < 0x20 or 0x7F <= ord(ch) <= 0x9F for ch in label):
+                problems.append(f"object {obj.get('id')} label contains control characters")
         for field in ("widthM", "depthM", "heightM"):
             value = float(obj.get(field, 0.0))
             if not (MIN_OBJECT_DIM_M <= value <= MAX_OBJECT_DIM_M):
@@ -368,9 +379,10 @@ def summarize(snapshot):
     print(f"\nobjects ({len(objects)}):")
     for obj in objects:
         c = obj.get("center", {})
+        label = f"  \"{obj.get('label')}\"" if obj.get("label") else ""
         print(f"  {obj.get('id'):<10} {obj.get('type'):<8} "
               f"at ({c.get('x')}, {c.get('z')})  yaw {obj.get('yawDeg')} deg  "
-              f"{obj.get('widthM')}x{obj.get('depthM')}x{obj.get('heightM')} m")
+              f"{obj.get('widthM')}x{obj.get('depthM')}x{obj.get('heightM')} m{label}")
 
 
 def main():

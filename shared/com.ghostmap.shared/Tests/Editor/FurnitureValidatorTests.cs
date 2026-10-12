@@ -141,5 +141,53 @@ namespace GhostMap.Shared.Tests
                     $"Default dimensions for '{type}' must pass validation.");
             }
         }
+
+        // -------------------------------------------------------------------
+        // Task R5: label
+        // -------------------------------------------------------------------
+
+        [TestCase(null)]
+        [TestCase("")]
+        [TestCase("potted plant")]
+        [TestCase("dining table")]
+        public void AcceptsAnAbsentOrOrdinaryLabel(string label)
+        {
+            SceneObjectModel model = Desk();
+            model.label = label;
+
+            Assert.IsTrue(FurnitureValidator.Validate(model).IsValid);
+        }
+
+        [Test]
+        public void AcceptsALabelOfExactlyTheMaximumLength()
+        {
+            SceneObjectModel model = Desk();
+            model.label = new string('a', FurnitureValidator.MaxLabelLength);
+
+            Assert.IsTrue(FurnitureValidator.Validate(model).IsValid);
+        }
+
+        [Test]
+        public void RejectsALabelOneCharacterTooLong()
+        {
+            SceneObjectModel model = Desk();
+            model.label = new string('a', FurnitureValidator.MaxLabelLength + 1);
+
+            ValidationResult result = FurnitureValidator.Validate(model);
+
+            Assert.IsFalse(result.IsValid);
+            StringAssert.Contains("65 characters", result.Error);
+        }
+
+        [TestCase("plant\n")]
+        [TestCase("tab\there")]
+        [TestCase("nul\u0000")]
+        public void RejectsALabelWithControlCharacters(string label)
+        {
+            SceneObjectModel model = Desk();
+            model.label = label;
+
+            Assert.IsFalse(FurnitureValidator.Validate(model).IsValid);
+        }
     }
 }

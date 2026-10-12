@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
+using GhostMap.Scanner.Capture;
 using GhostMap.Shared.Domain;
 using GhostMap.Shared.Export;
 using UnityEngine;
@@ -19,6 +20,7 @@ namespace GhostMap.Scanner.Export
     /// ├── room.html         the browser viewer template, filled with this room
     /// ├── room.glb          floor, ceiling, walls with openings cut
     /// ├── objects/&lt;id&gt;.glb  one per furniture object, centred on the origin
+    /// ├── photos/&lt;id&gt;.jpg   a photo of each object that has one (task R11)
     /// ├── scene.json        the finalized SceneSnapshot
     /// └── README.txt
     /// </code>
@@ -40,13 +42,29 @@ namespace GhostMap.Scanner.Export
         public const string SceneJsonEntry = "scene.json";
         public const string ReadmeEntry = "README.txt";
         public const string ObjectsFolder = "objects/";
+        public const string PhotosFolder = "photos/";
 
-        /// <summary>Builds the bundle for a finalized snapshot.</summary>
-        /// <param name="now">Local time of the export; names the file and stamps the zip entries.</param>
+        /// <summary>Builds the bundle for a finalized snapshot, without photos.</summary>
         public static bool TryBuild(
             SceneSnapshot snapshot,
             string roomTemplateHtml,
             DateTime now,
+            out byte[] zip,
+            out string fileName,
+            out string error)
+            => TryBuild(snapshot, roomTemplateHtml, now, null, out zip, out fileName, out error);
+
+        /// <summary>Builds the bundle for a finalized snapshot.</summary>
+        /// <param name="now">Local time of the export; names the file and stamps the zip entries.</param>
+        /// <param name="objectPhotos">
+        /// Task R11: a JPEG per object id. Optional; photos of objects not in
+        /// the room, or not acceptable (<see cref="ObjectPhotoRules.IsAcceptable"/>), are left out.
+        /// </param>
+        public static bool TryBuild(
+            SceneSnapshot snapshot,
+            string roomTemplateHtml,
+            DateTime now,
+            IReadOnlyDictionary<string, byte[]> objectPhotos,
             out byte[] zip,
             out string fileName,
             out string error)
@@ -85,13 +103,15 @@ namespace GhostMap.Scanner.Export
                 objectGlbs.Add(new KeyValuePair<SceneObjectModel, byte[]>(model, glb));
             }
 
-            if (!TryFillTemplate(roomTemplateHtml, snapshot, roomGlb, objectGlbs, out string roomHtml, out error))
+            List<KeyValuePair<SceneObjectModel, byte[]>> photos = PhotosFor(objects, objectPhotos);
+
+            if (!TryFillTemplate(roomTemplateHtml, snapshot, roomGlb, objectGlbs, photos, out string roomHtml, out error))
             {
                 return false;
             }
 
             fileName = FileNameFor(snapshot, now);
-            zip = WriteZip(snapshot, roomHtml, roomGlb, objectGlbs, now);
+            zip = WriteZip(snapshot, roomHtml, roomGlb, objectGlbs, photos, now);
             error = string.Empty;
             return true;
         }
@@ -106,6 +126,18 @@ namespace GhostMap.Scanner.Export
             SceneSnapshot snapshot,
             byte[] roomGlb,
             IReadOnlyList<KeyValuePair<SceneObjectModel, byte[]>> objectGlbs,
+            out string html,
+            out string error)
+            => TryFillTemplate(template, snapshot, roomGlb, objectGlbs, null, out html, out error);
+
+        /// <inheritdoc cref="TryFillTemplate(string, SceneSnapshot, byte[], IReadOnlyList{KeyValuePair{SceneObjectModel, byte[]}}, out string, out string)"/>
+        /// <param name="objectPhotos">Task R11: JPEGs keyed by object; written as <c>objectPhotos</c>.</param>
+        public static bool TryFillTemplate(
+            string template,
+            SceneSnapshot snapshot,
+            byte[] roomGlb,
+            IReadOnlyList<KeyValuePair<SceneObjectModel, byte[]>> objectGlbs,
+            IReadOnlyList<KeyValuePair<SceneObjectModel, byte[]>> objectPhotos,
             out string html,
             out string error)
         {
@@ -139,6 +171,15 @@ namespace GhostMap.Scanner.Export
                     .Append(Convert.ToBase64String(objectGlbs[i].Value)).Append('"');
             }
 
+            data.Append("},\"objectPhotos\":{");
+
+            for (int i = 0; objectPhotos != null && i < objectPhotos.Count; i++)
+            {
+                data.Append(i == 0 ? "" : ",");
+                data.Append(Quote(objectPhotos[i].Key.id)).Append(":\"")
+                    .Append(Convert.ToBase64String(objectPhotos[i].Value)).Append('"');
+            }
+
             data.Append("}}");
             data.Replace("<", "\\u003c");
 
@@ -160,6 +201,17 @@ namespace GhostMap.Scanner.Export
         /// <c>-</c> replaced by <c>_</c>, and a suffix if two ids collide.
         /// </summary>
         public static IReadOnlyList<string> ObjectEntryNames(IReadOnlyList<SceneObjectModel> objects)
+            => EntryNames(objects, ObjectsFolder, ".glb");
+
+        /// <summary>
+        /// Task R11: the zip path of each object's photo,
+        /// <c>photos/&lt;id&gt;.jpg</c>, with the same file-name stem as its
+        /// model in <see cref="ObjectEntryNames"/>.
+        /// </summary>
+        public static IReadOnlyList<string> PhotoEntryNames(IReadOnlyList<SceneObjectModel> objects)
+            => EntryNames(objects, PhotosFolder, ".jpg");
+
+        private static IReadOnlyList<string> EntryNames(IReadOnlyList<SceneObjectModel> objects, string folder, string extension)
         {
             var names = new List<string>(objects.Count);
             var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -178,7 +230,7 @@ namespace GhostMap.Scanner.Export
                     candidate = $"{stem}_{n}";
                 }
 
-                names.Add(ObjectsFolder + candidate + ".glb");
+                names.Add(folder + candidate + extension);
             }
 
             return names;
@@ -186,11 +238,37 @@ namespace GhostMap.Scanner.Export
 
         // -------------------------------------------------------------------
 
+        /// <summary>Acceptable photos of objects in the room, in room order.</summary>
+        private static List<KeyValuePair<SceneObjectModel, byte[]>> PhotosFor(
+            SceneObjectModel[] objects,
+            IReadOnlyDictionary<string, byte[]> objectPhotos)
+        {
+            var photos = new List<KeyValuePair<SceneObjectModel, byte[]>>();
+
+            if (objectPhotos == null)
+            {
+                return photos;
+            }
+
+            foreach (SceneObjectModel model in objects)
+            {
+                if (model?.id != null
+                    && objectPhotos.TryGetValue(model.id, out byte[] photo)
+                    && ObjectPhotoRules.IsAcceptable(photo))
+                {
+                    photos.Add(new KeyValuePair<SceneObjectModel, byte[]>(model, photo));
+                }
+            }
+
+            return photos;
+        }
+
         private static byte[] WriteZip(
             SceneSnapshot snapshot,
             string roomHtml,
             byte[] roomGlb,
             List<KeyValuePair<SceneObjectModel, byte[]>> objectGlbs,
+            List<KeyValuePair<SceneObjectModel, byte[]>> photos,
             DateTime now)
         {
             var models = new List<SceneObjectModel>(objectGlbs.Count);
@@ -214,8 +292,16 @@ namespace GhostMap.Scanner.Export
                         Add(archive, objectNames[i], objectGlbs[i].Value, now);
                     }
 
+                    // Photo names follow the model names, so photos/x.jpg is
+                    // always the photo of objects/x.glb.
+                    IReadOnlyList<string> photoNames = PhotoEntryNames(models);
+                    foreach (KeyValuePair<SceneObjectModel, byte[]> photo in photos)
+                    {
+                        Add(archive, photoNames[models.IndexOf(photo.Key)], photo.Value, now);
+                    }
+
                     Add(archive, SceneJsonEntry, utf8.GetBytes(JsonUtility.ToJson(snapshot, true)), now);
-                    Add(archive, ReadmeEntry, utf8.GetBytes(Readme(snapshot, objectGlbs.Count)), now);
+                    Add(archive, ReadmeEntry, utf8.GetBytes(Readme(snapshot, objectGlbs.Count, photos.Count)), now);
                 }
 
                 return stream.ToArray();
@@ -235,7 +321,7 @@ namespace GhostMap.Scanner.Export
             }
         }
 
-        private static string Readme(SceneSnapshot snapshot, int objectCount)
+        private static string Readme(SceneSnapshot snapshot, int objectCount, int photoCount)
         {
             var text = new StringBuilder();
             text.Append("GhostMap room export\n");
@@ -248,6 +334,12 @@ namespace GhostMap.Scanner.Export
             text.Append("room.glb           The room: floor, ceiling, and walls with doors and windows cut out.\n");
             text.Append("objects/<id>.glb   One 3D model per piece of furniture, centred on its own origin.\n");
             text.Append("                   Its place in the room is \"center\" and \"yawDeg\" in scene.json.\n");
+            if (photoCount > 0)
+            {
+                text.Append("photos/<id>.jpg    A photo of the piece of furniture with the same name in objects/,\n");
+                text.Append("                   taken by the phone (").Append(photoCount.ToString(CultureInfo.InvariantCulture))
+                    .Append(photoCount == 1 ? " photo" : " photos").Append("). room.html shows it when you click it.\n");
+            }
             text.Append("scene.json         The room as structured data: corners, height, openings, furniture\n");
             text.Append("                   (GhostMap scene schema v1, metres, +Y up).\n\n");
             text.Append("Using the files in Unity\n");

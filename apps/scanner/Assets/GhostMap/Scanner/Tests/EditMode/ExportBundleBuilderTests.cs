@@ -257,6 +257,112 @@ namespace GhostMap.Scanner.Tests.EditMode
             Assert.Less(zip.Length, 2 * 1024 * 1024, "plan section 24: room.html under 2 MB");
         }
 
+        // ---------------------------------------------------------------
+        // Task R11: object photos (contract sections 1 and 2.2)
+        // ---------------------------------------------------------------
+
+        private static byte[] Jpeg(byte marker) => new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, marker, 1, 2, 3 };
+
+        private static byte[] BuildWithPhotos(IReadOnlyDictionary<string, byte[]> photos)
+        {
+            Assert.IsTrue(ExportBundleBuilder.TryBuild(Fixture(), Template, Now, photos, out byte[] zip, out _, out string error), error);
+            return zip;
+        }
+
+        [Test]
+        public void Photos_AreZippedBesideTheirModels_ByteForByte()
+        {
+            var photos = new Dictionary<string, byte[]> { { "bed-1", Jpeg(1) }, { "chair-1", Jpeg(2) } };
+
+            Dictionary<string, byte[]> entries = Unzip(BuildWithPhotos(photos));
+
+            CollectionAssert.AreEquivalent(
+                new[]
+                {
+                    "room.html", "room.glb", "objects/bed-1.glb", "objects/desk-1.glb", "objects/chair-1.glb",
+                    "photos/bed-1.jpg", "photos/chair-1.jpg", "scene.json", "README.txt"
+                },
+                entries.Keys);
+            CollectionAssert.AreEqual(photos["bed-1"], entries["photos/bed-1.jpg"]);
+            CollectionAssert.AreEqual(photos["chair-1"], entries["photos/chair-1.jpg"]);
+            StringAssert.Contains("photos/<id>.jpg", Encoding.UTF8.GetString(entries["README.txt"]));
+        }
+
+        [Test]
+        public void Photos_AreEmbeddedInRoomHtml_KeyedByObjectId()
+        {
+            var photos = new Dictionary<string, byte[]> { { "desk-1", Jpeg(3) } };
+
+            string html = Encoding.UTF8.GetString(Unzip(BuildWithPhotos(photos))["room.html"]);
+            string data = DataTag(html);
+
+            StringAssert.Contains("\"objectPhotos\":{\"desk-1\":\"" + Convert.ToBase64String(photos["desk-1"]) + "\"}", data);
+        }
+
+        [Test]
+        public void Photos_OfUnknownObjectsOrNotJpeg_AreLeftOut()
+        {
+            var photos = new Dictionary<string, byte[]>
+            {
+                { "ghost-object", Jpeg(4) },
+                { "bed-1", new byte[] { 0x89, 0x50, 0x4E, 0x47, 0, 0 } },
+                { "desk-1", new byte[300 * 1024] }
+            };
+
+            Dictionary<string, byte[]> entries = Unzip(BuildWithPhotos(photos));
+
+            Assert.IsFalse(entries.Keys.Any(name => name.StartsWith("photos/", StringComparison.Ordinal)));
+            StringAssert.Contains("\"objectPhotos\":{}", DataTag(Encoding.UTF8.GetString(entries["room.html"])));
+            StringAssert.DoesNotContain("photos/", Encoding.UTF8.GetString(entries["README.txt"]));
+        }
+
+        [Test]
+        public void WithoutPhotos_RoomHtmlStillCarriesAnEmptyPhotoTable()
+        {
+            StringAssert.Contains("\"objectPhotos\":{}", DataTag(Encoding.UTF8.GetString(Unzip(Build(Fixture()))["room.html"])));
+        }
+
+        [Test]
+        public void PhotoEntryNames_FollowTheModelNames_IncludingCollisions()
+        {
+            var objects = new[]
+            {
+                new SceneObjectModel { id = "a/b" }, new SceneObjectModel { id = "a_b" }, new SceneObjectModel { id = "" }
+            };
+
+            IReadOnlyList<string> models = ExportBundleBuilder.ObjectEntryNames(objects);
+            IReadOnlyList<string> photos = ExportBundleBuilder.PhotoEntryNames(objects);
+
+            for (int i = 0; i < objects.Length; i++)
+            {
+                Assert.AreEqual(
+                    models[i].Replace("objects/", "photos/").Replace(".glb", ".jpg"),
+                    photos[i]);
+            }
+        }
+
+        [Test]
+        public void ScanExporter_PassesThePhotosToTheBundle()
+        {
+            string folder = Path.Combine(Path.GetTempPath(), "ghostmap-photo-test-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var exporter = new ScanExporter(() => Template, new SavedScanStore(folder), () => Now);
+
+                ExportResult result = exporter.Export(Fixture(), new Dictionary<string, byte[]> { { "bed-1", Jpeg(5) } });
+
+                Assert.IsTrue(result.Succeeded, result.Error);
+                Assert.IsTrue(Unzip(File.ReadAllBytes(result.Saved.Path)).ContainsKey("photos/bed-1.jpg"));
+            }
+            finally
+            {
+                if (Directory.Exists(folder))
+                {
+                    Directory.Delete(folder, true);
+                }
+            }
+        }
+
         private static int CountOccurrences(string haystack, string needle)
         {
             int count = 0;

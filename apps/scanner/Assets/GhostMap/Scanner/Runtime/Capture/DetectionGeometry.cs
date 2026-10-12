@@ -31,6 +31,23 @@ namespace GhostMap.Scanner.Capture
         public static DisplayTransform Identity => new DisplayTransform(1f, 0f, 0f, 1f, 0f, 0f);
 
         public Vector2 Apply(Vector2 p) => new Vector2(A * p.x + C * p.y + Tx, B * p.x + D * p.y + Ty);
+
+        /// <summary>The point <see cref="Apply"/> maps to <paramref name="v"/>; false for a degenerate transform.</summary>
+        public bool TryInvert(Vector2 v, out Vector2 p)
+        {
+            float det = A * D - C * B;
+
+            if (Mathf.Abs(det) < 1e-8f)
+            {
+                p = default;
+                return false;
+            }
+
+            float x = v.x - Tx;
+            float y = v.y - Ty;
+            p = new Vector2((D * x - C * y) / det, (A * y - B * x) / det);
+            return true;
+        }
     }
 
     /// <summary>
@@ -83,6 +100,59 @@ namespace GhostMap.Scanner.Capture
         }
 
         /// <summary>The point the floor ray goes through: the middle of the box's bottom edge.</summary>
+        /// <summary>
+        /// The inverse of <see cref="VisionBoxToScreen"/>: a screen box (Unity
+        /// pixels, bottom-left origin) as a box in the upright camera image
+        /// (normalized, Vision's bottom-left origin), clamped to the image.
+        /// Task R11 crops object photos with it.
+        /// </summary>
+        public static bool TryScreenToVisionBox(Rect screenBox, DisplayTransform transform, Vector2 screenSize, out Rect uprightBox)
+        {
+            uprightBox = default;
+
+            if (screenSize.x <= 0f || screenSize.y <= 0f)
+            {
+                return false;
+            }
+
+            var min = new Vector2(float.MaxValue, float.MaxValue);
+            var max = new Vector2(float.MinValue, float.MinValue);
+
+            Vector2[] corners =
+            {
+                new Vector2(screenBox.xMin, screenBox.yMin),
+                new Vector2(screenBox.xMax, screenBox.yMin),
+                new Vector2(screenBox.xMin, screenBox.yMax),
+                new Vector2(screenBox.xMax, screenBox.yMax)
+            };
+
+            foreach (Vector2 corner in corners)
+            {
+                var view = new Vector2(corner.x / screenSize.x, 1f - corner.y / screenSize.y);
+
+                if (!transform.TryInvert(view, out Vector2 raw))
+                {
+                    return false;
+                }
+
+                // UprightToRawImage is its own inverse.
+                Vector2 upright = UprightToRawImage(raw);
+                min = Vector2.Min(min, upright);
+                max = Vector2.Max(max, upright);
+            }
+
+            min = Vector2.Max(min, Vector2.zero);
+            max = Vector2.Min(max, Vector2.one);
+
+            if (max.x <= min.x || max.y <= min.y)
+            {
+                return false;
+            }
+
+            uprightBox = Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+            return true;
+        }
+
         public static Vector2 BottomCentre(Rect screenBox) => new Vector2(screenBox.center.x, screenBox.yMin);
     }
 }

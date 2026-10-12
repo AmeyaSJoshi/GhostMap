@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using GhostMap.Shared.Domain;
 
@@ -46,7 +47,8 @@ namespace GhostMap.Scanner.Export
 
         public SavedScanStore Store => store;
 
-        public ExportResult Export(SceneSnapshot finalized)
+        /// <param name="objectPhotos">Task R11: a JPEG per object id, exported beside the models. Optional.</param>
+        public ExportResult Export(SceneSnapshot finalized, IReadOnlyDictionary<string, byte[]> objectPhotos = null)
         {
             Stopwatch timer = Stopwatch.StartNew();
 
@@ -60,7 +62,7 @@ namespace GhostMap.Scanner.Export
                 return new ExportResult(false, default, $"The room viewer template could not be loaded: {exception.Message}", timer.ElapsedMilliseconds);
             }
 
-            if (!ExportBundleBuilder.TryBuild(finalized, template, clock(), out byte[] zip, out string fileName, out string error))
+            if (!ExportBundleBuilder.TryBuild(finalized, template, clock(), objectPhotos, out byte[] zip, out string fileName, out string error))
             {
                 return new ExportResult(false, default, error, timer.ElapsedMilliseconds);
             }

@@ -10,10 +10,17 @@
 //
 // One frame at a time: Submit refuses while the previous frame is still being
 // processed, so frames are dropped, never queued.
+//
+// Task R11: the camera image of the last frame whose results were published is
+// kept (one buffer, released when the next frame's results arrive), so
+// CropJpeg can photograph a piece of furniture from exactly the frame its box
+// came from.
 
 #import <ARKit/ARKit.h>
 #import <CoreML/CoreML.h>
 #import <Vision/Vision.h>
+#import <CoreImage/CoreImage.h>
+#import <UIKit/UIKit.h>
 
 // AR Foundation's XRCameraFrame.nativePtr on ARKit (UnityXRNativeFrame_1).
 typedef struct
@@ -48,6 +55,7 @@ static int gCount = 0;
 static long long gFrameId = 0;
 static float gTransform[6] = { 1, 0, 0, 1, 0, 0 };
 static float gElapsedMs = 0;
+static CVPixelBufferRef gLastPixels = NULL;
 
 static dispatch_queue_t GhostMapQueue(void)
 {
@@ -175,7 +183,6 @@ extern "C" int GhostMapDetector_Submit(void* nativeFrame, float viewportWidth, f
                                                                                       options:@{}];
         NSError* error = nil;
         BOOL ok = [handler performRequests:@[ request ] error:&error];
-        CVPixelBufferRelease(pixels);
 
         GhostMapDetection found[GhostMapMaxDetections];
         int count = 0;
@@ -224,7 +231,16 @@ extern "C" int GhostMapDetector_Submit(void* nativeFrame, float viewportWidth, f
         gElapsedMs = elapsed;
         gFrameId++;
         gBusy = NO;
+
+        // Keep this frame's image for CropJpeg; let the previous one go.
+        CVPixelBufferRef previous = gLastPixels;
+        gLastPixels = pixels;
         [gLock unlock];
+
+        if (previous != NULL)
+        {
+            CVPixelBufferRelease(previous);
+        }
     });
 
     return 1;
@@ -257,4 +273,75 @@ extern "C" int GhostMapDetector_Latest(GhostMapDetection* out, int maxCount, lon
     }
     [gLock unlock];
     return count;
+}
+
+// Task R11: a JPEG of part of the last published frame. The box is normalized
+// in the upright image with a bottom-left origin, the space Vision reports
+// boxes in, which is also Core Image's. Returns the JPEG's length, 0 on
+// failure, or minus the needed size if the buffer is too small.
+extern "C" int GhostMapDetector_CropJpeg(float x, float y, float width, float height,
+                                         int maxSide, float quality, unsigned char* buffer, int capacity)
+{
+    if (gLock == nil || buffer == NULL || capacity <= 0 || width <= 0 || height <= 0)
+    {
+        return 0;
+    }
+
+    [gLock lock];
+    CVPixelBufferRef pixels = gLastPixels != NULL ? CVPixelBufferRetain(gLastPixels) : NULL;
+    [gLock unlock];
+
+    if (pixels == NULL)
+    {
+        return 0;
+    }
+
+    static CIContext* context = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        context = [CIContext contextWithOptions:nil];
+    });
+
+    int result = 0;
+
+    @autoreleasepool
+    {
+        CIImage* upright = [[CIImage imageWithCVPixelBuffer:pixels] imageByApplyingCGOrientation:kCGImagePropertyOrientationRight];
+        CGRect extent = upright.extent;
+        CGRect crop = CGRectIntersection(
+            CGRectMake(extent.origin.x + x * extent.size.width, extent.origin.y + y * extent.size.height,
+                       width * extent.size.width, height * extent.size.height),
+            extent);
+
+        if (!CGRectIsEmpty(crop) && crop.size.width >= 8 && crop.size.height >= 8)
+        {
+            CGFloat longest = MAX(crop.size.width, crop.size.height);
+            CGFloat scale = maxSide > 0 && longest > maxSide ? (CGFloat)maxSide / longest : 1.0;
+            CIImage* photo = [[upright imageByCroppingToRect:crop]
+                imageByApplyingTransform:CGAffineTransformMakeScale(scale, scale)];
+            CGImageRef image = [context createCGImage:photo fromRect:CGRectIntegral(photo.extent)];
+
+            if (image != NULL)
+            {
+                NSData* jpeg = UIImageJPEGRepresentation([UIImage imageWithCGImage:image], quality);
+                CGImageRelease(image);
+
+                if (jpeg.length > 0)
+                {
+                    if ((int)jpeg.length <= capacity)
+                    {
+                        memcpy(buffer, jpeg.bytes, jpeg.length);
+                        result = (int)jpeg.length;
+                    }
+                    else
+                    {
+                        result = -(int)jpeg.length;
+                    }
+                }
+            }
+        }
+    }
+
+    CVPixelBufferRelease(pixels);
+    return result;
 }

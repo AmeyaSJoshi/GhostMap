@@ -95,6 +95,7 @@ namespace GhostMap.Scanner.Workflow
         private readonly FurnitureDetectionController furnitureDetection;
         private readonly FurnitureIdentificationController furnitureIdentification;
         private readonly AutoRoomScanController autoScan;
+        private readonly Dictionary<string, byte[]> objectPhotos = new Dictionary<string, byte[]>();
 
         private bool isFinalized;
 
@@ -162,6 +163,30 @@ namespace GhostMap.Scanner.Workflow
 
         /// <summary>Task R4 furniture identification. Read-only from outside the workflow.</summary>
         public FurnitureIdentificationController FurnitureIdentification => furnitureIdentification;
+
+        /// <summary>
+        /// Task R11: a JPEG of each furniture object that has one, keyed by
+        /// object id. Not scene state: it is not in the snapshot or on the wire,
+        /// only in the export bundle.
+        /// </summary>
+        public IReadOnlyDictionary<string, byte[]> ObjectPhotos => objectPhotos;
+
+        /// <summary>
+        /// Task R11: keeps a photo of a placed object. Publishes nothing (the
+        /// scene did not change). Refused for an unknown object, outside
+        /// <see cref="ScanPhase.AddObjects"/>, or for anything but an
+        /// acceptable JPEG (<see cref="ObjectPhotoRules.IsAcceptable"/>).
+        /// </summary>
+        public bool SetObjectPhoto(string objectId, byte[] jpeg)
+        {
+            if (Phase != ScanPhase.AddObjects || !ObjectPhotoRules.IsAcceptable(jpeg) || !HasObject(objectId))
+            {
+                return false;
+            }
+
+            objectPhotos[objectId] = jpeg;
+            return true;
+        }
 
         /// <summary>The automatic room scan. Null in a workflow built without one.</summary>
         public AutoRoomScanController Auto => autoScan;
@@ -1134,6 +1159,13 @@ namespace GhostMap.Scanner.Workflow
             if (hasSurface)
             {
                 furnitureDetection.MarkResolved(surfaceId);
+
+                // Task R11: the detector's photo of what stands on this surface.
+                IdentifiedFurniture identified = furnitureIdentification?.ProposalOn(surfaceId);
+                if (identified?.Photo != null)
+                {
+                    objectPhotos[model.id] = identified.Photo;
+                }
             }
 
             Publish();
@@ -1206,6 +1238,11 @@ namespace GhostMap.Scanner.Workflow
                 {
                     furnitureIdentification.Remove(item.Id);
                     continue;
+                }
+
+                if (item.Photo != null)
+                {
+                    objectPhotos[model.id] = item.Photo;
                 }
 
                 furnitureIdentification.Remove(item.Id);
@@ -1315,6 +1352,48 @@ namespace GhostMap.Scanner.Workflow
         {
             Revision++;
             Snapshot = BuildSnapshot();
+            PrunePhotos();
+        }
+
+        /// <summary>Drops photos of objects no longer in the room (undo).</summary>
+        private void PrunePhotos()
+        {
+            if (objectPhotos.Count == 0)
+            {
+                return;
+            }
+
+            var stale = new List<string>();
+            foreach (string id in objectPhotos.Keys)
+            {
+                if (!HasObject(id))
+                {
+                    stale.Add(id);
+                }
+            }
+
+            foreach (string id in stale)
+            {
+                objectPhotos.Remove(id);
+            }
+        }
+
+        private bool HasObject(string objectId)
+        {
+            if (string.IsNullOrEmpty(objectId))
+            {
+                return false;
+            }
+
+            foreach (SceneObjectModel model in objectPlacement.Objects)
+            {
+                if (model.id == objectId)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

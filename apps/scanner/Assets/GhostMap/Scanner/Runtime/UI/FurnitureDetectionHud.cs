@@ -3,6 +3,7 @@ using System.Text;
 using GhostMap.Scanner.AR;
 using GhostMap.Scanner.Capture;
 using GhostMap.Scanner.Workflow;
+using GhostMap.Shared.Domain;
 using GhostMap.Shared.Geometry;
 using GhostMap.Shared.Validation;
 using UnityEngine;
@@ -70,6 +71,14 @@ namespace GhostMap.Scanner.UI
         // scanned is already found when the furniture step opens.
         private IObjectDetector detector;
         private string lastProposals = string.Empty;
+
+        // Task R11: objects already given their one chance at a photo of the
+        // view, so an object off screen when it was added is not retried forever.
+        private readonly HashSet<string> photoAttempted = new HashSet<string>();
+        private ScanWorkflowController photoWorkflow;
+
+        /// <summary>At most this many photos per frame: each is a crop and a JPEG encode.</summary>
+        private const int MaxPhotosPerFrame = 2;
 
         private void Awake()
         {
@@ -142,6 +151,11 @@ namespace GhostMap.Scanner.UI
                 UpdateIdentification(workflow);
             }
 
+            if (inObjectPhase)
+            {
+                PhotographNewObjects(workflow);
+            }
+
             UpdateControls(workflow, inObjectPhase);
             UpdateMarkers(workflow, inObjectPhase);
 
@@ -163,12 +177,73 @@ namespace GhostMap.Scanner.UI
 
             workflow.UpdateFurnitureIdentification(detections, Time.unscaledTime);
 
+            // Task R11: photograph each sighting that beats the item's photo,
+            // from the same camera frame its box came from.
+            int taken = 0;
+            var screen = new Vector2(Screen.width, Screen.height);
+            foreach (IdentifiedFurniture item in workflow.FurnitureIdentification.WantingPhotos())
+            {
+                if (taken >= MaxPhotosPerFrame)
+                {
+                    break;
+                }
+
+                if (detector.TryCapturePhoto(ObjectPhotoRules.Pad(item.PhotoBox, screen), out byte[] jpeg)
+                    && workflow.FurnitureIdentification.SetPhoto(item.Id, jpeg))
+                {
+                    taken++;
+                }
+            }
+
             // Device-test observability: what the phone thinks is in the room.
             string proposals = FurnitureIdentificationController.Describe(workflow.FurnitureIdentification.Proposals);
             if (proposals != lastProposals)
             {
                 lastProposals = proposals;
                 Debug.Log("GhostMap identify: " + (proposals.Length > 0 ? proposals : "(nothing)"));
+            }
+        }
+
+        /// <summary>
+        /// Task R11: an object added without a detector photo (placed by hand,
+        /// or a surface the detector did not name) gets one photo of where it is
+        /// on screen at that moment, if it is mostly in view.
+        /// </summary>
+        private void PhotographNewObjects(ScanWorkflowController workflow)
+        {
+            if (photoWorkflow != workflow)
+            {
+                photoWorkflow = workflow;
+                photoAttempted.Clear();
+            }
+
+            Camera arCamera = spatialProvider.ArCamera;
+            if (detector == null || !detector.IsAvailable || arCamera == null || workflow.Frame == null)
+            {
+                return;
+            }
+
+            var screen = new Vector2(Screen.width, Screen.height);
+            int taken = 0;
+
+            foreach (SceneObjectModel model in workflow.Objects.Objects)
+            {
+                if (taken >= MaxPhotosPerFrame)
+                {
+                    break;
+                }
+
+                if (workflow.ObjectPhotos.ContainsKey(model.id) || !photoAttempted.Add(model.id))
+                {
+                    continue;
+                }
+
+                if (ObjectPhotoRules.TryFrameObject(model, workflow.Frame, arCamera.WorldToScreenPoint, screen, out Rect box)
+                    && detector.TryCapturePhoto(box, out byte[] jpeg)
+                    && workflow.SetObjectPhoto(model.id, jpeg))
+                {
+                    taken++;
+                }
             }
         }
 

@@ -461,7 +461,7 @@ namespace GhostMap.Scanner.UI
                 return;
             }
 
-            lastExport = exporter.Export(workflow.Snapshot);
+            lastExport = exporter.Export(workflow.Snapshot, workflow.ObjectPhotos);
             exportedWorkflow = workflow;
 
             if (lastExport.Succeeded)

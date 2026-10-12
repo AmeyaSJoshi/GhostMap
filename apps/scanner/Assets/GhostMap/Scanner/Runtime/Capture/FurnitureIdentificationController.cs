@@ -253,6 +253,7 @@ namespace GhostMap.Scanner.Capture
             {
                 id = Guid.NewGuid().ToString(),
                 type = item.Type,
+                label = LabelFor(item.ClassName),
                 center = Vec3Dto.FromVector3(new Vector3(item.CenterGhost.x, 0f, item.CenterGhost.z)),
                 yawDeg = yaw,
                 widthM = width,
@@ -327,6 +328,22 @@ namespace GhostMap.Scanner.Capture
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Task R5: the detector's class name as an object label, cut to
+        /// <see cref="FurnitureValidator.MaxLabelLength"/>; null for none.
+        /// </summary>
+        public static string LabelFor(string className)
+        {
+            if (string.IsNullOrEmpty(className))
+            {
+                return null;
+            }
+
+            return className.Length <= FurnitureValidator.MaxLabelLength
+                ? className
+                : className.Substring(0, FurnitureValidator.MaxLabelLength);
         }
 
         /// <summary>The identified type for each matched surface, for the surface candidates' type.</summary>

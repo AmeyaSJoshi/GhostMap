@@ -1075,6 +1075,90 @@ namespace GhostMap.Scanner.Tests.EditMode
         }
 
         // -------------------------------------------------------------------
+        // Task R5: the detector's label
+        // -------------------------------------------------------------------
+
+        [Test]
+        public void TryBuild_LabelsTheObjectWithTheDetectorsClassName()
+        {
+            FurnitureIdentificationController identifier = Identifier(Provider());
+            Repeat(identifier, Frame(Seen("potted plant", 1f, 1f), Seen("dining table", 3f, 1f)), 5);
+
+            Assert.IsTrue(FurnitureIdentificationController.TryBuild(identifier.Proposals[0], out SceneObjectModel plant, out _));
+            Assert.IsTrue(FurnitureIdentificationController.TryBuild(identifier.Proposals[1], out SceneObjectModel table, out _));
+
+            Assert.AreEqual("generic", plant.type);
+            Assert.AreEqual("potted plant", plant.label);
+            Assert.AreEqual("table", table.type);
+            Assert.AreEqual("dining table", table.label);
+        }
+
+        [Test]
+        public void LabelFor_CutsToTheSchemaLimit()
+        {
+            Assert.IsNull(FurnitureIdentificationController.LabelFor(null));
+            Assert.IsNull(FurnitureIdentificationController.LabelFor(""));
+            Assert.AreEqual(FurnitureValidator.MaxLabelLength,
+                FurnitureIdentificationController.LabelFor(new string('a', 100)).Length);
+        }
+
+        [Test]
+        public void Workflow_AddAll_KeepsLabelsInTheSnapshot()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = AddObjectsWorkflow(provider);
+            See(workflow, Frame(Seen("potted plant", 1f, 1f), Seen("chair", 3f, 1f)), 5);
+
+            Assert.AreEqual(2, workflow.TryAcceptAllDetectedFurniture());
+
+            SceneObjectModel[] published = workflow.Snapshot.room.objects;
+            Assert.AreEqual("potted plant", published[0].label);
+            Assert.AreEqual("chair", published[1].label);
+            Assert.IsTrue(FurnitureValidator.Validate(published[0]).IsValid);
+        }
+
+        [Test]
+        public void Workflow_AnIdentifiedSurface_KeepsTheLabel_UnlessTheUserPickedAnotherType()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = AddObjectsWorkflow(provider);
+            provider.DetectedSurfaces.Add(DeskPlane(workflow.Frame, 2f, 1.5f));
+            provider.DetectedSurfaces.Add(DeskPlane(workflow.Frame, 2f, 2.6f));
+            Assert.IsTrue(workflow.TryRefreshFurnitureDetection(out _));
+            See(workflow, Frame(Seen("dining table", 2f, 1.1f), Seen("dining table", 2f, 2.2f)), 5);
+
+            // The first surface as identified; the second retyped by the user.
+            Assert.IsTrue(workflow.TryAcceptDetectedFurniture(out _, out _));
+            Assert.IsTrue(workflow.SetDetectedFurnitureType("dresser"));
+            Assert.IsTrue(workflow.TryAcceptDetectedFurniture(out _, out _), workflow.FurnitureDetection.LastError);
+
+            SceneObjectModel[] objects = workflow.Snapshot.room.objects;
+            Assert.AreEqual("desk", objects[0].type);
+            Assert.AreEqual("dining table", objects[0].label);
+            Assert.AreEqual("dresser", objects[1].type);
+            Assert.IsTrue(string.IsNullOrEmpty(objects[1].label));
+        }
+
+        [Test]
+        public void Workflow_AnObjectPlacedByHand_HasNoLabel_AndResizingKeepsALabel()
+        {
+            FakeSpatialProvider provider = Provider();
+            ScanWorkflowController workflow = AddObjectsWorkflow(provider);
+            See(workflow, Frame(Seen("potted plant", 1f, 1f)), 5);
+            Assert.AreEqual(1, workflow.TryAcceptAllDetectedFurniture());
+
+            provider.ScreenRayAt = null;
+            AimAtGhost(provider, workflow.Frame, 3f, 2f);
+            Assert.IsTrue(workflow.TryPlaceObject(out _));
+            Assert.IsTrue(workflow.TrySetObjectWidth(0, 0.6f, out _));
+
+            SceneObjectModel[] objects = workflow.Snapshot.room.objects;
+            Assert.AreEqual("potted plant", objects[0].label);
+            Assert.AreEqual(0.6f, objects[0].widthM, Tolerance);
+            Assert.IsTrue(string.IsNullOrEmpty(objects[1].label));
+        }
+
+        // -------------------------------------------------------------------
 
         private static void AssertNear(Vector2 expected, Vector2 actual)
         {

@@ -23,10 +23,16 @@ export function typeName(type) {
   return TYPE_NAMES[type] ?? type;
 }
 
-/** The detector's label (task R5) when present, else the type name. */
+/**
+ * The title: the type name, except for a generic object with a detector label
+ * (task R5), which is better called "Potted plant" than "Object". A desk the
+ * detector called "dining table" stays "Desk"; its label is in the details.
+ */
 export function objectTitle(object) {
   const label = typeof object.label === 'string' ? object.label.trim() : '';
-  return label !== '' ? capitalise(label) : typeName(object.type);
+  return label !== '' && (object.type === 'generic' || typeof object.type !== 'string' || object.type === '')
+    ? capitalise(label)
+    : typeName(object.type);
 }
 
 /** Rows for the info panel: [label, value] pairs. */

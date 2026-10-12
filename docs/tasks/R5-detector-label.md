@@ -3,6 +3,24 @@
 **Decision:** ADR-0011 ("Classes"). **Workstream:** Shared/Integration (contract
 change), with a one-line Scanner change to fill it.
 
+> **Built 2026-10-11** on `shared/r5-detector-label` (handoff
+> `docs/handoffs/2026-10-11-shared-r5-detector-label.md`). Differences from
+> this brief:
+>
+> - **Fixture:** `room-with-door-window-v1.json` has no `generic` object, and
+>   adding one would change every test that counts its objects and need a new
+>   reference `.glb`. Its desk carries `"label": "dining table"` instead, which
+>   is what the detector really calls a desk.
+> - **Viewer title:** `room.html` titles an object by its label only when it is
+>   `generic` ("Potted plant"); a labelled desk stays "Desk", with "Detected
+>   as: dining table" in its details.
+> - **Surface objects** get the label only when added as the type the detector
+>   identified; one the user retyped gets none.
+> - **Two copy helpers** that rebuild objects field by field now copy `label`:
+>   the scanner's `ObjectPlacementController.Clone` and the frozen Unity
+>   Viewer's `ObjectEditController.Clone` (a one-line integration fix so an
+>   edit there does not drop it).
+
 ## Goal
 
 A `generic` object keeps what the detector called it ("potted plant",

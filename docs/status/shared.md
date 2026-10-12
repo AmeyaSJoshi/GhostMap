@@ -34,6 +34,8 @@ The tag `shared-v1-ready` marks the frozen foundation baseline.
   passes at `69af8eb`.
 - `Runtime/Export/`: branch `integration/r6-export-bundle` (task `R6`), suite
   292/292 on the owner's Mac, 2026-10-11.
+- `SceneObjectModel.label` (task `R5`, additive schema v1 change): branch
+  `shared/r5-detector-label`, suite 303/303 on the owner's Mac, 2026-10-11.
 
 ## Tests run
 
@@ -46,7 +48,9 @@ Last recorded Unity result, in `GhostMapDublinHacks`: **202 tests, 202 passed**
 (156 foundation + 32 `WallFittingTests` + 9 `RoomContainmentTests` + 5 discovery
 tests), Unity 6000.3.24f1, Test Framework 1.6.0. **Confirmed in this repository
 on 2026-10-11 at `69af8eb`: 202/202**, 0 failed (owner's Mac). **After `R6`: 292 tests, 292
-passed** (+69 moved from the Viewer, +21 new export tests). On 2026-10-10 `inspect_snapshot.py` reported the two valid
+passed** (+69 moved from the Viewer, +21 new export tests). **After `R5`: 303** (+11 label
+tests: round trip, absent in older JSON, 64-character limit, control
+characters). On 2026-10-10 `inspect_snapshot.py` reported the two valid
 fixtures valid and the malformed one invalid on the height rule alone, and
 `send_fixture.py --dry-run` produced the documented 176 / 1059 / 141-byte
 messages.
@@ -86,10 +90,12 @@ the architecture overview's code map.
 
 ## Next safe task
 
-- `R5`: optional `label` on `SceneObjectModel` (additive schema v1 change,
-  ADR-0011) with contract doc, tests, `inspect_snapshot.py` and fixtures.
+- `R5` is built: optional `SceneObjectModel.label` (at most 64 characters, no
+  control characters), contract doc section 5 and 9, `inspect_snapshot.py`
+  checks and prints it, `room-with-door-window-v1.json`'s desk carries
+  `"label": "dining table"`.
 - `R6` is built (`Runtime/Export/`, contract complete). Next shared work is
-  `R5` above, then removing `PeerDiscoveryProtocol` in `R10`.
+  removing `PeerDiscoveryProtocol` in `R10`.
 
 Roadmap progress is tracked in `docs/status/integration.md`.
 

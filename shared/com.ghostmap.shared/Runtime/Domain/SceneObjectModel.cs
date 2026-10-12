@@ -20,6 +20,15 @@ namespace GhostMap.Shared.Domain
         /// <summary>bed, desk, chair, couch, table, dresser, tv, or generic.</summary>
         public string type;
 
+        /// <summary>
+        /// Optional (task R5, additive within schema v1): what the on-device
+        /// detector called the object, e.g. "potted plant" or "dining table".
+        /// Empty or null when it was placed by hand. At most
+        /// <c>FurnitureValidator.MaxLabelLength</c> characters, no control
+        /// characters. A name only: it never affects geometry.
+        /// </summary>
+        public string label;
+
         public Vec3Dto center;
 
         /// <summary>Rotation about +Y, in degrees.</summary>

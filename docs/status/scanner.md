@@ -60,6 +60,9 @@ validation and the snapshot are identical however the room was captured.
 - Export bundle: branch `integration/r6-export-bundle`; EditMode 694/694,
   `ScannerBuild.BuildScanner` and unsigned `xcodebuild` on the owner's Mac,
   2026-10-11. Not device-verified.
+- Detector label: branch `shared/r5-detector-label`; EditMode 821/821.
+  Objects the detector named carry its COCO class as `label`. Not
+  device-verified.
 - Object photos: branch `integration/r11-object-photos`; EditMode 805/805,
   iOS build and unsigned `xcodebuild` on the owner's Mac, 2026-10-11. Not
   device-verified.
@@ -81,7 +84,7 @@ unsigned `xcodebuild` (Release, iphoneos) succeeded there.
 
 **Confirmed in this repository on 2026-10-11 at `69af8eb`: 577 tests, 577
 passed**. **After `R6`: 694 tests, 694 passed** (+90 embedded shared, +27 export), 0 failed (owner's Mac, Unity 6000.3.24f1).
-**After `R7`: 710. After `R4`: 779 tests, 779 passed** **After `R11`: 805** (+26 photo tests). For `R4`: 773 at its first commit, +6 for identification from floor lock; +73
+**After `R7`: 710. After `R4`: 779 tests, 779 passed** **After `R11`: 805** (+26 photo tests). **After `R5`: 821** (+11 shared label tests, +5 label workflow tests). For `R4`: 773 at its first commit, +6 for identification from floor lock; +73
 `FurnitureIdentificationTests` cases, +2 guide tests, +2 detection tests with
 the six ADR-0007 suggestion tests rewritten for identified types, -14
 `FurnitureTypeSuggesterTests` removed); the iOS

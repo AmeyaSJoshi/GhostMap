@@ -1255,6 +1255,8 @@ Targets: median wall absolute error <= 0.12 m, max wall error <= 0.20 m, height 
 
 ## Task R5: Keep the detector's label in the scene
 
+**Built 2026-10-11** (`shared/r5-detector-label`). Every object the detector named carries its COCO class as `label` (a desk is `"dining table"`), not only `generic` ones; `room.html` uses the label as the title only for `generic` objects and lists it as "Detected as" for all.
+
 Shared-contract change (`AGENTS.md` rule 8): add an optional `label` string to `SceneObjectModel` so a `generic` object can carry `"potted plant"`. Additive within schema v1. Update `scene-schema-v1.md`, shared tests, `inspect_snapshot.py` and the fixtures. `room.html` shows the label.
 
 ---

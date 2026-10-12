@@ -35,6 +35,20 @@ test('the detector label is shown only when present', () => {
   }
 });
 
+test('a typed object keeps its type as the title; its label is only a detail', () => {
+  const desk = { id: 'desk-1', type: 'desk', label: 'dining table', widthM: 1.4, depthM: 0.7, heightM: 0.75 };
+  assert.equal(objectTitle(desk), 'Desk');
+  assert.deepEqual(objectDetails(desk)[1], ['Detected as', 'dining table']);
+  assert.equal(objectSummary(desk), 'Desk · 1.40 × 0.70 × 0.75 m');
+});
+
+test('the shared fixture carries a label (task R5)', async () => {
+  const scene = await readFixture('room-with-door-window-v1.json');
+  const desk = scene.room.objects.find((object) => object.id === 'desk-1');
+  assert.equal(desk.label, 'dining table');
+  assert.equal(objectTitle(desk), 'Desk');
+});
+
 test('list summary', () => {
   assert.equal(objectSummary({ type: 'bed', widthM: 1.52, depthM: 2.03, heightM: 0.6 }), 'Bed · 1.52 × 2.03 × 0.60 m');
 });

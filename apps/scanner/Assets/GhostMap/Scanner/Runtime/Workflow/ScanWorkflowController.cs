@@ -1151,6 +1151,14 @@ namespace GhostMap.Scanner.Workflow
                 return false;
             }
 
+            // Task R5: keep what the detector called it, when the object is
+            // what the detector said (the user did not pick another type).
+            IdentifiedFurniture identified = hasSurface ? furnitureIdentification?.ProposalOn(surfaceId) : null;
+            if (identified != null && identified.Type == model.type)
+            {
+                model.label = FurnitureIdentificationController.LabelFor(identified.ClassName);
+            }
+
             if (!objectPlacement.TryAdoptDetectedObject(model, out placementRejection))
             {
                 return false;
@@ -1161,7 +1169,6 @@ namespace GhostMap.Scanner.Workflow
                 furnitureDetection.MarkResolved(surfaceId);
 
                 // Task R11: the detector's photo of what stands on this surface.
-                IdentifiedFurniture identified = furnitureIdentification?.ProposalOn(surfaceId);
                 if (identified?.Photo != null)
                 {
                     objectPhotos[model.id] = identified.Photo;

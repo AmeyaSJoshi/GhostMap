@@ -50,6 +50,7 @@
       {
         "id": "desk-1",
         "type": "desk",
+        "label": "dining table",
         "center": { "x": 3.2, "y": 0.0, "z": 0.5 },
         "yawDeg": 0.0,
         "widthM": 1.4,

@@ -382,6 +382,7 @@ namespace GhostMap.Scanner.Capture
             {
                 id = source.id,
                 type = source.type,
+                label = source.label,
                 center = source.center,
                 yawDeg = source.yawDeg,
                 widthM = source.widthM,

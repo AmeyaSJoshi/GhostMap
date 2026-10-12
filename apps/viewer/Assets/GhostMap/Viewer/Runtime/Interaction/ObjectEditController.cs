@@ -144,6 +144,7 @@ namespace GhostMap.Viewer.Interaction
         {
             id = model.id,
             type = model.type,
+            label = model.label,
             center = model.center,
             yawDeg = model.yawDeg,
             widthM = model.widthM,
